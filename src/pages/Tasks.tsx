@@ -34,7 +34,7 @@ const PRIORITIES: Record<string, { label: string; tone: string }> = {
 };
 
 export default function Tasks() {
-  const { data, addTask, moveTask, updateTask, deleteTask } = useStore();
+  const { data, addTask, moveTask, updateTask, deleteTask, theme } = useStore();
   const [projectFilter, setProjectFilter] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [taskDraft, setTaskDraft] = useState<Task | null>(null);
@@ -80,7 +80,7 @@ export default function Tasks() {
         data: priorityDist,
       },
     ],
-  }), [priorityDist]);
+  }), [priorityDist, theme]);
 
   // 完成率统计
   const completionRate = useMemo(() => {

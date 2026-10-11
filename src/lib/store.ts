@@ -13,6 +13,7 @@ import {
   listProcesses,
   diskInfo,
   loadData,
+  notify,
   opencodeSessions,
   opencodeSessionDetail,
   gitBranch,
@@ -130,6 +131,8 @@ function uid(): string {
 
 // 模块级防抖计时器（仅用于持久化，toast 由 TTL 自动清理）
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+// 运行时刷新重入标记（同一时刻只允许一次快照采集在途）
+let refreshing = false;
 
 export const useStore = create<Store>()(
   persist(
@@ -214,6 +217,10 @@ export const useStore = create<Store>()(
 
       refreshRuntime: async () => {
         if (!isTauri()) return;
+        // 刷新重入保护：netstat + 进程快照耗时可超过最短刷新间隔（设置页有 1s 档），
+        // 不加锁会让并发调用乱序覆盖数据，并丢掉 history 采样点。
+        if (refreshing) return;
+        refreshing = true;
         set({ loading: true });
         try {
           const [procs, ports, devs, ais, sys, dk] = await Promise.all([
@@ -231,7 +238,8 @@ export const useStore = create<Store>()(
             memGb: Math.round((memTotal / 1024 ** 3) * 100) / 100,
             t: Date.now(),
           };
-          const history = [...get().history, point].slice(-HISTORY_LEN);
+          // 用函数式 set 追加，避免与并发写入互相覆盖采样点
+          const history = [...get().history.slice(-(HISTORY_LEN - 1)), point];
           set({
             procs,
             ports,
@@ -245,6 +253,8 @@ export const useStore = create<Store>()(
           });
         } catch (e) {
           set({ loading: false, toast: `运行时数据刷新失败: ${String(e)}` });
+        } finally {
+          refreshing = false;
         }
       },
 
@@ -376,22 +386,28 @@ export const useStore = create<Store>()(
       // ── 成本计量 ──
 
       loadCostOverview: async () => {
-        try {
-          const [overview, trend, breakdown, settings] = await Promise.all([
-            getCostOverview().catch(() => null),
-            getCostTrend(14).catch(() => [] as CostTrendRow[]),
-            getModelBreakdown().catch(() => [] as ModelBreakdownRow[]),
-            getCostSettings().catch(() => get().costSettings),
-          ]);
-          set({
-            costOverview: overview,
-            costTrend: trend,
-            costModelBreakdown: breakdown,
-            costSettings: settings,
+        // 后端现在会把「数据文件损坏」等真实错误抛出来，不能再用 catch(()=>null) 吞掉，
+        // 否则用户看到的是空白页而不是「账本读不了」。
+        const errors: string[] = [];
+        const track = <T,>(label: string, p: Promise<T>, fallback: T): Promise<T> =>
+          p.catch((e) => {
+            errors.push(`${label}: ${String(e)}`);
+            return fallback;
           });
-        } catch (e) {
-          console.warn("加载成本总览失败", e);
-        }
+
+        const [overview, trend, breakdown, settings] = await Promise.all([
+          track("成本总览", getCostOverview(), null),
+          track("成本趋势", getCostTrend(14), [] as CostTrendRow[]),
+          track("模型分解", getModelBreakdown(), [] as ModelBreakdownRow[]),
+          track("成本设置", getCostSettings(), get().costSettings),
+        ]);
+        set({
+          costOverview: overview,
+          costTrend: trend,
+          costModelBreakdown: breakdown,
+          costSettings: settings,
+        });
+        if (errors.length) set({ toast: `成本数据读取失败（${errors[0]}）` });
       },
 
       scanCosts: async () => {
@@ -451,11 +467,10 @@ export const useStore = create<Store>()(
           (o.monthly_budget > 0 && o.monthly_pct >= o.alert_threshold_pct);
         if (exceeded && !get().costNotified) {
           set({ costNotified: true });
-          const notify = async () => {
-            const { sendNotification } = await import("@tauri-apps/plugin-notification");
-            sendNotification({ title: "工作台成本告警", body: `日 ${o.daily_pct.toFixed(0)}% / 月 ${o.monthly_pct.toFixed(0)}% 已超预算阈值 ${o.alert_threshold_pct}%` });
-          };
-          notify().catch(() => {});
+          notify(
+            "工作台成本告警",
+            `日 ${o.daily_pct.toFixed(0)}% / 月 ${o.monthly_pct.toFixed(0)}% 已超预算阈值 ${o.alert_threshold_pct}%`
+          ).catch(() => {});
         }
         if (!exceeded) {
           set({ costNotified: false });
@@ -464,6 +479,8 @@ export const useStore = create<Store>()(
     }),
     {
       name: "workbench-ui-v1",
+      // 显式版本 + migrate：以后改持久化结构时老用户数据才不会直接被反序列化成半截状态
+      version: 1,
       partialize: (s) => ({ theme: s.theme, refreshMs: s.refreshMs }),
     }
   )

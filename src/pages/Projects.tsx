@@ -26,7 +26,7 @@ interface Draft {
 const emptyDraft: Draft = { name: "", path: "", status: "active", tags: "", pinned: false, note: "" };
 
 export default function Projects() {
-  const { data, devs, addProject, updateProject, deleteProject, setView } = useStore();
+  const { data, devs, addProject, updateProject, deleteProject, setView, theme } = useStore();
   const [draft, setDraft] = useState<Draft | null>(null);
 
   const runningDirs = useMemo(
@@ -77,7 +77,7 @@ export default function Projects() {
         data: statusDist,
       },
     ],
-  }), [statusDist]);
+  }), [statusDist, theme]);
 
   const taskBarOption = useMemo(() => {
     return {

@@ -74,16 +74,21 @@ export async function saveData(data: WorkbenchData): Promise<void> {
   return invoke("save_data", { data });
 }
 
-/** 用系统默认方式打开 URL / 路径（桌面端走 opener 插件，浏览器端降级 window.open）。 */
+/** 用系统默认方式打开 URL / 目录。
+ * URL 走 opener 插件；目录必须经后端 `open_known_path` 白名单校验，
+ * 因此 capabilities 里不再给 WebView 直接的 allow-open-path 权限。 */
 export async function openExternal(target: string): Promise<void> {
-  const { openUrl, openPath } = await import("@tauri-apps/plugin-opener");
   const isUrl = /^[a-z][a-z0-9+.-]*:\/\//i.test(target);
-  if (isTauri()) {
-    if (isUrl) await openUrl(target);
-    else await openPath(target);
-  } else if (isUrl) {
-    window.open(target, "_blank", "noopener");
+  if (!isTauri()) {
+    if (isUrl) window.open(target, "_blank", "noopener");
+    return;
   }
+  if (isUrl) {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(target);
+    return;
+  }
+  await invoke("open_known_path", { path: target });
 }
 
 // ── 系统通知 ──────────────────────────────────────────────

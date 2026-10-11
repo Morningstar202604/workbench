@@ -44,11 +44,6 @@ export function shortPath(p: string | null | undefined, max = 60): string {
   return p.length > max ? `…${p.slice(-max)}` : p;
 }
 
-export function basename(p: string): string {
-  const parts = p.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] ?? p;
-}
-
 /** 秒数 → 人性化运行时间 */
 export function formatUptime(secs: number): string {
   if (!secs) return "-";
@@ -60,10 +55,6 @@ export function formatUptime(secs: number): string {
   if (h) parts.push(`${h} 小时`);
   if (m && d === 0) parts.push(`${m} 分钟`);
   return parts.join(" ") || "不到 1 分钟";
-}
-
-export function formatPercent(n: number, decimals = 0): string {
-  return `${n.toFixed(decimals)}%`;
 }
 
 /** 毫秒/秒 → 可读时长（2小时15分 / 45分钟 / 30秒）。 */
@@ -91,9 +82,4 @@ export function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
-}
-
-/** 数字千分位 */
-export function formatNumber(n: number): string {
-  return n.toLocaleString("en-US");
 }

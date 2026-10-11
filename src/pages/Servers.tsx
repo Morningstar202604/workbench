@@ -44,7 +44,8 @@ function portHeatmap(ports: PortEntry[]) {
 const COLORS = ["#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#f87171", "#60a5fa", "#e879f9"];
 
 export default function Servers() {
-  const { devs, ports, procs, refreshRuntime, setKillTarget, gitBranches, fetchGitBranch } = useStore();
+  const { devs, ports, procs, refreshRuntime, setKillTarget, gitBranches, fetchGitBranch, theme } =
+    useStore();
   const [expandedServer, setExpandedServer] = useState<number | null>(null);
 
   const listening = useMemo<PortEntry[]>(
@@ -90,7 +91,7 @@ export default function Servers() {
         },
       ],
     };
-  }, [frameworkData]);
+  }, [frameworkData, theme]);
 
   // 端口分布条形图
   const portBarOption = useMemo(() => {
@@ -232,7 +233,7 @@ export default function Servers() {
                         <Btn
                           className="!px-2 !py-1 !text-xs"
                           title="打开项目目录"
-                          onClick={() => openExternal(d.project_dir!)}
+                          onClick={() => d.project_dir && openExternal(d.project_dir)}
                         >
                           <FolderOpen size={12} />
                         </Btn>

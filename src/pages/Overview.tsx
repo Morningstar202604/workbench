@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { EChart, chartGapColor } from "../lib/echarts";
+import { EChart, chartGapColor, chartLineColor } from "../lib/echarts";
 import {
   Activity,
   Cpu,
@@ -192,7 +192,7 @@ export default function Overview() {
         },
       ],
     }),
-    [categories]
+    [categories, theme]
   );
 
   // 端口分布条形图
@@ -275,7 +275,7 @@ export default function Overview() {
               radius: ["58%", "78%"],
               center: ["50%", "50%"],
               silent: true,
-              data: [{ value: 1, name: "无磁盘数据", itemStyle: { color: "var(--color-line)" } }],
+              data: [{ value: 1, name: "无磁盘数据", itemStyle: { color: chartLineColor() } }],
               label: { show: false },
             },
           ],

@@ -107,13 +107,17 @@ function toEChartsTheme(t: ChartTheme): echarts.EChartsCoreOption {
 echarts.registerTheme("wb-dark", toEChartsTheme(DARK));
 echarts.registerTheme("wb-light", toEChartsTheme(LIGHT));
 
-/** 暴露主题颜色供极个别仍需访问的地方使用 */
-export const chartTheme = { dark: DARK, light: LIGHT };
-
 /** 返回当前主题下图表「间隙」应使用的颜色（即面板背景色）。 */
 export function chartGapColor(): string {
   if (typeof document === "undefined") return DARK.bg;
   return document.documentElement.dataset.theme === "light" ? LIGHT.bg : DARK.bg;
+}
+
+/** 返回当前主题下的分隔线颜色（用于空数据占位图元）。
+ * 注意：ECharts 不解析 CSS 变量，选项里必须给出真实色值。 */
+export function chartLineColor(): string {
+  if (typeof document === "undefined") return DARK.line;
+  return document.documentElement.dataset.theme === "light" ? LIGHT.line : DARK.line;
 }
 
 // ─── 组件 ──────────────────────────────────────────────────

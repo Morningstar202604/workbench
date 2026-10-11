@@ -30,6 +30,7 @@ const COLORS = ["#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#f87171", "#60a5fa"
 
 export default function AiSessions() {
   const {
+    theme,
     ais,
     sessions,
     opencodePort,
@@ -137,7 +138,7 @@ export default function AiSessions() {
   // ── 总消息数 ──────────────────────────────────────────────
   const totalMessages = useMemo(
     () => sessionFiles.reduce((acc, f) => acc + (f.message_count ?? 0), 0),
-    [sessionFiles]
+    [sessionFiles, theme]
   );
 
   // ── 图表：AI 进程内存分布 ──────────────────────────────
@@ -192,7 +193,7 @@ export default function AiSessions() {
         },
       ],
     };
-  }, [sessionFiles]);
+  }, [sessionFiles, theme]);
 
   // ── 会话详情加载 ──────────────────────────────────────────
   const openSessionDetail = (port: number, id: string) => {
