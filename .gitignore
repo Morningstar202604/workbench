@@ -2,5 +2,8 @@ node_modules
 dist
 target
 .aqg/
+.meituan-catpaw/
 *.local
 .DS_Store
+# 数据文件损坏时的备份，别进仓库
+*.corrupt-*

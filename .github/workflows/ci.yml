@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+# 本项目只在 Windows 上开发与打包：Tauri 的构建脚本在 Linux 需要 webkit2gtk 系统依赖，
+# 用 windows-latest 既贴合真实目标平台，也免去装一堆图形库。
+jobs:
+  frontend:
+    name: 前端类型检查与构建
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: 上传 dist 供打包 job 复用
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+  backend:
+    name: 后端测试与静态检查
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: cargo test
+        run: cargo test --lib
+      - name: cargo clippy（零警告门禁）
+        run: cargo clippy --all-targets -- -D warnings
+
+  package:
+    name: 产出安装包（不发布）
+    runs-on: windows-latest
+    needs: [frontend, backend]
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npx tauri build --no-bundle
+      - name: 校验可执行文件确实产出
+        shell: bash
+        run: test -f src-tauri/target/release/workbench.exe && ls -la src-tauri/target/release/workbench.exe
