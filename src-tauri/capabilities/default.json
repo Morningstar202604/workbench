@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "默认权限集：核心 + opener + 通知 + 全局快捷键 + 窗口状态",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "opener:default",
+    "opener:allow-open-path",
+    "notification:default",
+    "global-shortcut:default",
+    "window-state:default"
+  ]
+}
