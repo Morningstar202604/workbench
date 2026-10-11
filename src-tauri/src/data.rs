@@ -1,10 +1,12 @@
-//! 本地数据层：项目与任务，持久化到 app_data_dir/data.json（原子写入）。
-//! 任何 IO 异常降级为默认空数据，保证前端可启动。
+//! 本地数据层：项目与任务，持久化到 app_data_dir/data.json。
+//! 损坏文件先保全再报错（见 json_store），绝不静默当成空数据 —— 那会让下一次保存
+//! 把可恢复的用户数据覆盖成空集。
 
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
+
+use crate::json_store;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct WorkbenchData {
@@ -42,28 +44,17 @@ pub fn data_file_path(app: &AppHandle) -> Result<PathBuf, String> {
         .path()
         .app_data_dir()
         .map_err(|e| format!("无法定位数据目录: {e}"))?;
-    fs::create_dir_all(&dir).map_err(|e| format!("无法创建数据目录: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建数据目录: {e}"))?;
     Ok(dir.join("data.json"))
 }
 
-pub fn load_from_disk(app: &AppHandle) -> WorkbenchData {
-    let path = match data_file_path(app) {
-        Ok(p) => p,
-        Err(_) => return WorkbenchData::default(),
-    };
-    match fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str(&text).unwrap_or_default(),
-        Err(_) => WorkbenchData::default(),
-    }
+/// 读取项目/任务数据。文件损坏或不可读时返回 Err，由前端明确告知用户。
+pub fn load_from_disk(app: &AppHandle) -> Result<WorkbenchData, String> {
+    let path = data_file_path(app)?;
+    Ok(json_store::read_json(&path)?.unwrap_or_default())
 }
 
-/// 原子写入：先写临时文件再 rename，避免半截 JSON。
 pub fn save_to_disk(app: &AppHandle, data: &WorkbenchData) -> Result<(), String> {
-    let path = data_file_path(app)?;
-    let tmp = path.with_extension("json.tmp");
-    let text = serde_json::to_string_pretty(data).map_err(|e| format!("序列化失败: {e}"))?;
-    fs::write(&tmp, text).map_err(|e| format!("写入失败: {e}"))?;
-    fs::rename(&tmp, &path).map_err(|e| format!("替换文件失败: {e}"))?;
-    Ok(())
+    json_store::write_json_atomic(&data_file_path(app)?, data)
 }
 

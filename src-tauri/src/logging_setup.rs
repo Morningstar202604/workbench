@@ -18,7 +18,7 @@ pub fn init_logging(app: &AppHandle) {
     };
     rotate_on_startup(&log_path);
 
-    let config = fern::Dispatch::new()
+    let dispatch = fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
                 "[{}] [{}]: {}",
@@ -27,13 +27,23 @@ pub fn init_logging(app: &AppHandle) {
                 message
             ))
         })
-        .level(LevelFilter::Debug)
-        .chain(fern::log_file(&log_path).unwrap_or_else(|e| {
-            panic!("无法初始化日志文件 {}: {e}", log_path.display())
-        }));
+        .level(LevelFilter::Debug);
 
-    if config.apply().is_err() {
-        eprintln!("日志初始化失败");
+    // 日志文件不可写（目录权限、被杀软占用、磁盘满）时降级到控制台，
+    // 绝不因为「日志写不了」而让整个应用启动失败。
+    let dispatch = match fern::log_file(&log_path) {
+        Ok(sink) => dispatch.chain(sink),
+        Err(e) => {
+            eprintln!(
+                "日志文件不可用，降级为控制台输出 {}: {e}",
+                log_path.display()
+            );
+            dispatch.chain(std::io::stderr())
+        }
+    };
+
+    if dispatch.apply().is_err() {
+        eprintln!("日志子系统安装失败");
     }
 }
 

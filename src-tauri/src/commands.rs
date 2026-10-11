@@ -2,12 +2,13 @@
 
 use tauri::AppHandle;
 
-use crate::ai::{self, AiProcess, OpencodeSession, SessionDetail, SessionFile, SessionFilePreview};
+use crate::ai::{self, AiProcess, OpencodeSession, SessionDetail, SessionFilePreview};
 use crate::cost_store::{
-    self, CostData, CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow,
+    self, CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow,
 };
 use crate::data::{self, WorkbenchData};
 use crate::devserver::{self, DevServer};
+use crate::ipc_guard::{AllowedPorts, KnownDirs};
 use crate::ports::{self, PortEntry};
 use crate::pricing::PricingTable;
 use crate::procs::{self, ProcInfo};
@@ -15,6 +16,17 @@ use crate::session_meter::{self, SessionFileEntry};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Command;
+
+/// 在 Windows 上取 netstat 输出。chcp 65001 确保中文 Windows 的表头按 UTF-8 输出。
+/// TODO(P1): 非 Windows 平台改走 POSIX netstat/ss —— 当前 ports.rs 的 POSIX 分支在
+/// 本 crate 里实际不会被执行，README 的跨平台说法也据此收敛为 Windows。
+fn run_netstat() -> Result<String, String> {
+    let output = Command::new("cmd")
+        .args(["/c", "chcp", "65001", ">", "nul", "&&", "netstat", "-ano"])
+        .output()
+        .map_err(|e| format!("netstat 执行失败: {e}"))?;
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
 
 /// 构建 PID 索引哈希表（消除 O(n*m) 端口→进程扫描）
 fn build_pid_index(procs: Vec<ProcInfo>) -> HashMap<u32, ProcInfo> {
@@ -42,34 +54,18 @@ pub async fn terminate_process(pid: u32) -> Result<(), String> {
 
 #[tauri::command(async)]
 pub async fn list_ports() -> Result<Vec<PortEntry>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        // chcp 65001 确保中文 Windows 下 netstat 表头用 UTF-8 输出，避免表头行解析出替换字符
-        let output = Command::new("cmd")
-            .args(["/c", "chcp", "65001", ">", "nul", "&&", "netstat", "-ano"])
-            .output();
-        let output = match output {
-            Ok(o) => o,
-            Err(e) => return Err(format!("netstat 执行失败: {e}")),
-        };
-        let text = String::from_utf8_lossy(&output.stdout);
-        Ok(ports::parse_netstat(&text))
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    tauri::async_runtime::spawn_blocking(|| Ok(ports::parse_netstat(&run_netstat()?)))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 开发服务器 = LISTENING 的 TCP 端口 + 命令行命中框架规则的进程。
 #[tauri::command(async)]
-pub async fn list_dev_servers() -> Result<Vec<DevServer>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let output = Command::new("cmd")
-            .args(["/c", "chcp", "65001", ">", "nul", "&&", "netstat", "-ano"])
-            .output();
-        let output = match output {
-            Ok(o) => o,
-            Err(e) => return Err(format!("netstat 执行失败: {e}")),
-        };
-        let text = String::from_utf8_lossy(&output.stdout);
+pub async fn list_dev_servers(
+    dirs: tauri::State<'_, KnownDirs>,
+) -> Result<Vec<DevServer>, String> {
+    let servers = tauri::async_runtime::spawn_blocking(|| -> Result<Vec<DevServer>, String> {
+        let text = run_netstat()?;
         let ports = ports::parse_netstat(&text);
         let procs = procs::snapshot_processes();
         let pid_index = build_pid_index(procs);
@@ -113,7 +109,17 @@ pub async fn list_dev_servers() -> Result<Vec<DevServer>, String> {
         Ok(servers)
     })
     .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    .map_err(|e| format!("任务执行失败: {e}"))??;
+
+    // 这些目录会以 project_dir 的形式回到前端，再被 git_branch / open_path 传回来，
+    // 因此同步登记为「后端主动展示过的目录」。
+    dirs.record(
+        servers
+            .iter()
+            .filter_map(|s| s.project_dir.as_deref())
+            .filter(|d| !d.is_empty()),
+    );
+    Ok(servers)
 }
 
 #[tauri::command(async)]
@@ -155,8 +161,10 @@ pub struct OpencodeSessionsResult {
 /// 拉取 opencode 在线会话。端口发现：默认 4096 + AI 进程命令行里的 --port；
 /// 逐个尝试直到成功，全部失败才报错。
 #[tauri::command(async)]
-pub async fn opencode_sessions() -> Result<OpencodeSessionsResult, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+pub async fn opencode_sessions(
+    ports_state: tauri::State<'_, AllowedPorts>,
+) -> Result<OpencodeSessionsResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(|| {
         let procs = procs::snapshot_processes();
         let mut ports = vec![4096u16];
         ports.extend(discover_opencode_ports(&procs));
@@ -175,7 +183,11 @@ pub async fn opencode_sessions() -> Result<OpencodeSessionsResult, String> {
         ))
     })
     .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    .map_err(|e| format!("任务执行失败: {e}"))??;
+
+    // 只允许详情请求复用刚刚探测成功的端口
+    ports_state.record([result.port]);
+    Ok(result)
 }
 
 fn discover_opencode_ports(procs: &[ProcInfo]) -> Vec<u16> {
@@ -205,29 +217,28 @@ fn discover_opencode_ports(procs: &[ProcInfo]) -> Vec<u16> {
     ports
 }
 
-#[tauri::command(async)]
-pub async fn recent_sessions() -> Result<Vec<SessionFile>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let home = dirs_home().ok_or_else(|| "无法定位用户主目录".to_string())?;
-        Ok(ai::scan_session_files(&home))
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
-}
-
 // ── AI 会话详情 ──────────────────────────────────────────
 
 /// 拉取单个 opencode 会话详情（消息数量、预览、工具使用等）。
+/// 端口必须是上一次 opencode_sessions 真正探测成功的端口。
 #[tauri::command(async)]
-pub async fn opencode_session_detail(port: u16, session_id: String) -> Result<SessionDetail, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        Ok(ai::fetch_session_detail(port, &session_id))
+pub async fn opencode_session_detail(
+    ports_state: tauri::State<'_, AllowedPorts>,
+    port: u16,
+    session_id: String,
+) -> Result<SessionDetail, String> {
+    if !ports_state.contains(port) {
+        log::warn!("拒绝未探测过的端口上的会话详情请求: {port}");
+        return Err("端口不在允许列表内，请刷新会话列表".to_string());
+    }
+    let detail = tauri::async_runtime::spawn_blocking(move || {
+        ai::fetch_session_detail(port, &session_id)
     })
     .await
-    .map_err(|e| format!("任务执行失败: {e}"))?
+    .map_err(|e| format!("任务执行失败: {e}"))?;
+    Ok(detail)
 }
 
-/// 增强扫描本地会话文件，附带消息条数和内容预览。
 #[tauri::command(async)]
 pub async fn recent_sessions_preview() -> Result<Vec<SessionFilePreview>, String> {
     tauri::async_runtime::spawn_blocking(|| {
@@ -238,24 +249,37 @@ pub async fn recent_sessions_preview() -> Result<Vec<SessionFilePreview>, String
     .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
-/// 探测项目的 git 分支信息。
+/// 探测项目的 git 分支信息。只接受后端此前展示过的目录 —— `git -C <任意目录>`
+/// 会执行该仓库配置的 fsmonitor / filter 钩子，恶意目录即等于本机代码执行。
 #[tauri::command(async)]
-pub async fn git_branch(dir: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let output = Command::new("git")
+pub async fn git_branch(dirs: tauri::State<'_, KnownDirs>, dir: String) -> Result<String, String> {
+    if !dirs.contains(&dir) {
+        log::warn!("拒绝未登记的目录 git 探测: {dir}");
+        return Err("该目录不在允许列表内".to_string());
+    }
+    let output = tauri::async_runtime::spawn_blocking(move || {
+        Command::new("git")
             .args(["-C", &dir, "branch", "--show-current"])
-            .output();
-        match output {
-            Ok(o) if o.status.success() => {
-                let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                Ok(s)
-            }
-            Ok(_) => Ok(String::new()),
-            Err(_) => Ok(String::new()),
-        }
+            .output()
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
+    .map_err(|e| format!("git 执行失败: {e}"))?;
+    if !output.status.success() {
+        return Ok(String::new());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// 用系统默认程序打开目录。同样只允许后端展示过的目录，等价于把
+/// opener 的 `allow-open-path` 从 WebView 权限面里彻底拿掉。
+#[tauri::command]
+pub fn open_known_path(dirs: tauri::State<'_, KnownDirs>, path: String) -> Result<(), String> {
+    if path.is_empty() || !dirs.contains(&path) {
+        log::warn!("拒绝打开未登记的路径: {path}");
+        return Err("该路径不在允许列表内".to_string());
+    }
+    tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| format!("打开失败: {e}"))
 }
 
 fn dirs_home() -> Option<std::path::PathBuf> {
@@ -356,14 +380,26 @@ pub async fn disk_info() -> Result<Vec<DiskInfo>, String> {
 }
 
 #[tauri::command]
-pub fn load_data(app: AppHandle) -> WorkbenchData {
-    data::load_from_disk(&app)
+pub fn load_data(app: AppHandle, dirs: tauri::State<'_, KnownDirs>) -> Result<WorkbenchData, String> {
+    let data = data::load_from_disk(&app)?;
+    // 项目路径是前端后续 git 探测 / 打开目录的唯一合法来源，先登记
+    dirs.record(data.projects.iter().map(|p| p.path.as_str()));
+    Ok(data)
 }
 
 #[tauri::command]
-pub fn save_data(app: AppHandle, data: WorkbenchData) -> Result<(), String> {
-        log::debug!("持久化数据: {} 项目 {} 任务", data.projects.len(), data.tasks.len());
-        data::save_to_disk(&app, &data)
+pub fn save_data(
+    app: AppHandle,
+    dirs: tauri::State<'_, KnownDirs>,
+    data: WorkbenchData,
+) -> Result<(), String> {
+    log::debug!(
+        "持久化数据: {} 项目 {} 任务",
+        data.projects.len(),
+        data.tasks.len()
+    );
+    dirs.record(data.projects.iter().map(|p| p.path.as_str()));
+    data::save_to_disk(&app, &data)
 }
 
 // ── 日志读取 ──────────────────────────────────────────────
@@ -390,15 +426,6 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
         let home = dirs_home().ok_or_else(|| "无法定位用户主目录".to_string())?;
         let session_files = ai::collect_all_session_files(&home);
 
-        // 已有的记录 key 集合（(path, mtime, size) 未变化的文件跳过重算）
-        let existing = cost_store::load_cost_data(&app);
-        let existing_keys: HashMap<(String, u64, u64), ()> = existing
-            .records
-            .iter()
-            .map(|r| ((r.file_path.clone(), r.file_mtime, r.file_size), ()))
-            .collect();
-
-        // 组装 entry
         let entries: Vec<SessionFileEntry> = session_files
             .iter()
             .map(|f| SessionFileEntry {
@@ -410,23 +437,23 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
             })
             .collect();
 
-        // 获取当前定价表（用户自定价覆盖内置快照）
-        let pricing_table = build_pricing_table(&app, &existing);
-
-        // 扫描
-        let records = session_meter::scan_sessions_to_records(&entries, &pricing_table, &existing_keys);
-
-        let new_count = records.len();
+        // 已有记录快照仅用于跳过未变化的文件（纯加速，不影响正确性：
+        // 入库按 file_path 整组替换，重复扫描同一文件不会叠加）。
+        let existing_keys = cost_store::existing_keys(&app)?;
+        let pricing_table = build_pricing_table(&app)?;
+        let records =
+            session_meter::scan_sessions_to_records(&entries, &pricing_table, &existing_keys);
+        let total_scanned = records.len();
         let added = cost_store::import_records(&app, &records)?;
 
         // 构建聚合视图
-        let overview = cost_store::build_overview(&app);
-        let trend = cost_store::build_trend(&app, 14);
-        let model_breakdown = cost_store::build_model_breakdown(&app);
+        let overview = cost_store::build_overview(&app)?;
+        let trend = cost_store::build_trend(&app, 14)?;
+        let model_breakdown = cost_store::build_model_breakdown(&app)?;
 
         Ok(ScanCostResult {
             new_records: added,
-            total_scanned: new_count,
+            total_scanned,
             overview,
             trend,
             model_breakdown,
@@ -438,25 +465,25 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
 
 /// 获取成本总览（不重新扫描）
 #[tauri::command]
-pub fn get_cost_overview(app: AppHandle) -> CostOverview {
+pub fn get_cost_overview(app: AppHandle) -> Result<CostOverview, String> {
     cost_store::build_overview(&app)
 }
 
 /// 获取成本趋势
 #[tauri::command]
-pub fn get_cost_trend(app: AppHandle, days: usize) -> Vec<CostTrendRow> {
+pub fn get_cost_trend(app: AppHandle, days: usize) -> Result<Vec<CostTrendRow>, String> {
     cost_store::build_trend(&app, days)
 }
 
 /// 按模型分解成本
 #[tauri::command]
-pub fn get_model_breakdown(app: AppHandle) -> Vec<ModelBreakdownRow> {
+pub fn get_model_breakdown(app: AppHandle) -> Result<Vec<ModelBreakdownRow>, String> {
     cost_store::build_model_breakdown(&app)
 }
 
-/// 获取 / 保存成本设置（预算 / 自定价 / 告警阈值）
+/// 获取 / 保存成本设置（预算 / 告警阈值 / 是否计入估算）
 #[tauri::command]
-pub fn get_cost_settings_cmd(app: AppHandle) -> CostSettings {
+pub fn get_cost_settings_cmd(app: AppHandle) -> Result<CostSettings, String> {
     cost_store::get_cost_settings(&app)
 }
 
@@ -481,17 +508,14 @@ pub struct ScanCostResult {
     pub model_breakdown: Vec<ModelBreakdownRow>,
 }
 
-/// 构造当前定价表 = 内置快照 + 用户覆盖（自定价放在 cost_data.json 内的 settings 里）
-/// 目前简单实现：用户覆盖单独存一个 pricing_overrides.json 文件。
-fn build_pricing_table(app: &AppHandle, _cost_data: &CostData) -> PricingTable {
+/// 构造当前定价表 = 内置快照 + 用户覆盖文件 pricing_overrides.json。
+/// 覆盖文件目前只读（无写入 IPC）：用户需手工放置文件，UI 未提供编辑入口。
+fn build_pricing_table(app: &AppHandle) -> Result<PricingTable, String> {
     let mut table = PricingTable::default();
-    // 读取覆盖文件
-    if let Ok(path) = cost_store::cost_data_path_overrides(app) {
-        if let Ok(text) = std::fs::read_to_string(&path) {
-            if let Ok(overrides) = serde_json::from_str::<HashMap<String, (f64, f64)>>(&text) {
-                table.overrides = overrides;
-            }
-        }
+    let path = cost_store::cost_data_path_overrides(app)?;
+    match crate::json_store::read_json::<HashMap<String, (f64, f64)>>(&path)? {
+        Some(overrides) => table.overrides = overrides,
+        None => log::debug!("无 pricing_overrides.json，使用内置价格表"),
     }
-    table
+    Ok(table)
 }

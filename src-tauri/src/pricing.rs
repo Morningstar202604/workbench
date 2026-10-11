@@ -96,18 +96,10 @@ fn builtin_pricing() -> HashMap<&'static str, PricePair> {
 }
 
 /// 价格表：内置快照 + 用户覆盖。
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, Default)]
 pub struct PricingTable {
     /// 用户自定义覆盖（优先级高于内置）
     pub overrides: HashMap<String, PricePair>,
-}
-
-impl Default for PricingTable {
-    fn default() -> Self {
-        Self {
-            overrides: HashMap::new(),
-        }
-    }
 }
 
 impl PricingTable {
@@ -162,12 +154,21 @@ impl PricingTable {
         let total = inp_cost + out_cost + cache_cost;
         (inp_cost + cache_cost, out_cost, total)
     }
+
+    /// 该型号在价格表里是否真的有价。0 价 = 未定价，调用方应标成 zero_pricing
+    /// 而不是让用户看到「花了 $0.00」。
+    pub fn is_priced(&self, model: &str) -> bool {
+        let (input, output) = self.lookup(model);
+        input > 0.0 || output > 0.0
+    }
 }
 
 /// 从 JSONL 内容中推断模型名（如果存在）。
 /// Claude Code 文件通常在顶层有 `model` 字段，但很多时候只有 session 元信息里才有。
-/// 这里提供一个启发式推理：根据文件路径 + 工具类型给一个合理默认。
-pub fn infer_model(tool: &str, raw_jsonl_head: &str) -> String {
+/// 推断不出来时返回 "unknown" —— 绝不编造一个具体型号：编造会让它按那个型号的价格
+/// 参与成本聚合，把一个 haiku/gpt 会话算成 sonnet 的钱。
+/// 未知型号查表得 0 价，由 scan_sessions_to_records 标成 zero_pricing 供 UI 明示。
+pub fn infer_model(raw_jsonl_head: &str) -> String {
     // 尝试从首行 JSON 中找 model 字段
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(raw_jsonl_head) {
         if let Some(m) = v.get("model").and_then(|s| s.as_str()) {
@@ -182,14 +183,7 @@ pub fn infer_model(tool: &str, raw_jsonl_head: &str) -> String {
             }
         }
     }
-    // 回退默认
-    match tool {
-        "Claude Code" => "claude-sonnet-4-5".to_string(),
-        "Codex CLI" => "gpt-5".to_string(),
-        "OpenCode" => "gpt-4o".to_string(),
-        "Aider" => "claude-sonnet-4-5".to_string(),
-        _ => "unknown".to_string(),
-    }
+    "unknown".to_string()
 }
 
 #[cfg(test)]
@@ -268,16 +262,17 @@ mod tests {
     }
 
     #[test]
-    fn infer_model_default() {
-        let m = infer_model("Claude Code", "");
-        assert_eq!(m, "claude-sonnet-4-5");
-        let m2 = infer_model("Codex CLI", "");
-        assert_eq!(m2, "gpt-5");
+    fn infer_model_never_invents_a_specific_model() {
+        // 关键回归：宁可 unknown（走 zero_pricing，UI 显示「未定价」），
+        // 也不能把 haiku/gpt 会话编成 sonnet 计费。
+        assert_eq!(infer_model(""), "unknown");
+        assert!(!PricingTable::default().is_priced("unknown"));
+        assert!(PricingTable::default().is_priced("claude-sonnet-4-5"));
     }
 
     #[test]
     fn infer_model_from_json() {
         let json = r#"{"model":"gpt-4o-mini","type":"summary"}"#;
-        assert_eq!(infer_model("Claude Code", json), "gpt-4o-mini");
+        assert_eq!(infer_model(json), "gpt-4o-mini");
     }
 }

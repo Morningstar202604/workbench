@@ -35,77 +35,69 @@ pub struct UsageAgg {
 
 /// 从单个 JSONL 文件提取 (模型, 按日聚合的用量列表)。
 /// `mtime_day`：文件 mtime 对应日期，作为无行级时间戳时的兜底归属日。
-pub fn extract_usage(path: &str, tool: &str, mtime_day: &str) -> (String, Vec<UsageAgg>) {
+pub fn extract_usage(path: &str, mtime_day: &str) -> (String, Vec<UsageAgg>) {
     let file = match fs::File::open(path) {
         Ok(f) => f,
         Err(_) => {
-            return (
-                infer_model(tool, ""),
-                vec![zero_agg(mtime_day, "zero_pricing")],
-            )
+            // 读不动的文件不猜模型：标 zero_pricing，金额为 0，由 UI 明示未定价
+            return (infer_model(""), vec![zero_agg(mtime_day, "zero_pricing")]);
         }
     };
 
     let reader = BufReader::new(file);
     let mut by_day: HashMap<String, UsageAgg> = HashMap::new();
+    let mut chars_by_day: HashMap<String, usize> = HashMap::new();
     let mut found_model: Option<String> = None;
     let mut found_usage = false;
     let mut head_line = String::new();
+    let mut latest_day: Option<String> = None;
 
     for line_result in reader.lines() {
-        let line = match line_result {
-            Ok(l) => l,
-            Err(_) => continue,
-        };
+        let Ok(line) = line_result else { continue };
         if line.trim().is_empty() {
             continue;
         }
         if head_line.is_empty() {
             head_line = line.clone();
         }
-        let parsed: serde_json::Value = match serde_json::from_str(&line) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
+        let parsed: Option<serde_json::Value> = serde_json::from_str(&line).ok();
 
-        if found_model.is_none() {
-            found_model = model_from_value(&parsed);
+        // 归属日：行级 timestamp 优先；取不到就挂到已见到的最近一天，最后兜底 mtime 日。
+        // 同时累计每天的字符数，供无 usage 时的启发式估算按日分桶使用。
+        let day = parsed
+            .as_ref()
+            .and_then(line_day)
+            .or_else(|| latest_day.clone())
+            .unwrap_or_else(|| mtime_day.to_string());
+        if latest_day.as_deref().map_or(true, |prev| day.as_str() > prev) {
+            latest_day = Some(day.clone());
         }
+        *chars_by_day.entry(day.clone()).or_insert(0) += line.chars().count();
 
-        let usage = parsed
-            .get("message")
-            .and_then(|m| m.get("usage"))
-            .or_else(|| parsed.get("usage"));
-        let usage = match usage {
-            Some(u) => u,
-            None => continue,
+        let Some(value) = parsed else { continue };
+        if found_model.is_none() {
+            found_model = model_from_value(&value);
+        }
+        let Some(usage) = usage_from_value(&value) else {
+            continue;
         };
-        let inp = usage_token_u64(usage.get("input_tokens"))
-            .or_else(|| usage_token_u64(usage.get("inputTokens")))
-            .or_else(|| usage_token_u64(usage.get("prompt_tokens")))
-            .unwrap_or(0);
-        let out = usage_token_u64(usage.get("output_tokens"))
-            .or_else(|| usage_token_u64(usage.get("outputTokens")))
-            .or_else(|| usage_token_u64(usage.get("completion_tokens")))
-            .unwrap_or(0);
-        if inp == 0 && out == 0 {
+
+        // 纯缓存行（input/output 均为 0 但 cache 分量非 0）同样是真实计费事件，不能跳过
+        if usage.is_empty() {
             continue;
         }
-        let cache_read = usage_token_u64(usage.get("cache_read_input_tokens")).unwrap_or(0);
-        let cache_creation = usage_token_u64(usage.get("cache_creation_input_tokens")).unwrap_or(0);
 
         found_usage = true;
-        let day = line_day(&parsed).unwrap_or_else(|| mtime_day.to_string());
         let agg = by_day
             .entry(day.clone())
             .or_insert_with(|| zero_agg(&day, "measured"));
-        agg.input = agg.input.saturating_add(inp);
-        agg.output = agg.output.saturating_add(out);
-        agg.cache_read = agg.cache_read.saturating_add(cache_read);
-        agg.cache_creation = agg.cache_creation.saturating_add(cache_creation);
+        agg.input = agg.input.saturating_add(usage.input);
+        agg.output = agg.output.saturating_add(usage.output);
+        agg.cache_read = agg.cache_read.saturating_add(usage.cache_read);
+        agg.cache_creation = agg.cache_creation.saturating_add(usage.cache_creation);
     }
 
-    let model = found_model.unwrap_or_else(|| infer_model(tool, &head_line));
+    let model = found_model.unwrap_or_else(|| infer_model(&head_line));
 
     if found_usage {
         let mut aggs: Vec<UsageAgg> = by_day.into_values().collect();
@@ -113,20 +105,30 @@ pub fn extract_usage(path: &str, tool: &str, mtime_day: &str) -> (String, Vec<Us
         return (model, aggs);
     }
 
-    // 降级：启发式估算（4 chars/token 是业界常用经验值），整文件记到 mtime 日
-    let (est_inp, est_out) = heuristic_estimate(path);
-    if est_inp + est_out > 0 {
-        return (
-            model,
-            vec![UsageAgg {
-                day: mtime_day.to_string(),
-                input: est_inp,
-                output: est_out,
+    // 降级：按日分桶的字符估算（4 chars/token 是业界常用经验值）。
+    // 关键点是分桶而不是整文件记到 mtime 日：会话追加只会改变最新一天的桶，
+    // 往日柱子保持稳定，趋势图不会自己重写历史。
+    let mut aggs: Vec<UsageAgg> = chars_by_day
+        .into_iter()
+        .filter_map(|(day, chars)| {
+            let total = (chars / 4) as u64;
+            if total == 0 {
+                return None;
+            }
+            let input = total * 6 / 10;
+            Some(UsageAgg {
+                day,
+                input,
+                output: total - input,
                 cache_read: 0,
                 cache_creation: 0,
                 source: "estimated".to_string(),
-            }],
-        );
+            })
+        })
+        .collect();
+    if !aggs.is_empty() {
+        aggs.sort_by(|a, b| a.day.cmp(&b.day));
+        return (model, aggs);
     }
     (model, vec![zero_agg(mtime_day, "zero_pricing")])
 }
@@ -196,23 +198,46 @@ fn normalize_epoch(n: i64) -> i64 {
     }
 }
 
-/// 从已知格式的 JSON 中提取 (input, output) usage —— 保留给单测与外部复用。
-fn extract_usage_from_json(v: &serde_json::Value) -> Option<(u64, u64)> {
+/// 一条 usage 的四个分量。
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Usage {
+    pub input: u64,
+    pub output: u64,
+    pub cache_read: u64,
+    pub cache_creation: u64,
+}
+
+impl Usage {
+    fn is_empty(&self) -> bool {
+        self.input + self.output + self.cache_read + self.cache_creation == 0
+    }
+}
+
+/// 从一行 JSONL 提取 usage：兼容 Claude Code（message.usage）、OpenAI 风格
+/// （顶层 usage + prompt/completion_tokens）与驼峰命名。生产路径与单测共用同一实现，
+/// 避免「测的是生产不跑的函数」这种假信心。
+fn usage_from_value(v: &serde_json::Value) -> Option<Usage> {
     let usage = v
         .get("message")
         .and_then(|m| m.get("usage"))
         .or_else(|| v.get("usage"))?;
-    let inp = usage_token_u64(usage.get("input_tokens"))
-        .or_else(|| usage_token_u64(usage.get("inputTokens")))
-        .or_else(|| usage_token_u64(usage.get("prompt_tokens")))?;
-    let out = usage_token_u64(usage.get("output_tokens"))
-        .or_else(|| usage_token_u64(usage.get("outputTokens")))
-        .or_else(|| usage_token_u64(usage.get("completion_tokens")))?;
-    if inp > 0 || out > 0 {
-        Some((inp, out))
-    } else {
-        None
-    }
+    let pick = |keys: [&str; 3]| -> u64 {
+        keys.iter()
+            .filter_map(|k| usage_token_u64(usage.get(*k)))
+            .next()
+            .unwrap_or(0)
+    };
+    let input = pick(["input_tokens", "inputTokens", "prompt_tokens"]);
+    let output = pick(["output_tokens", "outputTokens", "completion_tokens"]);
+    let cache_read = usage_token_u64(usage.get("cache_read_input_tokens")).unwrap_or(0);
+    let cache_creation =
+        usage_token_u64(usage.get("cache_creation_input_tokens")).unwrap_or(0);
+    Some(Usage {
+        input,
+        output,
+        cache_read,
+        cache_creation,
+    })
 }
 
 fn usage_token_u64(v: Option<&serde_json::Value>) -> Option<u64> {
@@ -221,22 +246,6 @@ fn usage_token_u64(v: Option<&serde_json::Value>) -> Option<u64> {
         Some(serde_json::Value::String(s)) => s.parse::<u64>().ok(),
         _ => None,
     }
-}
-
-/// 启发式估算：读取全部文本，character_count / 4 估 token，按 6:4 粗分 input:output。
-fn heuristic_estimate(path: &str) -> (u64, u64) {
-    let text = match fs::read_to_string(path) {
-        Ok(t) => t,
-        Err(_) => return (0, 0),
-    };
-    let total_chars = text.chars().count() as f64;
-    let total_tokens = (total_chars / 4.0).max(0.0) as u64;
-    if total_tokens == 0 {
-        return (0, 0);
-    }
-    let input = (total_tokens as f64 * 0.6) as u64;
-    let output = total_tokens - input;
-    (input, output)
 }
 
 /// 批量扫描 session 文件 → 成本记录。
@@ -255,7 +264,8 @@ pub fn scan_sessions_to_records(
         }
 
         let mtime_day = unix_to_day(f.modified);
-        let (model, aggs) = extract_usage(&f.path, &f.tool, &mtime_day);
+        let (model, aggs) = extract_usage(&f.path, &mtime_day);
+        let priced = table.is_priced(&model);
         for agg in aggs {
             let (cost_inp, cost_out, cost_total) = table.calc_cost(
                 &model,
@@ -264,6 +274,8 @@ pub fn scan_sessions_to_records(
                 agg.cache_read,
                 agg.cache_creation,
             );
+            // 查不到单价的型号：一律记 zero_pricing，绝不让它伪装成「花了 $0.00」的有效账单
+            let source = if priced { agg.source } else { "zero_pricing".to_string() };
             records.push(CostRecord {
                 file_path: f.path.clone(),
                 file_mtime: f.modified,
@@ -278,7 +290,7 @@ pub fn scan_sessions_to_records(
                 cost_input: round3(cost_inp),
                 cost_output: round3(cost_out),
                 cost_total: round3(cost_total),
-                cost_source: agg.source,
+                cost_source: source,
                 day: agg.day,
             });
         }
@@ -288,7 +300,7 @@ pub fn scan_sessions_to_records(
 
 fn unix_to_day(unix_secs: u64) -> String {
     let dt = chrono::DateTime::from_timestamp(unix_secs as i64, 0)
-        .unwrap_or_else(|| chrono::DateTime::UNIX_EPOCH);
+        .unwrap_or(chrono::DateTime::UNIX_EPOCH);
     dt.with_timezone(&chrono::Local).format("%Y-%m-%d").to_string()
 }
 
@@ -324,7 +336,15 @@ mod tests {
             }
         }"#;
         let v: serde_json::Value = serde_json::from_str(json).unwrap();
-        assert_eq!(extract_usage_from_json(&v), Some((15000, 2500)));
+        assert_eq!(
+            usage_from_value(&v),
+            Some(Usage {
+                input: 15000,
+                output: 2500,
+                cache_read: 0,
+                cache_creation: 0
+            })
+        );
     }
 
     #[test]
@@ -336,7 +356,25 @@ mod tests {
             }
         }"#;
         let v: serde_json::Value = serde_json::from_str(json).unwrap();
-        assert_eq!(extract_usage_from_json(&v), Some((100, 50)));
+        assert_eq!(
+            usage_from_value(&v),
+            Some(Usage {
+                input: 100,
+                output: 50,
+                cache_read: 0,
+                cache_creation: 0
+            })
+        );
+    }
+
+    #[test]
+    fn cache_only_line_is_not_dropped() {
+        // 纯缓存写入行：input/output 为 0 但 cache_creation 非 0，这是真实计费事件
+        let json = r#"{"usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":8000}}"#;
+        let v: serde_json::Value = serde_json::from_str(json).unwrap();
+        let usage = usage_from_value(&v).expect("应识别为有效 usage");
+        assert!(!usage.is_empty());
+        assert_eq!(usage.cache_creation, 8000);
     }
 
     #[test]
@@ -348,7 +386,7 @@ mod tests {
             r#"{"type":"assistant","model":"claude-sonnet-4-5","timestamp":"2026-01-05T01:00:00Z","message":{"usage":{"input_tokens":300,"output_tokens":30,"cache_read_input_tokens":900}}}"#,
         ];
         fs::write(&tmp, lines.join("\n")).unwrap();
-        let (model, aggs) = extract_usage(tmp.to_str().unwrap(), "Claude Code", "2026-01-05");
+        let (model, aggs) = extract_usage(tmp.to_str().unwrap(), "2026-01-05");
         assert_eq!(model, "claude-sonnet-4-5");
         assert_eq!(aggs.len(), 2, "跨两天应拆成两条记录，got {:?}", aggs);
         let total_input: u64 = aggs.iter().map(|a| a.input).sum();
@@ -364,11 +402,47 @@ mod tests {
         let tmp = std::env::temp_dir().join("wb-estimate.jsonl");
         let content = "This is a test line with about forty characters of text content here.\nAnother line of similar length and content here.";
         fs::write(&tmp, content).unwrap();
-        let (_model, aggs) = extract_usage(tmp.to_str().unwrap(), "Claude Code", "2026-01-06");
+        let (_model, aggs) = extract_usage(tmp.to_str().unwrap(), "2026-01-06");
         assert_eq!(aggs.len(), 1);
         assert_eq!(aggs[0].source, "estimated");
         assert!(aggs[0].input + aggs[0].output > 0);
         assert_eq!(aggs[0].day, "2026-01-06");
+        fs::remove_file(&tmp).ok();
+    }
+
+    #[test]
+    fn estimated_rows_are_bucketed_by_line_day_and_stay_stable() {
+        // 无 usage 但每行有时间戳：估算应落到各自的那一天，而不是整文件挂到 mtime 日
+        let tmp = std::env::temp_dir().join("wb-estimate-perday.jsonl");
+        let day_a = r#"{"type":"user","timestamp":"2026-01-03T09:00:00Z","message":{"content":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#;
+        let day_b = r#"{"type":"user","timestamp":"2026-01-04T09:00:00Z","message":{"content":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}"#;
+        fs::write(&tmp, format!("{day_a}\n{day_b}\n")).unwrap();
+
+        let (_m, first_two) = extract_usage(tmp.to_str().unwrap(), "2026-01-09");
+        assert_eq!(
+            first_two.iter().map(|a| a.day.as_str()).collect::<Vec<_>>(),
+            vec!["2026-01-03", "2026-01-04"],
+            "估算必须按行级日期分桶，不能整组挂到 mtime 日"
+        );
+
+        // 追加新一天后，往日桶的 token 数不应变化 —— 趋势图不重写历史
+        let day_c = r#"{"type":"user","timestamp":"2026-01-05T09:00:00Z","message":{"content":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}"#;
+        let mut text = fs::read_to_string(&tmp).unwrap();
+        text.push_str(day_c);
+        text.push('\n');
+        fs::write(&tmp, &text).unwrap();
+
+        let (_m, after) = extract_usage(tmp.to_str().unwrap(), "2026-01-09");
+        assert_eq!(after.len(), 3);
+        for day in ["2026-01-03", "2026-01-04"] {
+            let before = first_two.iter().find(|a| a.day == day).unwrap();
+            let now = after.iter().find(|a| a.day == day).unwrap();
+            assert_eq!(
+                (before.input, before.output),
+                (now.input, now.output),
+                "{day} 的估算量不应随文件追加而变化"
+            );
+        }
         fs::remove_file(&tmp).ok();
     }
 
@@ -398,6 +472,28 @@ mod tests {
         assert_eq!(records[0].input_tokens, 1000);
         assert_eq!(records[0].cache_read_tokens, 9000);
         assert!(records[0].cost_input > 0.003, "got {}", records[0].cost_input);
+        fs::remove_file(&tmp).ok();
+    }
+
+    #[test]
+    fn unpriced_model_is_flagged_zero_pricing_not_free_money() {
+        // 回归：型号推断失败或价格表没有该型号时，不能伪装成「花了 $0.00」的有效记录
+        let tmp = std::env::temp_dir().join("wb-unpriced.jsonl");
+        let line = r#"{"model":"some-brand-new-model-9000","timestamp":"2026-01-07T10:00:00Z","message":{"usage":{"input_tokens":1000,"output_tokens":500}}}"#;
+        fs::write(&tmp, format!("{line}\n")).unwrap();
+        let entries = vec![SessionFileEntry {
+            path: tmp.to_str().unwrap().to_string(),
+            tool: "Claude Code".to_string(),
+            project: "p".to_string(),
+            modified: 1_767_000_000,
+            size: 1,
+        }];
+        let records = scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].cost_source, "zero_pricing");
+        assert_eq!(records[0].cost_total, 0.0);
+        // token 数仍然保留，用户能看出「有用量但没定价」而不是凭空没花钱
+        assert_eq!(records[0].input_tokens, 1000);
         fs::remove_file(&tmp).ok();
     }
 

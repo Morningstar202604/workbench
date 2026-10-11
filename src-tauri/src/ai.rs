@@ -43,10 +43,6 @@ pub fn find_ai_keyword(name_lower: &str, cmd_lower: &str, exe_lower: &str) -> Op
     })
 }
 
-pub fn is_ai_related(name_lower: &str, cmd_lower: &str, exe_lower: &str) -> bool {
-    find_ai_keyword(name_lower, cmd_lower, exe_lower).is_some()
-}
-
 #[derive(Serialize, Clone, Debug)]
 pub struct AiProcess {
     pub pid: u32,
@@ -79,11 +75,51 @@ pub struct SessionDetail {
     pub error: String,
 }
 
+/// opencode 会话 id 只允许这些字符：id 会被拼进 URL 路径段，
+/// 放行 `/`、`?`、`#`、`%` 就等于让前端能改写请求路径与查询串。
+fn is_safe_session_id(raw: &str) -> bool {
+    !raw.is_empty()
+        && raw.len() <= 128
+        && raw
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ':'))
+}
+
+/// 路径段 percent-encode。校验通过后再编码属于双保险。
+fn encode_path_segment(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for byte in raw.as_bytes() {
+        let c = *byte as char;
+        if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '~') {
+            out.push(c);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
+/// 统一构造失败详情，避免每个错误分支重复一遍结构体。
+fn detail_error(id: &str, title: &str, error: String) -> SessionDetail {
+    SessionDetail {
+        id: id.to_string(),
+        title: title.to_string(),
+        message_count: 0,
+        first_message: String::new(),
+        last_message: String::new(),
+        duration_seconds: 0,
+        tools_used: Vec::new(),
+        error,
+    }
+}
+
 /// 从本地 opencode server 拉会话列表（GET /session）。
 pub fn fetch_opencode_sessions(port: u16) -> Result<Vec<OpencodeSession>, String> {
     let url = format!("http://127.0.0.1:{port}/session");
     let resp = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_millis(1500))
+        // 本机服务的 3xx 会把请求带到任意外网地址：跟随重定向等于开放出站口子
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| format!("客户端创建失败: {e}"))?
         .get(&url)
@@ -116,7 +152,8 @@ pub fn fetch_opencode_sessions(port: u16) -> Result<Vec<OpencodeSession>, String
             ),
             None => (0, 0),
         };
-        if !id.is_empty() {
+        // id 之后会被前端原样传回拼进详情 URL，这里就按同一规则过滤
+        if !id.is_empty() && is_safe_session_id(&id) {
             sessions.push(OpencodeSession {
                 id,
                 title,
@@ -130,54 +167,33 @@ pub fn fetch_opencode_sessions(port: u16) -> Result<Vec<OpencodeSession>, String
 
 /// 拉取单个 opencode 会话详情（GET /session/{id}）。
 pub fn fetch_session_detail(port: u16, session_id: &str) -> SessionDetail {
-    let url = format!("http://127.0.0.1:{port}/session/{session_id}");
+    if !is_safe_session_id(session_id) {
+        log::warn!("拒绝非法会话 id（长度 {}）", session_id.len());
+        return detail_error(session_id, "(非法会话 id)", "会话 id 含不允许的字符".to_string());
+    }
+    if !(1..=65535).contains(&port) {
+        return detail_error(session_id, "(非法端口)", "端口不在允许范围".to_string());
+    }
+
+    let url = format!(
+        "http://127.0.0.1:{port}/session/{}",
+        encode_path_segment(session_id)
+    );
     let resp = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_millis(2000))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .and_then(|c| c.get(&url).send());
 
     let resp = match resp {
         Ok(r) if r.status().is_success() => r,
-        Ok(r) => {
-            return SessionDetail {
-                id: session_id.to_string(),
-                title: "(获取失败)".to_string(),
-                message_count: 0,
-                first_message: String::new(),
-                last_message: String::new(),
-                duration_seconds: 0,
-                tools_used: Vec::new(),
-                error: format!("HTTP {}", r.status().as_u16()),
-            };
-        }
-        Err(e) => {
-            return SessionDetail {
-                id: session_id.to_string(),
-                title: "(获取失败)".to_string(),
-                message_count: 0,
-                first_message: String::new(),
-                last_message: String::new(),
-                duration_seconds: 0,
-                tools_used: Vec::new(),
-                error: e.to_string(),
-            };
-        }
+        Ok(r) => return detail_error(session_id, "(获取失败)", format!("HTTP {}", r.status().as_u16())),
+        Err(e) => return detail_error(session_id, "(获取失败)", e.to_string()),
     };
 
     let body: serde_json::Value = match resp.json() {
         Ok(v) => v,
-        Err(e) => {
-            return SessionDetail {
-                id: session_id.to_string(),
-                title: "(解析失败)".to_string(),
-                message_count: 0,
-                first_message: String::new(),
-                last_message: String::new(),
-                duration_seconds: 0,
-                tools_used: Vec::new(),
-                error: e.to_string(),
-            };
-        }
+        Err(e) => return detail_error(session_id, "(解析失败)", e.to_string()),
     };
 
     // 解析消息列表
@@ -471,24 +487,55 @@ mod tests {
 
     #[test]
     fn detects_agents_and_ignores_normal_apps() {
-        assert!(is_ai_related("claude.exe", "claude", ""));
-        assert!(is_ai_related(
-            "node.exe",
-            "node c:\\users\\me\\appdata\\roaming\\npm\\node_modules\\opencode\\bin\\opencode",
-            ""
-        ));
-        assert!(!is_ai_related("chrome.exe", "chrome --type=renderer", ""));
-        assert!(!is_ai_related("code.exe", "code", ""));
+        assert_eq!(find_ai_keyword("claude.exe", "claude", ""), Some("claude"));
+        assert_eq!(
+            find_ai_keyword(
+                "node.exe",
+                "node c:\\users\\me\\appdata\\roaming\\npm\\node_modules\\opencode\\bin\\opencode",
+                ""
+            ),
+            Some("opencode")
+        );
+        assert_eq!(find_ai_keyword("chrome.exe", "chrome --type=renderer", ""), None);
+        assert_eq!(find_ai_keyword("code.exe", "code", ""), None);
     }
 
     #[test]
     fn token_boundary_avoids_substring_false_positives() {
         // "amp" / "roo" / "zed" 不应被子串（sample / classroom / lazy）命中
-        assert!(!is_ai_related("sample.exe", "sample --run", "c:\\ramp\\bin"));
-        assert!(!is_ai_related("classroom.exe", "open classroom app", ""));
+        assert_eq!(find_ai_keyword("sample.exe", "sample --run", "c:\\ramp\\bin"), None);
+        assert_eq!(find_ai_keyword("classroom.exe", "open classroom app", ""), None);
         // 真正的词边界命中
-        assert!(is_ai_related("amp.exe", "amp", ""));
-        assert!(find_ai_keyword("node.exe", "npx claude-code run", "").unwrap() == "claude");
+        assert_eq!(find_ai_keyword("amp.exe", "amp", ""), Some("amp"));
+        assert_eq!(find_ai_keyword("node.exe", "npx claude-code run", ""), Some("claude"));
+    }
+
+    #[test]
+    fn session_id_gate_blocks_url_path_injection() {
+        assert!(is_safe_session_id("ses_abc123"));
+        assert!(is_safe_session_id("ses:123-45"));
+        // 路径穿越 / 查询串注入 / 空 id / 超长
+        assert!(!is_safe_session_id("../../../etc/passwd"));
+        assert!(!is_safe_session_id("abc?port=9"));
+        assert!(!is_safe_session_id("abc#frag"));
+        assert!(!is_safe_session_id("abc%2fdef"));
+        assert!(!is_safe_session_id(""));
+        assert!(!is_safe_session_id(&"s".repeat(129)));
+    }
+
+    #[test]
+    fn path_segment_encoding_keeps_unreserved_only() {
+        assert_eq!(encode_path_segment("ses_abc-123.X~"), "ses_abc-123.X~");
+        assert_eq!(encode_path_segment("a b"), "a%20b");
+        assert_eq!(encode_path_segment("a/b?c"), "a%2Fb%3Fc");
+    }
+
+    #[test]
+    fn illegal_session_id_never_reaches_the_network() {
+        // 端口 1 上没有服务：合法 id 会走请求并返回连接错误，非法 id 必须在发请求前被拒
+        let blocked = fetch_session_detail(1, "../../windows/system32");
+        assert_eq!(blocked.title, "(非法会话 id)");
+        assert!(blocked.error.contains("不允许的字符"));
     }
 
     #[test]

@@ -3,6 +3,8 @@ mod commands;
 mod cost_store;
 mod data;
 mod devserver;
+mod ipc_guard;
+mod json_store;
 mod logging_setup;
 mod ports;
 mod pricing;
@@ -37,6 +39,10 @@ pub fn run() {
         .setup(|app| {
             logging_setup::init_logging(app.handle());
             log::info!("工作台 v{} 启动", app.package_info().version);
+
+            // IPC 反向入参守卫：目录与端口白名单，随扫描/加载动态登记
+            app.manage(ipc_guard::KnownDirs::default());
+            app.manage(ipc_guard::AllowedPorts::default());
 
             // ── 全局快捷键 Ctrl+Shift+W 切换窗口可见性（被占用时降级为警告，不阻断启动）──
             if let Err(e) = app
@@ -101,11 +107,11 @@ pub fn run() {
             commands::list_ai_processes,
             commands::opencode_sessions,
             commands::opencode_session_detail,
-            commands::recent_sessions,
             commands::recent_sessions_preview,
             commands::system_info,
             commands::disk_info,
             commands::git_branch,
+            commands::open_known_path,
             commands::load_data,
             commands::save_data,
             commands::read_logs,
