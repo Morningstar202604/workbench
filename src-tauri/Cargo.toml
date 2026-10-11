@@ -2,7 +2,6 @@
 name = "workbench"
 version = "0.1.0"
 description = "工作台 - 桌面优先的本机工作管理台"
-authors = ["you"]
 edition = "2021"
 rust-version = "1.77"
 
