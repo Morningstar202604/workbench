@@ -1,43 +1,43 @@
-<!-- 感谢贡献！请填写以下内容，便于 review。 -->
+<!-- Thanks for the contribution! Fill in the sections below to make review faster. -->
 
-## 这个 PR 做了什么
+## What this PR does
 
-<!-- 一句话概括 -->
+<!-- One-sentence summary -->
 
-## 关联 Issue
+## Related issue
 
-<!-- 如 Closes #12 -->
+<!-- e.g. Closes #12 -->
 
-## 改动类型
+## Change type
 
-- [ ] 缺陷修复（fix）
-- [ ] 新功能（feat）
-- [ ] 重构（refactor）
-- [ ] 文档（docs）
-- [ ] 测试（test）
-- [ ] 构建 / CI（chore / ci）
+- [ ] Bug fix (fix)
+- [ ] New feature (feat)
+- [ ] Refactor (refactor)
+- [ ] Docs (docs)
+- [ ] Tests (test)
+- [ ] Build / CI (chore / ci)
 
-## 怎么验证的
+## How you verified it
 
-<!-- 写清你实际执行的命令与结果，便于复核 -->
+<!-- List the commands you actually ran and their results, so we can reproduce. -->
 
 ```bash
 npm run format:check
 npm run lint
 npm test
 npm run build
-# 涉及后端时：
+# If it touches the backend:
 # cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings
 ```
 
-## 自查清单
+## Checklist
 
-- [ ] 本地门禁全绿（format / lint / test / build，涉及 Rust 时含 cargo test 与 clippy）
-- [ ] 改了 Rust 结构体的话，已跑 `cargo test --test export_bindings` 并提交生成物
-- [ ] 新增逻辑有对应测试，或说明了为何不需要
-- [ ] 界面改动附了截图（用浏览器演示模式截）
-- [ ] 没有提交任何密钥、令牌或本机绝对路径
+- [ ] All local gates green (format / lint / test / build, plus cargo test & clippy when Rust is touched)
+- [ ] If a Rust struct changed, ran `cargo test --test export_bindings` and committed the generated output
+- [ ] New logic has tests, or explains why it doesn't need any
+- [ ] UI changes include screenshots (captured in browser demo mode)
+- [ ] No secrets, tokens, or local absolute paths committed
 
-## 补充说明
+## Notes
 
-<!-- 有取舍或已知限制请写在这里 -->
+<!-- Trade-offs or known limitations go here. -->

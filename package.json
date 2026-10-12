@@ -1,8 +1,8 @@
 {
   "name": "workbench",
   "private": true,
-  "version": "0.1.0",
-  "description": "工作台 - 桌面优先的本机工作管理台（Tauri 2 + React 18）：进程 / 端口 / 开发服务器 / AI 会话实时可视 + 项目与任务管理",
+  "version": "0.1.1",
+  "description": "Workbench - local-first desktop workbench (Tauri 2 + React 19): live process / port / dev-server visibility + AI session cost metering",
   "license": "MIT",
   "engines": {
     "node": ">=20"

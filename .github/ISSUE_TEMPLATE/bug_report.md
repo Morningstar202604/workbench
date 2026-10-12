@@ -1,42 +1,42 @@
 ---
-name: Bug 报告
-about: 报告一个缺陷，帮我们定位并修复
+name: Bug report
+about: Report a defect so we can locate and fix it
 title: "[Bug] "
 labels: ["bug"]
 assignees: []
 ---
 
-## 问题描述
+## What happened
 
-<!-- 一句话说清出了什么问题 -->
+<!-- One sentence: what went wrong -->
 
-## 复现步骤
+## Reproduction steps
 
 1.
 2.
 3.
 
-## 期望行为
+## Expected behavior
 
-<!-- 你认为应该发生什么 -->
+<!-- What should have happened -->
 
-## 实际行为
+## Actual behavior
 
-<!-- 实际发生了什么。有报错请贴原文 -->
+<!-- What actually happened. Paste the exact error text if there is one. -->
 
 ```
-（粘贴报错 / 日志）
+(paste error / log here)
 ```
 
-## 环境
+## Environment
 
-| 项 | 值 |
-|----|----|
-| 工作台版本 | <!-- 设置页「关于」里可见，如 0.1.0 --> |
-| Windows 版本 | <!-- 如 Windows 11 23H2 --> |
-| 安装方式 | <!-- NSIS 安装包 / 源码构建 --> |
-| 运行模式 | <!-- 桌面端 / 浏览器演示模式 --> |
+| Item | Value |
+|------|-------|
+| Workbench version | <!-- shown on Settings → About, e.g. 0.1.1 --> |
+| Windows version | <!-- e.g. Windows 11 23H2 --> |
+| Install method | <!-- NSIS installer / built from source --> |
+| Mode | <!-- desktop / browser demo mode --> |
 
-## 截图或录屏
+## Screenshots / recording
 
-<!-- 界面类问题请附图。注意用浏览器演示模式截，避免泄漏真实数据 -->
+<!-- Attach for UI issues. Capture in browser demo mode so no real data leaks. -->

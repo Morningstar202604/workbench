@@ -1,27 +1,27 @@
 ---
-name: 功能建议
-about: 提出一个新功能或改进想法
+name: Feature request
+about: Propose a new feature or improvement
 title: "[Feature] "
 labels: ["enhancement"]
 assignees: []
 ---
 
-## 你遇到什么问题
+## What problem are you hitting?
 
-<!-- 描述痛点，而不是直接给方案。为什么现有功能不够用？ -->
+<!-- Describe the pain, not the solution. Why is the current behavior not enough? -->
 
-## 你希望怎么解决
+## How you'd like it solved
 
-<!-- 你设想的方案 -->
+<!-- Your proposed approach -->
 
-## 你考虑过的替代方案
+## Alternatives you considered
 
-<!-- 有没有别的方式能达到同样目的 -->
+<!-- Other ways to reach the same goal -->
 
-## 适用场景
+## Use cases
 
-<!-- 这个功能对谁有用、在什么场景下用 -->
+<!-- Who benefits, in which situation -->
 
-## 补充信息
+## Additional context
 
-<!-- 参考截图、同类产品做法、相关链接等 -->
+<!-- Reference screenshots, how similar tools do it, links, etc. -->

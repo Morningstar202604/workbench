@@ -1,7 +1,7 @@
 [package]
 name = "workbench"
-version = "0.1.0"
-description = "工作台 - 桌面优先的本机工作管理台"
+version = "0.1.1"
+description = "Workbench - local-first desktop workbench (Tauri 2 + React 19)"
 edition = "2021"
 rust-version = "1.77"
 

@@ -34,6 +34,8 @@ jobs:
 
       - name: 收集产物
         shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
           New-Item -ItemType Directory -Force -Path release-assets | Out-Null
           $exe = 'src-tauri/target/release/workbench.exe'
@@ -41,7 +43,9 @@ jobs:
           Copy-Item $exe release-assets/
           $setup = Get-ChildItem 'src-tauri/target/release/bundle/nsis/*-setup.exe'
           if (-not $setup) { Write-Error '未产出 NSIS 安装包'; exit 1 }
-          Copy-Item $setup.FullName 'release-assets/Workbench_0.1.0_x64-setup.exe'
+          # 文件名由 tag 驱动（workflow_dispatch 时退化为 main），不再手写版本号
+          $tag = $env:TAG -replace '^v', ''
+          Copy-Item $setup.FullName "release-assets/Workbench_${tag}_x64-setup.exe"
           Get-ChildItem release-assets | Select-Object Name, Length
 
       # 便于在不看 Release 的情况下直接下载构建产物
@@ -64,7 +68,7 @@ jobs:
 
             | 文件 | 说明 |
             |------|------|
-            | `Workbench_0.1.0_x64-setup.exe` | **推荐**：NSIS 安装包，双击安装 |
+            | `Workbench_0.1.1_x64-setup.exe` | **推荐**：NSIS 安装包，双击安装 |
             | `workbench.exe` | 免安装单文件，直接运行 |
 
             仅 Windows x64。安装包未做代码签名，Windows 可能提示「未知发布者」，

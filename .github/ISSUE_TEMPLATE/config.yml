@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 安全问题（请勿公开）
+  - name: Security issue (please keep private)
     url: https://github.com/X33834/workbench/security/advisories/new
-    about: 发现安全漏洞请走私密通道，不要开公开 issue。
-  - name: 使用问题与讨论
+    about: Report vulnerabilities through the private channel, not a public issue.
+  - name: Usage questions & discussion
     url: https://github.com/X33834/workbench/discussions
-    about: 安装、使用、配置类问题请走 Discussions。
+    about: Installation, usage, and configuration questions belong in Discussions.

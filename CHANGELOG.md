@@ -3,7 +3,7 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.1.1] - 2026-10-12
 
 ### Added
 
@@ -80,5 +80,5 @@ First public release. Windows desktop, NSIS installer.
   read/write sluggish
 - Installer is not code-signed; Windows may warn "Unknown publisher"
 
-[Unreleased]: https://github.com/X33834/workbench/compare/v0.1.0...HEAD
+[0.1.1]: https://github.com/X33834/workbench/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/X33834/workbench/releases/tag/v0.1.0
