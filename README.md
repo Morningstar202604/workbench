@@ -33,7 +33,7 @@ prefer:
 
 | Channel | File | Notes |
 |---------|------|-------|
-| **Recommended** | `Workbench_<version>_x64-setup.exe` (Releases → latest) | NSIS installer, ~3 MB |
+| **Recommended** | `Workbench_<version>_x64-setup.exe` (Releases → latest) | NSIS installer, ~4 MB |
 | Portable | `workbench.exe` (Releases → latest) | Single file, no registry writes |
 
 > The installer is not code-signed, so Windows SmartScreen may show an
@@ -142,7 +142,7 @@ data can never leak into the repo.
 |------|-------------|
 | OS | Windows 10 / 11 (x64) — the only verified platform |
 | Runtime | WebView2 Runtime (preinstalled on Windows 11; recent Windows 10 usually has it) |
-| Disk | ~30 MB installed; portable single file ~13 MB |
+| Disk | ~35 MB installed; portable single file ~15 MB |
 | Privileges | No admin required; killing a process needs same-or-higher privileges |
 | Network | None required. The only optional probe is the local opencode service when you open the AI sessions page |
 

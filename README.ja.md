@@ -32,7 +32,7 @@ Release を指します。
 
 | 方法 | ファイル | 説明 |
 |------|----------|------|
-| **推奨** | `Workbench_<version>_x64-setup.exe`（Releases → latest） | NSIS インストーラー、約 3 MB |
+| **推奨** | `Workbench_<version>_x64-setup.exe`（Releases → latest） | NSIS インストーラー、約 4 MB |
 | ポータブル | `workbench.exe`（Releases → latest） | 単一ファイル、レジストリ書き込みなし |
 
 > インストーラーはコード署名されていないため、Windows SmartScreen が
@@ -139,7 +139,7 @@ Release を指します。
 |------|------|
 | OS | Windows 10 / 11（x64）—— 検証済みはこのプラットフォームのみ |
 | ランタイム | WebView2 Runtime（Windows 11 は同梱。最近の Windows 10 でも大半は同梱） |
-| ディスク | インストール後約 30 MB。ポータブル版は単一ファイル約 13 MB |
+| ディスク | インストール後約 35 MB。ポータブル版は単一ファイル約 15 MB |
 | 権限 | 管理者権限は不要。プロセス終了には対象と同等以上の権限が必要 |
 | ネットワーク | 不要。AI セッションページを開いたときにローカル opencode サービスを探知するだけ |
 

@@ -30,7 +30,7 @@ NSIS）；macOS / Linux 尚未接入采集与打包，属未验证状态。
 
 | 方式 | 文件 | 说明 |
 |------|------|------|
-| **推荐** | `Workbench_<版本>_x64-setup.exe`（Releases → latest） | NSIS 安装包，约 3 MB，双击安装 |
+| **推荐** | `Workbench_<版本>_x64-setup.exe`（Releases → latest） | NSIS 安装包，约 4 MB，双击安装 |
 | 免安装 | `workbench.exe`（Releases → latest） | 单文件直接运行，不写注册表 |
 
 > 安装包未做代码签名，Windows SmartScreen 可能提示「未知发布者」——
@@ -121,7 +121,7 @@ NSIS）；macOS / Linux 尚未接入采集与打包，属未验证状态。
 |----|------|
 | 操作系统 | Windows 10 / 11（x64）—— 仅此平台经过验证 |
 | 运行时 | WebView2 Runtime（Windows 11 预装；Windows 10 现代版本通常已含） |
-| 磁盘 | 约 30 MB（安装后），免安装版单文件约 13 MB |
+| 磁盘 | 约 35 MB（安装后），免安装版单文件约 15 MB |
 | 权限 | 无需管理员权限；进程终止需与目标进程同级权限 |
 | 网络 | 不需联网。仅在你主动使用 AI 会话页时会探测本地 opencode 服务 |
 
