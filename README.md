@@ -53,6 +53,18 @@ macOS / Linux 尚未接入采集与打包，属未验证状态。
 npm install
 ```
 
+### IPC 契约类型生成
+
+前端引用的跨 IPC 类型不在 `src/types.ts` 手写，而是由 Rust 结构体生成：
+
+```bash
+cd src-tauri
+cargo test --test export_bindings   # 重新生成 src/generated/*.ts
+```
+
+`src/types.ts` 只做 re-export，`src/generated/` 作为契约快照入库。
+改完 Rust 结构体必须重跑上面这条命令，否则 CI 的漂移门禁会直接拦下。
+
 ### 开发模式
 
 ```bash
@@ -79,6 +91,7 @@ npm run tauri build
 | 虚拟滚动 | @tanstack/react-virtual 3（展开行高度可变，进入视口后实测回写行高） |
 | 状态订阅 | Zustand 5 `useShallow` 选择器 + 页面组件 `memo`（自身切片不变不重渲染） |
 | IPC 通道 | Tauri IPC + spawn_blocking |
+| IPC 契约 | ts-rs 10 由 Rust 结构体生成 `src/generated/*.ts`，CI 校验无漂移 |
 | 进程采集 | sysinfo |
 | 端口解析 | netstat 解析器（POSIX / Windows 双方言兼容） |
 
@@ -89,6 +102,7 @@ workbench/
 ├── src/                    # 前端源码
 │   ├── pages/              # 8 个功能页面（按需 lazy 加载）
 │   ├── lib/                # store / api / echarts / util
+│   ├── generated/          # ts-rs 生成的 IPC 契约类型（勿手改）
 │   ├── ui.tsx              # 共享组件库
 │   ├── types.ts            # 类型定义
 │   ├── App.tsx             # 主应用入口
@@ -113,23 +127,24 @@ workbench/
 
 ```bash
 npm install                # 前端依赖
+npm run test               # 前端单测（vitest，47 个用例）
 npm run build              # tsc --noEmit + vite build
 npm run tauri dev          # 桌面开发模式
 npm run tauri build        # 产出 NSIS 安装包
 
 cd src-tauri
-cargo test --lib           # 后端单测（解析 / 计价 / 持久化 / 守卫）
-cargo clippy --all-targets # 保持零警告
+cargo test                 # 后端单测 + IPC 契约导出
+cargo clippy --all-targets -- -D warnings   # 零警告门禁
 ```
 
 Rust 侧纯逻辑（netstat 解析、框架识别、价格匹配、token 提取、JSON 存储、IPC 守卫）
-都有 `#[cfg(test)]` 单测，由 CI 强制跑；前端只有类型检查与构建门禁，尚无自动化测试 —— 见下方已知限制。
+都有 `#[cfg(test)]` 单测；前端有 vitest 单测覆盖 util / store / 共享组件 / 错误边界。
+CI 跑类型检查、构建、两侧单测、clippy 零警告，并校验 `src/generated/` 与 Rust 结构体一致。
 
 ## 已知限制
 
 - 仅 Windows 验证：端口采集写死 `cmd /c netstat -ano`，`ports.rs` 的 POSIX 分支当前不会被执行
-- 前端零自动化测试、零 lint 配置；CI 只做类型检查 / 构建、Rust 单测与 clippy 零警告门禁，渲染行为仍依赖人工验证
-- Rust 类型与 `src/types.ts` 手工双维护，IPC 契约没有 codegen 或契约测试兜底
+- 前端渲染行为仍以人工验证为主：vitest 覆盖 util / store / 共享组件 / 错误边界，8 个页面的交互路径尚无端到端测试
 - 成本账本落在单个 `cost_data.json`（写操作已串行化），记录数很大时全量读写会开始吃力
 - `pricing_overrides.json` 只有读取路径，没有写入入口
 

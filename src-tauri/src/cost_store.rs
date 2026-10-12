@@ -24,7 +24,7 @@ fn lock() -> MutexGuard<'static, ()> {
 
 // ── 成本配置（预算 / 自定价 / 告警阈值）─────────────────────
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
 pub struct CostSettings {
     /// 日预算（USD），0 表示不设限
     pub daily_budget: f64,
@@ -83,22 +83,34 @@ pub struct CostRecord {
 
 // ── 聚合视图 ───────────────────────────────────────────────
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
 pub struct CostOverview {
     pub today_cost: f64,
+    #[ts(type = "number")]
     pub today_input_tokens: u64,
+    #[ts(type = "number")]
     pub today_output_tokens: u64,
+    #[ts(type = "number")]
     pub today_cache_read_tokens: u64,
+    #[ts(type = "number")]
     pub today_cache_creation_tokens: u64,
     pub month_cost: f64,
+    #[ts(type = "number")]
     pub month_input_tokens: u64,
+    #[ts(type = "number")]
     pub month_output_tokens: u64,
+    #[ts(type = "number")]
     pub month_cache_read_tokens: u64,
+    #[ts(type = "number")]
     pub month_cache_creation_tokens: u64,
     pub total_cost: f64,
+    #[ts(type = "number")]
     pub total_input_tokens: u64,
+    #[ts(type = "number")]
     pub total_output_tokens: u64,
+    #[ts(type = "number")]
     pub total_cache_read_tokens: u64,
+    #[ts(type = "number")]
     pub total_cache_creation_tokens: u64,
     pub record_count: usize,
     pub measured_count: usize,
@@ -114,21 +126,27 @@ pub struct CostOverview {
     pub budget_exceeded: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
 pub struct CostTrendRow {
     pub day: String,
+    #[ts(type = "number")]
     pub input_tokens: u64,
+    #[ts(type = "number")]
     pub output_tokens: u64,
+    #[ts(type = "number")]
     pub cache_read_tokens: u64,
+    #[ts(type = "number")]
     pub cache_creation_tokens: u64,
     pub cost: f64,
     pub record_count: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
 pub struct ModelBreakdownRow {
     pub model: String,
+    #[ts(type = "number")]
     pub input_tokens: u64,
+    #[ts(type = "number")]
     pub output_tokens: u64,
     pub cost: f64,
     pub record_count: u32,

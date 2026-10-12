@@ -167,7 +167,7 @@ pub async fn list_ai_processes() -> Result<Vec<AiProcess>, String> {
 }
 
 /// opencode 会话列表 + 实际命中的服务端口（前端详情请求必须复用该端口）。
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, ts_rs::TS)]
 pub struct OpencodeSessionsResult {
     pub port: u16,
     pub sessions: Vec<OpencodeSession>,
@@ -313,12 +313,14 @@ fn dirs_home() -> Option<std::path::PathBuf> {
 
 // ── 系统信息 ──────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct SystemInfo {
     pub hostname: String,
     pub os_name: String,
     pub cpu_cores: usize,
+    #[ts(type = "number")]
     pub total_memory: u64,
+    #[ts(type = "number")]
     pub uptime_seconds: u64,
 }
 
@@ -350,12 +352,15 @@ pub async fn system_info() -> Result<SystemInfo, String> {
 
 // ── 磁盘信息 ──────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct DiskInfo {
     pub label: String,
     pub mount_point: String,
+    #[ts(type = "number")]
     pub total_bytes: u64,
+    #[ts(type = "number")]
     pub available_bytes: u64,
+    #[ts(type = "number")]
     pub used_bytes: u64,
     pub is_removable: bool,
 }
@@ -522,7 +527,7 @@ pub fn clear_cost_records(app: AppHandle) -> Result<(), String> {
 }
 
 /// 扫描结果回传
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct ScanCostResult {
     pub new_records: usize,
     pub total_scanned: usize,

@@ -8,13 +8,13 @@ use tauri::{AppHandle, Manager};
 
 use crate::json_store;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, ts_rs::TS)]
 pub struct WorkbenchData {
     pub projects: Vec<Project>,
     pub tasks: Vec<Task>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
 pub struct Project {
     pub id: String,
     pub name: String,
@@ -23,10 +23,11 @@ pub struct Project {
     pub tags: Vec<String>,
     pub pinned: bool,
     pub note: String,
+    #[ts(type = "number")]
     pub created_at: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
 pub struct Task {
     pub id: String,
     pub title: String,
@@ -35,7 +36,9 @@ pub struct Task {
     pub due: Option<String>,
     pub project_id: Option<String>,
     pub tags: Vec<String>,
+    #[ts(type = "number")]
     pub created_at: u64,
+    #[ts(type = "number")]
     pub updated_at: u64,
 }
 

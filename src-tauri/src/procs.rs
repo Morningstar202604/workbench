@@ -3,16 +3,18 @@
 use serde::Serialize;
 use sysinfo::{Pid, ProcessesToUpdate, System};
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, ts_rs::TS)]
 pub struct ProcInfo {
     pub pid: u32,
     pub name: String,
     pub exe_path: String,
     pub cmd_line: String,
     pub cpu: f32,
+    #[ts(type = "number")]
     pub memory: u64,
     pub parent_pid: Option<u32>,
     pub status: String,
+    #[ts(type = "number")]
     pub start_time: u64,
 }
 

@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, ts_rs::TS)]
 pub struct DevServer {
     pub port: u16,
     pub protocol: String,

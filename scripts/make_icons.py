@@ -12,8 +12,9 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
+HERE = Path(__file__).resolve().parent
 ICONS = ROOT / "src-tauri" / "icons"
-SRC = ROOT / "logo-src.jpg"
+SRC = HERE / "logo-src.jpg"
 
 # ICO 内包含的尺寸（Windows 推荐）
 ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]

@@ -38,7 +38,8 @@
 │   ├── App.tsx               🔧 接入真实 Logo；新增窗口置顶开关按钮
 │   ├── ErrorBoundary.tsx     ✅ 渲染异常兜底 + 重试按钮
 │   ├── ui.tsx                🔧 新增共享 StatCard（带数字滚动动画），替代 4 个页面的重复实现
-│   ├── types.ts              ✅ 与 Rust 结构手工对齐（已知限制，README 已声明）
+│   ├── types.ts              🔧 改为 re-export；跨 IPC 类型由 ts-rs 从 Rust 结构体生成到 src/generated/
+│   ├── generated/            🆕 ts-rs 生成的 IPC 契约类型（19 个，勿手改；CI 卡漂移）
 │   ├── assets/logo.png       🆕 前端 Logo 资源
 │   ├── styles/global.css     🔧 新增 Hero 动效（光晕漂移/Logo 悬浮），prefers-reduced-motion 降级
 │   ├── lib/
@@ -47,6 +48,12 @@
 │   │   ├── echarts.tsx       ✅ 按需注册省 ~800KB，双主题注册，MutationObserver 切主题
 │   │   ├── util.ts           ✅ 纯函数工具集，无冗余
 │   │   └── demo.ts           ✅ 浏览器演示模式数据，与 Tauri 模式严格隔离
+│   ├── test/setup.ts         🆕 vitest 环境打桩（matchMedia / ResizeObserver / animate）
+│   ├── ui.test.tsx           🆕 共享组件单测（15）
+│   ├── ErrorBoundary.test.tsx 🆕 错误边界单测（3）
+│   ├── lib/util.test.ts      🆕 纯函数单测（17）
+│   ├── lib/store.test.ts     🆕 状态层单测（12）
+│   └── vitest.config.ts      🆕 jsdom 环境 + 覆盖率配置
 │   └── pages/
 │       ├── Overview.tsx      🔧 新增大标题 Hero 横幅（问候语+实时脉冲+Logo）；改用共享 StatCard
 │       ├── Processes.tsx     🔧 删除本地 StatPill，改用共享 StatCard

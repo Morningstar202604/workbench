@@ -43,33 +43,38 @@ pub fn find_ai_keyword(name_lower: &str, cmd_lower: &str, exe_lower: &str) -> Op
     })
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, ts_rs::TS)]
 pub struct AiProcess {
     pub pid: u32,
     pub name: String,
     pub exe_path: String,
     pub cmd_line: String,
     pub matched: String,
+    #[ts(type = "number")]
     pub memory: u64,
+    #[ts(type = "number")]
     pub start_time: u64,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, ts_rs::TS)]
 pub struct OpencodeSession {
     pub id: String,
     pub title: String,
+    #[ts(type = "number")]
     pub created: i64,
+    #[ts(type = "number")]
     pub updated: i64,
 }
 
 /// opencode 会话详情（消息摘要）。
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, ts_rs::TS)]
 pub struct SessionDetail {
     pub id: String,
     pub title: String,
     pub message_count: usize,
     pub first_message: String,
     pub last_message: String,
+    #[ts(type = "number")]
     pub duration_seconds: i64,
     pub tools_used: Vec<String>,
     pub error: String,
@@ -292,22 +297,26 @@ pub fn fetch_session_detail(port: u16, session_id: &str) -> SessionDetail {
     }
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, ts_rs::TS)]
 pub struct SessionFile {
     pub tool: String,
     pub project: String,
     pub path: String,
+    #[ts(type = "number")]
     pub modified: u64,
+    #[ts(type = "number")]
     pub size: u64,
 }
 
 /// 本地文件增强预览：消息条数、首条内容、最近一条内容。
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, ts_rs::TS)]
 pub struct SessionFilePreview {
     pub tool: String,
     pub project: String,
     pub path: String,
+    #[ts(type = "number")]
     pub modified: u64,
+    #[ts(type = "number")]
     pub size: u64,
     pub message_count: usize,
     pub first_line: String,

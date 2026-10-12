@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, ts_rs::TS)]
 pub struct PortEntry {
     pub protocol: String,
     pub local_addr: String,

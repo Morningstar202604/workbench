@@ -1,15 +1,15 @@
-mod ai;
-mod commands;
-mod cost_store;
-mod data;
-mod devserver;
-mod ipc_guard;
-mod json_store;
-mod logging_setup;
-mod ports;
-mod pricing;
-mod procs;
-mod session_meter;
+pub mod ai;
+pub mod commands;
+pub mod cost_store;
+pub mod data;
+pub mod devserver;
+pub mod ipc_guard;
+pub mod json_store;
+pub mod logging_setup;
+pub mod ports;
+pub mod pricing;
+pub mod procs;
+pub mod session_meter;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};

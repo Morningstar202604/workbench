@@ -19,12 +19,8 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - run: npm run test
       - run: npm run build
-      - name: 上传 dist 供打包 job 复用
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist
 
   backend:
     name: 后端测试与静态检查
@@ -40,13 +36,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      - name: cargo test
-        run: cargo test --lib
+      - name: cargo test（含 IPC 契约导出）
+        run: cargo test
+      - name: 契约漂移门禁（Rust 改了结构体却没重新生成 TS）
+        run: |
+          # 用 --name-only / ls-files 判空，不依赖原生命令退出码，避免 pwsh 下误抛。
+          # 内容比对按 .gitattributes 归一化换行符，不会被 CRLF 或 stat 缓存误报。
+          $changed = git diff --name-only -- :/src/generated
+          $untracked = git ls-files --others --exclude-standard -- :/src/generated
+          if ($changed -or $untracked) {
+            Write-Error "src/generated 与 Rust 结构体不一致，请本地跑 cargo test 后提交生成物：`n$changed`n$untracked"
+            exit 1
+          }
       - name: cargo clippy（零警告门禁）
         run: cargo clippy --all-targets -- -D warnings
 
   package:
-    name: 产出安装包（不发布）
+    name: 构建校验（产出 exe，不打包安装器）
     runs-on: windows-latest
     needs: [frontend, backend]
     if: github.event_name == 'push'
@@ -64,5 +70,7 @@ jobs:
       - run: npm ci
       - run: npx tauri build --no-bundle
       - name: 校验可执行文件确实产出
-        shell: bash
-        run: test -f src-tauri/target/release/workbench.exe && ls -la src-tauri/target/release/workbench.exe
+        run: |
+          $exe = 'src-tauri/target/release/workbench.exe'
+          if (-not (Test-Path $exe)) { Write-Error "未产出 $exe"; exit 1 }
+          Get-Item $exe | Select-Object FullName, Length, LastWriteTime
