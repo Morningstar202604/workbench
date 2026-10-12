@@ -16,6 +16,7 @@ import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { Badge, Card, Empty, SectionTitle, StatCard, Table, Td, Tr } from "../ui";
 import { formatBytes, formatCpu, formatUptime, dueLabel, shortPath } from "../lib/util";
+import { useT, useLang, localeFor } from "../lib/i18n";
 import logoUrl from "../assets/logo.png";
 
 // ─── 进程分类 ─────────────────────────────────────────────
@@ -100,27 +101,28 @@ function hasAny(tokens: Set<string>, list: string[]): boolean {
 }
 
 function categorizeProcs(
-  procs: { name: string; exe_path: string; memory: number }[]
+  procs: { name: string; exe_path: string; memory: number }[],
+  t: (key: string) => string
 ): Category[] {
   const cats: Record<string, Category> = {
-    浏览器: { name: "浏览器", count: 0, mem: 0, color: "#22d3ee" },
-    开发工具: { name: "开发工具", count: 0, mem: 0, color: "#a78bfa" },
-    AI工具: { name: "AI 工具", count: 0, mem: 0, color: "#fbbf24" },
-    系统: { name: "系统", count: 0, mem: 0, color: "#34d399" },
-    其他: { name: "其他", count: 0, mem: 0, color: "#64748b" },
+    browser: { name: t("overview.cat.browser"), count: 0, mem: 0, color: "#22d3ee" },
+    dev: { name: t("overview.cat.dev"), count: 0, mem: 0, color: "#a78bfa" },
+    ai: { name: t("overview.cat.ai"), count: 0, mem: 0, color: "#fbbf24" },
+    system: { name: t("overview.cat.system"), count: 0, mem: 0, color: "#34d399" },
+    other: { name: t("overview.cat.other"), count: 0, mem: 0, color: "#64748b" },
   };
   for (const p of procs) {
     const nameTokens = tokenize(p.name.toLowerCase());
     const allTokens = tokenize(`${p.name} ${p.exe_path}`.toLowerCase());
     const cat = hasAny(nameTokens, BROWSER_TOKENS)
-      ? "浏览器"
+      ? "browser"
       : hasAny(allTokens, AI_TOKENS)
-        ? "AI工具"
+        ? "ai"
         : hasAny(allTokens, DEV_TOKENS)
-          ? "开发工具"
+          ? "dev"
           : hasAny(nameTokens, SYSTEM_TOKENS)
-            ? "系统"
-            : "其他";
+            ? "system"
+            : "other";
     cats[cat].count++;
     cats[cat].mem += p.memory;
   }
@@ -150,6 +152,8 @@ function portDistribution(ports: { local_port: number }[]): PortRange[] {
 // ─── 主组件 ──────────────────────────────────────────────
 
 export default function Overview() {
+  const t = useT();
+  const lang = useLang();
   const {
     procs,
     ports,
@@ -187,9 +191,9 @@ export default function Overview() {
     () => [...procs].sort((a, b) => b.cpu - a.cpu).slice(0, 6),
     [procs]
   );
-  const doingTasks = data.tasks.filter((t) => t.status === "doing");
+  const doingTasks = data.tasks.filter((task) => task.status === "doing");
   const upcoming = data.tasks
-    .filter((t) => t.due && t.status !== "done")
+    .filter((task) => task.due && task.status !== "done")
     .sort((a, b) => (a.due ?? "").localeCompare(b.due ?? ""))
     .slice(0, 5);
 
@@ -201,7 +205,7 @@ export default function Overview() {
 
   const cpuMemOption = useMemo(() => {
     const times = history.map((h) =>
-      new Date(h.t).toLocaleTimeString("zh-CN", { hour12: false }).slice(3)
+      new Date(h.t).toLocaleTimeString(localeFor(lang), { hour12: false }).slice(3)
     );
     return {
       grid: { left: 42, right: 48, top: 28, bottom: 24 },
@@ -224,7 +228,7 @@ export default function Overview() {
       ],
       series: [
         {
-          name: "CPU 合计",
+          name: t("overview.seriesCpuTotal"),
           type: "line",
           smooth: true,
           showSymbol: false,
@@ -246,7 +250,7 @@ export default function Overview() {
           },
         },
         {
-          name: "内存占用",
+          name: t("overview.seriesMemory"),
           type: "line",
           yAxisIndex: 1,
           smooth: true,
@@ -270,13 +274,13 @@ export default function Overview() {
         },
       ],
     };
-  }, [history]);
+  }, [history, t, lang]);
 
   // 进程分类饼图
-  const categories = useMemo(() => categorizeProcs(procs), [procs]);
+  const categories = useMemo(() => categorizeProcs(procs, t), [procs, t]);
   const pieOption = useMemo(
     () => ({
-      tooltip: { trigger: "item", formatter: "{b}: {c} 个 ({d}%)" },
+      tooltip: { trigger: "item", formatter: t("overview.pieTooltip") },
       series: [
         {
           type: "pie",
@@ -297,7 +301,7 @@ export default function Overview() {
         },
       ],
     }),
-    [categories, theme]
+    [categories, theme, t]
   );
 
   // 端口分布条形图（与 Servers / Projects / AiSessions 共用同一构造器）
@@ -338,7 +342,11 @@ export default function Overview() {
           data: { name: string; total: number; used: number; mount: string };
         }) => {
           const d = p.data;
-          return `<b>${d.name}</b><br/>已用: ${formatBytes(d.used)}<br/>总计: ${formatBytes(d.total)}<br/>挂载: ${d.mount}`;
+          return `<b>${d.name}</b><br/>${t("overview.diskTooltip", {
+            used: formatBytes(d.used),
+            total: formatBytes(d.total),
+            mount: d.mount,
+          })}`;
         },
       },
       series: diskSeries.length
@@ -369,7 +377,7 @@ export default function Overview() {
               data: [
                 {
                   value: 1,
-                  name: "无磁盘数据",
+                  name: t("overview.noDiskData"),
                   itemStyle: { color: chartLineColor(theme) },
                 },
               ],
@@ -377,7 +385,7 @@ export default function Overview() {
             },
           ],
     }),
-    [diskSeries, theme]
+    [diskSeries, theme, t]
   );
 
   return (
@@ -395,13 +403,15 @@ export default function Overview() {
           />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-wide">工作台</h1>
+              <h1 className="text-3xl font-bold tracking-wide">
+                {t("overview.heroTitle")}
+              </h1>
               <span className="rounded-md border border-accent/40 bg-accentsoft px-2 py-0.5 text-xs font-medium text-accent">
                 Workbench
               </span>
             </div>
             <p className="mt-1.5 text-sm text-dim">
-              {greeting()} · 本机运维仪表盘与 AI 会话成本计量，数据仅存本机
+              {greeting(t)} · {t("overview.heroSubtitle")}
             </p>
           </div>
           <div className="flex flex-col items-end gap-1.5 text-right">
@@ -410,10 +420,10 @@ export default function Overview() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60" />
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-ok" />
               </span>
-              实时监控中
+              {t("overview.liveMonitoring")}
             </span>
             <span className="font-mono text-xs tabular-nums text-dim">
-              {new Date().toLocaleDateString("zh-CN", {
+              {new Date().toLocaleDateString(localeFor(lang), {
                 month: "long",
                 day: "numeric",
                 weekday: "long",
@@ -439,20 +449,24 @@ export default function Overview() {
               <Cpu size={13} className="text-accent" />
               CPU{" "}
               <span className="font-mono font-semibold text-text">
-                {sysinfo.cpu_cores} 核
+                {sysinfo.cpu_cores} {t("overview.cpuCores")}
               </span>
             </span>
             <span className="flex items-center gap-1.5 text-dim">
               <HardDrive size={13} className="text-warn" />
-              内存{" "}
+              {t("overview.memory")}{" "}
               <span className="font-mono font-semibold text-text">
                 {formatBytes(sysinfo.total_memory)}
               </span>
-              {memUsedPct > 0 && <span className="text-dim">（已用 {memUsedPct}%）</span>}
+              {memUsedPct > 0 && (
+                <span className="text-dim">
+                  {t("overview.memUsedPct", { pct: memUsedPct })}
+                </span>
+              )}
             </span>
             <span className="flex items-center gap-1.5 text-dim">
               <Clock size={13} className="text-ok" />
-              已运行{" "}
+              {t("overview.uptime")}{" "}
               <span className="font-mono font-semibold text-text">
                 {formatUptime(sysinfo.uptime_seconds)}
               </span>
@@ -465,33 +479,35 @@ export default function Overview() {
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard
           icon={Cpu}
-          label="运行中进程"
+          label={t("overview.statRunningProcs")}
           value={procs.length}
-          hint={`CPU 合计 ${formatCpu(cpuTotal)}`}
+          hint={t("overview.statCpuTotal", { cpu: formatCpu(cpuTotal) })}
           tone="accent"
           bar="bg-accent"
         />
         <StatCard
           icon={Server}
-          label="开发服务器"
+          label={t("overview.statDevServers")}
           value={devs.length}
-          hint={devs.map((d) => `${d.framework}:${d.port}`).join(" / ") || "无"}
+          hint={
+            devs.map((d) => `${d.framework}:${d.port}`).join(" / ") || t("overview.none")
+          }
           tone="ok"
           bar="bg-ok"
         />
         <StatCard
           icon={Sparkles}
-          label="AI 代理进程"
+          label={t("overview.statAiAgents")}
           value={ais.length}
-          hint={ais.map((a) => a.name).join(" / ") || "无"}
+          hint={ais.map((a) => a.name).join(" / ") || t("overview.none")}
           tone="warn"
           bar="bg-warn"
         />
         <StatCard
           icon={Activity}
-          label="进行中任务"
+          label={t("overview.statDoingTasks")}
           value={doingTasks.length}
-          hint={`共 ${data.tasks.length} 个任务`}
+          hint={t("overview.statTotalTasks", { count: data.tasks.length })}
           tone="text"
           bar="bg-accent"
         />
@@ -501,26 +517,31 @@ export default function Overview() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {/* CPU + 内存大图 */}
         <Card className="p-4 xl:col-span-2">
-          <SectionTitle>资源曲线（近 {history.length} 次采样）</SectionTitle>
+          <SectionTitle>
+            {t("overview.chartResourceTitle", { count: history.length })}
+          </SectionTitle>
           {history.length > 1 ? (
             <EChart option={cpuMemOption} style={{ height: 230 }} notMerge lazyUpdate />
           ) : (
-            <Empty icon={Activity}>采样中，稍候出现曲线…</Empty>
+            <Empty icon={Activity}>{t("overview.samplingEmpty")}</Empty>
           )}
           <p className="mt-1 text-[11px] text-dim">
-            CPU 为所有进程占用率求和（可超过 100%）；内存为进程工作集
-            {memTotalGb > 0 && `（总计 ${memTotalGb.toFixed(1)} GB）`}，合计{" "}
-            {formatBytes(memTotal)}。
+            {t("overview.chartNote1")}
+            {memTotalGb > 0 &&
+              t("overview.chartNoteTotal", { gb: memTotalGb.toFixed(1) })}
+            {t("overview.chartNoteSumPrefix")}
+            {formatBytes(memTotal)}
+            {t("overview.chartNotePeriod")}
           </p>
         </Card>
 
         {/* 进程分类饼图 */}
         <Card className="p-4">
-          <SectionTitle>进程分类</SectionTitle>
+          <SectionTitle>{t("overview.chartCategoryTitle")}</SectionTitle>
           {categories.length > 0 ? (
             <EChart option={pieOption} style={{ height: 190 }} notMerge lazyUpdate />
           ) : (
-            <Empty icon={Cpu}>暂无进程数据</Empty>
+            <Empty icon={Cpu}>{t("overview.noProcessData")}</Empty>
           )}
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
             {categories.map((c) => (
@@ -543,11 +564,11 @@ export default function Overview() {
       {/* ── 磁盘 + 端口分布 ── */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card className="p-4">
-          <SectionTitle>磁盘用量</SectionTitle>
+          <SectionTitle>{t("overview.diskTitle")}</SectionTitle>
           {disks.length > 0 ? (
             <EChart option={diskOption} style={{ height: 190 }} notMerge lazyUpdate />
           ) : (
-            <Empty icon={HardDrive}>读取磁盘信息中…</Empty>
+            <Empty icon={HardDrive}>{t("overview.diskLoading")}</Empty>
           )}
           {disks.length > 0 && (
             <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
@@ -586,20 +607,22 @@ export default function Overview() {
           <SectionTitle>
             <span className="flex items-center gap-1.5">
               <Network size={14} />
-              端口分布
+              {t("overview.portTitle")}
             </span>
           </SectionTitle>
           {portRanges.some((p) => p.count > 0) ? (
             <EChart option={portBarOption} style={{ height: 190 }} notMerge lazyUpdate />
           ) : (
-            <Empty icon={Network}>未检测到监听端口</Empty>
+            <Empty icon={Network}>{t("overview.noPorts")}</Empty>
           )}
           <div className="mt-2 flex gap-6 text-xs text-dim">
             <span>
-              总监听 <span className="font-mono text-text">{ports.length}</span>
+              {t("overview.totalListening")}{" "}
+              <span className="font-mono text-text">{ports.length}</span>
             </span>
             <span>
-              已知服务 <span className="font-mono text-text">{devs.length}</span>
+              {t("overview.knownServices")}{" "}
+              <span className="font-mono text-text">{devs.length}</span>
             </span>
           </div>
         </Card>
@@ -614,13 +637,13 @@ export default function Overview() {
                 className="text-xs text-accent hover:underline"
                 onClick={() => setView("processes")}
               >
-                查看全部 →
+                {t("overview.viewAll")}
               </button>
             }
           >
-            CPU 占用 Top 6
+            {t("overview.topCpuTitle")}
           </SectionTitle>
-          <Table head={["PID", "进程", "CPU", "内存"]}>
+          <Table head={["PID", t("overview.colProcess"), "CPU", t("overview.memory")]}>
             {topProcs.map((p) => (
               <Tr key={p.pid}>
                 <Td mono className="text-dim">
@@ -635,7 +658,7 @@ export default function Overview() {
             ))}
             {topProcs.length === 0 && (
               <Tr>
-                <Td className="text-dim">暂无数据</Td>
+                <Td className="text-dim">{t("overview.noData")}</Td>
               </Tr>
             )}
           </Table>
@@ -648,14 +671,14 @@ export default function Overview() {
                 className="text-xs text-accent hover:underline"
                 onClick={() => setView("ai")}
               >
-                查看会话 →
+                {t("overview.viewSessions")}
               </button>
             }
           >
-            正在运行的服务与 AI 代理
+            {t("overview.runningServicesTitle")}
           </SectionTitle>
           {devs.length === 0 && ais.length === 0 && (
-            <Empty icon={Server}>没有检测到开发服务器或 AI 代理进程</Empty>
+            <Empty icon={Server}>{t("overview.noServices")}</Empty>
           )}
           <ul className="flex flex-col gap-2">
             {devs.map((d) => (
@@ -700,27 +723,27 @@ export default function Overview() {
                 className="text-xs text-accent hover:underline"
                 onClick={() => setView("tasks")}
               >
-                去处理 →
+                {t("overview.goHandle")}
               </button>
             }
           >
-            近期任务
+            {t("overview.recentTasks")}
           </SectionTitle>
           {upcoming.length === 0 ? (
-            <Empty icon={Activity}>没有带截止日期的待办任务</Empty>
+            <Empty icon={Activity}>{t("overview.noUpcomingTasks")}</Empty>
           ) : (
             <ul className="flex flex-col gap-2">
-              {upcoming.map((t) => {
-                const due = dueLabel(t.due);
+              {upcoming.map((task) => {
+                const due = dueLabel(task.due);
                 return (
                   <li
-                    key={t.id}
+                    key={task.id}
                     className="flex items-center gap-3 rounded-lg border border-line/60 bg-panel2 px-3 py-2 text-sm"
                   >
                     <Badge tone={due.tone === "muted" ? "dim" : due.tone}>
                       {due.text}
                     </Badge>
-                    <span className="truncate">{t.title}</span>
+                    <span className="truncate">{task.title}</span>
                   </li>
                 );
               })}
@@ -729,9 +752,9 @@ export default function Overview() {
         </Card>
 
         <Card className="p-4">
-          <SectionTitle>本地会话文件</SectionTitle>
+          <SectionTitle>{t("overview.localSessions")}</SectionTitle>
           {sessionFiles.length === 0 ? (
-            <Empty icon={Inbox}>未检测到 ~/.claude 或 ~/.codex 会话</Empty>
+            <Empty icon={Inbox}>{t("overview.noSessionFiles")}</Empty>
           ) : (
             <ul className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto">
               {sessionFiles.slice(0, 8).map((s, i) => (
@@ -759,11 +782,11 @@ export default function Overview() {
 }
 
 /** 按当前小时返回问候语。 */
-function greeting(): string {
+function greeting(t: (key: string) => string): string {
   const h = new Date().getHours();
-  if (h < 5) return "夜深了";
-  if (h < 11) return "早上好";
-  if (h < 14) return "中午好";
-  if (h < 18) return "下午好";
-  return "晚上好";
+  if (h < 5) return t("overview.greeting.lateNight");
+  if (h < 11) return t("overview.greeting.morning");
+  if (h < 14) return t("overview.greeting.noon");
+  if (h < 18) return t("overview.greeting.afternoon");
+  return t("overview.greeting.evening");
 }

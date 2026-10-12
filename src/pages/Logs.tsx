@@ -3,6 +3,7 @@ import { FileText, RefreshCw, Trash2 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { readLogs, clearLogs } from "../lib/api";
 import { Btn } from "../ui";
+import { t as translate, useT } from "../lib/i18n";
 
 /**
  * Log viewer — displays the Rust backend logs without needing the DevTools console.
@@ -11,6 +12,7 @@ import { Btn } from "../ui";
  * promise 回调里而非 effect 同步体，因此不会引发级联渲染。
  */
 export default function Logs() {
+  const t = useT();
   const setToast = useStore((s) => s.setToast);
   const [content, setContent] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -19,7 +21,7 @@ export default function Logs() {
     try {
       setContent(await readLogs(500));
     } catch {
-      setContent("(日志暂不可用 — 仅在桌面端运行时写入)");
+      setContent(translate("logs.unavailable"));
     }
   }, []);
 
@@ -41,10 +43,10 @@ export default function Logs() {
   const handleClear = async () => {
     try {
       await clearLogs();
-      setContent("(已清空)");
-      setToast("日志已清空");
+      setContent(t("logs.cleared"));
+      setToast(t("logs.clearedToast"));
     } catch {
-      setToast("清空日志失败");
+      setToast(t("logs.clearFailed"));
     }
   };
 
@@ -61,7 +63,7 @@ export default function Logs() {
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 pb-3">
         <FileText size={16} className="text-accent" />
-        <span className="text-sm font-medium">运行日志</span>
+        <span className="text-sm font-medium">{t("logs.title")}</span>
         <label className="ml-3 flex items-center gap-1.5 text-xs text-dim">
           <input
             type="checkbox"
@@ -69,14 +71,14 @@ export default function Logs() {
             onChange={(e) => setAutoRefresh(e.target.checked)}
             className="accent-accent"
           />
-          自动刷新
+          {t("logs.autoRefresh")}
         </label>
         <div className="ml-auto flex gap-2">
           <Btn onClick={load}>
-            <RefreshCw size={14} /> 刷新
+            <RefreshCw size={14} /> {t("logs.refresh")}
           </Btn>
           <Btn variant="danger" onClick={handleClear}>
-            <Trash2 size={14} /> 清空
+            <Trash2 size={14} /> {t("logs.clear")}
           </Btn>
         </div>
       </div>
@@ -85,7 +87,7 @@ export default function Logs() {
         ref={preRef}
         className="flex-1 overflow-auto rounded-lg border border-line bg-bg p-4 font-mono text-[11px] leading-relaxed text-dim"
       >
-        {content || "(暂无日志)"}
+        {content || t("logs.empty")}
       </pre>
     </div>
   );

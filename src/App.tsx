@@ -18,6 +18,7 @@ import { useStore } from "./lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./lib/api";
+import { APP_VERSION, localeFor, useLang, useT } from "./lib/i18n";
 import logoUrl from "./assets/logo.png";
 import { Btn, Modal, Spinner } from "./ui";
 import type { ViewKey } from "./types";
@@ -35,29 +36,32 @@ const Tasks = memo(lazy(() => import("./pages/Tasks")));
 const Settings = memo(lazy(() => import("./pages/Settings")));
 const Logs = memo(lazy(() => import("./pages/Logs")));
 
-const NAV: { key: ViewKey; label: string; icon: typeof Cpu }[] = [
-  { key: "overview", label: "概览", icon: LayoutDashboard },
-  { key: "processes", label: "进程", icon: Cpu },
-  { key: "servers", label: "服务与端口", icon: Server },
-  { key: "ai", label: "AI 会话", icon: Sparkles },
-  { key: "projects", label: "项目", icon: FolderKanban },
-  { key: "tasks", label: "任务", icon: ListChecks },
-  { key: "settings", label: "设置", icon: SettingsIcon },
-  { key: "logs", label: "运行日志", icon: FileText },
+const NAV_KEYS: ViewKey[] = [
+  "overview",
+  "processes",
+  "servers",
+  "ai",
+  "projects",
+  "tasks",
+  "settings",
+  "logs",
 ];
 
-const TITLES: Record<ViewKey, string> = {
-  overview: "概览",
-  processes: "进程监控",
-  servers: "服务与端口",
-  ai: "AI 会话",
-  projects: "项目管理",
-  tasks: "任务看板",
-  settings: "设置",
-  logs: "运行日志",
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const NAV_ICONS: Record<ViewKey, any> = {
+  overview: LayoutDashboard,
+  processes: Cpu,
+  servers: Server,
+  ai: Sparkles,
+  projects: FolderKanban,
+  tasks: ListChecks,
+  settings: SettingsIcon,
+  logs: FileText,
 };
 
 export default function App() {
+  const t = useT();
+  const lang = useLang();
   const {
     view,
     setView,
@@ -124,38 +128,43 @@ export default function App() {
         <div className="flex items-center gap-2 px-4 py-4">
           <img
             src={logoUrl}
-            alt="工作台 Logo"
+            alt="Workbench logo"
             className="h-8 w-8 rounded-lg"
             draggable={false}
           />
           <div>
-            <div className="text-sm font-bold leading-tight">工作台</div>
-            <div className="text-[10px] leading-tight text-dim">Workbench</div>
+            <div className="text-sm font-bold leading-tight">{t("app.brand")}</div>
+            <div className="text-[10px] leading-tight text-dim">{t("app.brandSub")}</div>
           </div>
         </div>
         <nav className="flex flex-col gap-0.5 px-2">
-          {NAV.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setView(key)}
-              className={`relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                view === key
-                  ? "bg-accentsoft font-semibold text-accent"
-                  : "text-dim hover:bg-panel2 hover:text-text"
-              }`}
-            >
-              {view === key && (
-                <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent" />
-              )}
-              <Icon size={16} />
-              {label}
-            </button>
-          ))}
+          {NAV_KEYS.map((key) => {
+            const Icon = NAV_ICONS[key];
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setView(key)}
+                className={`relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                  view === key
+                    ? "bg-accentsoft font-semibold text-accent"
+                    : "text-dim hover:bg-panel2 hover:text-text"
+                }`}
+              >
+                {view === key && (
+                  <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent" />
+                )}
+                <Icon size={16} />
+                {t(`app.nav.${key}`)}
+              </button>
+            );
+          })}
         </nav>
         <div className="mt-auto px-3 py-3 text-[10px] leading-relaxed text-dim">
-          <div>{tauri ? "桌面模式 · 数据存本机" : "浏览器预览 · 演示数据"}</div>
-          <div className="mt-0.5 opacity-60">v0.1.0 · Tauri 2</div>
+          <div>{tauri ? t("app.mode.desktop") : t("app.mode.browser")}</div>
+          <div className="mt-0.5 opacity-60">
+            {t("app.versionLine", { version: APP_VERSION })}
+          </div>
         </div>
       </aside>
 
@@ -164,24 +173,32 @@ export default function App() {
           className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-panel/80 px-5 backdrop-blur"
           data-tauri-drag-region
         >
-          <h1 className="text-base font-semibold">{TITLES[view]}</h1>
+          <h1 className="text-base font-semibold">{t(`app.title.${view}`)}</h1>
           <span
             className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium ${tauri ? "text-ok border-ok/40 bg-ok/10" : "text-warn border-warn/40 bg-warn/10"}`}
           >
-            {tauri ? "实时" : "演示"}
+            {tauri ? t("app.mode.realtime") : t("app.mode.demo")}
           </span>
           <div className="ml-auto flex items-center gap-2 text-xs text-dim">
             {loading && <Spinner />}
             <span>
               {lastRefreshAt
-                ? `更新于 ${new Date(lastRefreshAt).toLocaleTimeString("zh-CN", { hour12: false })}`
-                : "等待刷新"}
+                ? t("app.updatedAt", {
+                    time: new Date(lastRefreshAt).toLocaleTimeString(localeFor(lang), {
+                      hour12: false,
+                    }),
+                  })
+                : t("app.waitingRefresh")}
             </span>
-            <Btn title="立即刷新" onClick={refreshRuntime} className="!px-2 !py-1">
+            <Btn
+              title={t("app.refreshNow")}
+              onClick={refreshRuntime}
+              className="!px-2 !py-1"
+            >
               <RefreshCw size={14} />
             </Btn>
             <Btn
-              title={alwaysOnTop ? "取消窗口置顶" : "窗口置顶"}
+              title={alwaysOnTop ? t("app.pinOn") : t("app.pinOff")}
               onClick={async () => {
                 const next = !alwaysOnTop;
                 setAlwaysOnTop(next);
@@ -198,7 +215,7 @@ export default function App() {
               {alwaysOnTop ? <Pin size={14} /> : <PinOff size={14} />}
             </Btn>
             <Btn
-              title="切换主题"
+              title={t("app.themeToggle")}
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className="!px-2 !py-1"
             >
@@ -211,7 +228,7 @@ export default function App() {
           <Suspense
             fallback={
               <div className="flex h-64 items-center justify-center gap-3 text-sm text-dim">
-                <Spinner /> 加载中…
+                <Spinner /> {t("app.loading")}
               </div>
             }
           >
@@ -229,23 +246,25 @@ export default function App() {
 
       <Modal
         open={!!killTarget}
-        title="结束进程（不可恢复）"
+        title={t("app.kill.title")}
         onClose={() => setKillTarget(null)}
         footer={
           <>
-            <Btn onClick={() => setKillTarget(null)}>取消</Btn>
+            <Btn onClick={() => setKillTarget(null)}>{t("app.kill.cancel")}</Btn>
             <Btn
               variant="danger"
               onClick={() => killTarget && killProcess(killTarget.pid)}
             >
-              确认结束 {killTarget?.pid}
+              {t("app.kill.confirm", { pid: killTarget?.pid ?? "" })}
             </Btn>
           </>
         }
       >
         <p className="text-sm text-dim">
-          确定要结束进程 <span className="font-mono text-text">{killTarget?.name}</span>
-          （PID {killTarget?.pid}）吗？未保存的数据可能丢失，此操作不可恢复。
+          {t("app.kill.body", {
+            name: killTarget?.name ?? "",
+            pid: killTarget?.pid ?? "",
+          })}
         </p>
       </Modal>
 

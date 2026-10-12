@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useStore } from "./store";
 import type { Project, Task } from "../types";
+import { setLang } from "./i18n";
+
+// 锁定界面语言：toast / 默认名文案按中文断言（默认语言是英语）
+setLang("zh");
 
 /** 测试隔离：每个用例前把 store 重置到已知状态（浏览器模式下不触发 IPC）。 */
 function resetStore() {

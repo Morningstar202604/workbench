@@ -14,15 +14,16 @@ import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { Badge, Btn, Card, Empty, Spinner, StatCard, Td, Tr, inputCls } from "../ui";
 import { formatBytes, fromNow, shortPath } from "../lib/util";
+import { useT, useLang, localeFor } from "../lib/i18n";
 import type { ProcInfo } from "../types";
 
 type SortKey = "cpu" | "memory" | "pid" | "name";
 
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: "cpu", label: "CPU 占用" },
-  { key: "memory", label: "内存占用" },
-  { key: "pid", label: "PID" },
-  { key: "name", label: "名称" },
+const SORTS: { key: SortKey; labelKey: string }[] = [
+  { key: "cpu", labelKey: "procs.sortCpu" },
+  { key: "memory", labelKey: "procs.sortMemory" },
+  { key: "pid", labelKey: "procs.sortPid" },
+  { key: "name", labelKey: "procs.sortName" },
 ];
 
 /** 虚拟滚动估算尺寸：普通行固定，展开详情行内容高度不定，交由实测修正 */
@@ -72,6 +73,8 @@ function memHistogram(procs: ProcInfo[]) {
 }
 
 export default function Processes() {
+  const t = useT();
+  const lang = useLang();
   const { procs, devs, ais, loading, refreshRuntime } = useStore(
     useShallow((s) => ({
       procs: s.procs,
@@ -218,28 +221,28 @@ export default function Processes() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           icon={Cpu}
-          label="进程总数"
+          label={t("procs.statTotal")}
           value={procs.length}
           tone="accent"
           bar="bg-accent"
         />
         <StatCard
           icon={Cpu}
-          label="CPU 占用"
+          label={t("procs.sortCpu")}
           value={`${procs.reduce((a, p) => a + (p.cpu ?? 0), 0).toFixed(0)}%`}
           tone="warn"
           bar="bg-warn"
         />
         <StatCard
           icon={MemoryStick}
-          label="内存合计"
+          label={t("procs.statMemoryTotal")}
           value={formatBytes(procs.reduce((a, p) => a + (p.memory ?? 0), 0))}
           tone="ok"
           bar="bg-ok"
         />
         <StatCard
           icon={Search}
-          label="高CPU进程"
+          label={t("procs.statHighCpu")}
           value={procs.filter((p) => p.cpu > 10).length}
           tone="danger"
           bar="bg-danger"
@@ -249,13 +252,13 @@ export default function Processes() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card className="p-4">
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
-            <Cpu size={14} className="text-warn" /> CPU 占用分布
+            <Cpu size={14} className="text-warn" /> {t("procs.cpuDistTitle")}
           </h3>
           <EChart option={cpuChart} style={{ height: 170 }} notMerge lazyUpdate />
         </Card>
         <Card className="p-4">
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
-            <MemoryStick size={14} className="text-ok" /> 内存占用分布
+            <MemoryStick size={14} className="text-ok" /> {t("procs.memDistTitle")}
           </h3>
           <EChart option={memChart} style={{ height: 170 }} notMerge lazyUpdate />
         </Card>
@@ -270,7 +273,7 @@ export default function Processes() {
           />
           <input
             className={`${inputCls} pl-8`}
-            placeholder="搜索进程名 / PID / 命令行…"
+            placeholder={t("procs.searchPlaceholder")}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -278,11 +281,11 @@ export default function Processes() {
         <div className="flex items-center gap-1.5">
           {(
             [
-              ["all", "全部"],
-              ["ai", "AI 代理"],
-              ["dev", "开发服务器"],
+              ["all", "procs.chipAll"],
+              ["ai", "procs.chipAi"],
+              ["dev", "procs.chipDev"],
             ] as const
-          ).map(([key, label]) => (
+          ).map(([key, labelKey]) => (
             <button
               key={key}
               type="button"
@@ -293,12 +296,12 @@ export default function Processes() {
                   : "border-line bg-panel2 text-dim hover:text-text"
               }`}
             >
-              {label}
+              {t(labelKey)}
             </button>
           ))}
         </div>
         <label className="flex items-center gap-1.5 text-xs text-dim">
-          排序
+          {t("procs.sortLabel")}
           <select
             className="rounded-lg border border-line bg-panel2 px-2 py-1 text-xs text-text outline-none"
             value={sort}
@@ -306,16 +309,20 @@ export default function Processes() {
           >
             {SORTS.map((s) => (
               <option key={s.key} value={s.key}>
-                {s.label}
+                {t(s.labelKey)}
               </option>
             ))}
           </select>
         </label>
         <span className="text-xs text-dim">
-          {loading ? <Spinner /> : `${filteredProcs.length} / ${procs.length} 个进程`}
+          {loading ? (
+            <Spinner />
+          ) : (
+            t("procs.procCount", { shown: filteredProcs.length, total: procs.length })
+          )}
         </span>
         <Btn onClick={refreshRuntime} className="ml-auto">
-          刷新
+          {t("procs.refresh")}
         </Btn>
       </Card>
 
@@ -323,7 +330,7 @@ export default function Processes() {
       {/* max-h 而非固定高：筛出少量行时表格随内容收缩，滚动条不会留一片空白 */}
       <Card>
         {filteredProcs.length === 0 ? (
-          <Empty icon={SearchX}>没有匹配的进程</Empty>
+          <Empty icon={SearchX}>{t("procs.noMatch")}</Empty>
         ) : (
           <div ref={scrollRef} className="max-h-[60vh] overflow-auto">
             <table className="w-full text-sm">
@@ -332,13 +339,13 @@ export default function Processes() {
                   {[
                     "",
                     "PID",
-                    "名称",
+                    t("procs.colName"),
                     "CPU",
-                    "内存",
-                    "状态",
-                    "启动",
-                    "路径 / 命令行",
-                    "操作",
+                    t("procs.colMemory"),
+                    t("procs.colStatus"),
+                    t("procs.colStarted"),
+                    t("procs.colPath"),
+                    t("procs.colAction"),
                   ].map((h, i) => (
                     <th
                       key={i}
@@ -370,25 +377,31 @@ export default function Processes() {
                         <Td colSpan={9} className="bg-panel/60 px-4 py-3">
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-xs">
                             <div>
-                              <span className="text-dim">可执行路径</span>
+                              <span className="text-dim">{t("procs.detailExePath")}</span>
                               <div className="mt-0.5 break-all font-mono text-[11px] text-text">
                                 {p.exe_path || "—"}
                               </div>
                             </div>
                             <div>
-                              <span className="text-dim">父进程 PID</span>
+                              <span className="text-dim">
+                                {t("procs.detailParentPid")}
+                              </span>
                               <div className="mt-0.5 font-mono text-text">
-                                {p.parent_pid ?? "无（根进程）"}
+                                {p.parent_pid ?? t("procs.detailNoParent")}
                               </div>
                             </div>
                             <div>
-                              <span className="text-dim">启动时间</span>
+                              <span className="text-dim">
+                                {t("procs.detailStartTime")}
+                              </span>
                               <div className="mt-0.5 text-text">
-                                {new Date(p.start_time * 1000).toLocaleString("zh-CN")}
+                                {new Date(p.start_time * 1000).toLocaleString(
+                                  localeFor(lang)
+                                )}
                               </div>
                             </div>
                             <div className="sm:col-span-3">
-                              <span className="text-dim">完整命令行</span>
+                              <span className="text-dim">{t("procs.detailCmdLine")}</span>
                               <code className="mt-0.5 block break-all rounded bg-bg px-2 py-1.5 font-mono text-[11px] text-dim">
                                 {p.cmd_line || "—"}
                               </code>
@@ -466,7 +479,7 @@ export default function Processes() {
                           <Btn
                             variant="danger"
                             className="!px-2 !py-1 !text-xs"
-                            title="结束进程"
+                            title={t("procs.killTitle")}
                             onClick={() => {
                               useStore.getState().setKillTarget(p);
                             }}
@@ -477,7 +490,7 @@ export default function Processes() {
                           <Btn
                             variant="ghost"
                             className="!px-2 !py-1 !text-xs"
-                            title="结束进程"
+                            title={t("procs.killTitle")}
                             onClick={() => {
                               useStore.getState().setKillTarget(p);
                             }}
@@ -499,9 +512,7 @@ export default function Processes() {
           </div>
         )}
       </Card>
-      <p className="px-1 text-[11px] text-dim">
-        点击进程行展开详情。表格虚拟滚动，只渲染视口内的行。
-      </p>
+      <p className="px-1 text-[11px] text-dim">{t("procs.tableHint")}</p>
     </div>
   );
 }

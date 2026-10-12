@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { t } from "./lib/i18n";
 
 interface Props {
   children: ReactNode;
@@ -28,14 +29,14 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex h-full flex-col items-center justify-center gap-4 bg-bg p-10 text-center">
           <AlertTriangle size={40} className="text-danger" />
-          <h2 className="text-lg font-semibold">页面渲染异常</h2>
+          <h2 className="text-lg font-semibold">{t("err.title")}</h2>
           <p className="max-w-md text-sm text-dim">{this.state.error.message}</p>
           <button
             onClick={this.reset}
             className="flex items-center gap-2 rounded-lg bg-accentsoft px-4 py-2 text-sm text-accent hover:bg-accent/20"
           >
             <RefreshCw size={14} />
-            重试
+            {t("err.retry")}
           </button>
         </div>
       );

@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { setLang } from "./lib/i18n";
+
+// 锁定界面语言：兜底 UI 文案按中文断言（默认语言是英语）
+setLang("zh");
 
 /** 必须在类组件外抛错才会被边界捕获，这里用一个会炸的子组件。 */
 function Bomb({ shouldThrow }: { shouldThrow: boolean }) {

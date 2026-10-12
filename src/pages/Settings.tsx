@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { DollarSign, Download, Eraser, RefreshCw, Upload } from "lucide-react";
+import { DollarSign, Download, Eraser, Globe, RefreshCw, Upload } from "lucide-react";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { isTauri } from "../lib/api";
+import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
 import { Badge, Btn, Card, Field, SectionTitle } from "../ui";
 import type { CostSettings, WorkbenchData } from "../types";
 
@@ -36,22 +37,30 @@ function useCostSettingsEditor(current: CostSettings) {
 // ════════════════════════════════════════════════════════════
 
 const REFRESH_OPTIONS = [
-  { ms: 1000, label: "1 秒" },
-  { ms: 3000, label: "3 秒" },
-  { ms: 5000, label: "5 秒" },
-  { ms: 10000, label: "10 秒" },
-  { ms: 30000, label: "30 秒" },
+  { ms: 1000, key: "settings.refresh1s" },
+  { ms: 3000, key: "settings.refresh3s" },
+  { ms: 5000, key: "settings.refresh5s" },
+  { ms: 10000, key: "settings.refresh10s" },
+  { ms: 30000, key: "settings.refresh30s" },
 ];
 
 const ALERT_OPTIONS = [
-  { value: 50, label: "50%" },
-  { value: 70, label: "70%" },
-  { value: 80, label: "80%" },
-  { value: 90, label: "90%" },
-  { value: 100, label: "100%（用尽才告警）" },
+  { value: 50, key: "settings.alert50" },
+  { value: 70, key: "settings.alert70" },
+  { value: 80, key: "settings.alert80" },
+  { value: 90, key: "settings.alert90" },
+  { value: 100, key: "settings.alert100" },
+];
+
+const LANG_OPTIONS: { code: Lang; label: string }[] = [
+  { code: "en", label: "English" },
+  { code: "zh", label: "简体中文" },
+  { code: "ja", label: "日本語" },
 ];
 
 export default function Settings() {
+  const t = useT();
+  const lang = useLang();
   const {
     theme,
     setTheme,
@@ -104,33 +113,38 @@ export default function Settings() {
     a.download = `workbench-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    setToast("已导出 JSON 备份");
+    setToast(t("settings.exported"));
   };
 
   const importJson = async (file: File) => {
     try {
       const parsed = JSON.parse(await file.text()) as WorkbenchData;
       if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.tasks)) {
-        throw new Error("文件结构不符合预期（需要 projects / tasks 数组）");
+        throw new Error(t("settings.importBadStructure"));
       }
       // Schema 字段校验
       for (const p of parsed.projects) {
         if (typeof p.id !== "string" || typeof p.name !== "string") {
-          throw new Error("项目字段类型错误（id / name 必须为字符串）");
+          throw new Error(t("settings.importBadProject"));
         }
       }
-      for (const t of parsed.tasks) {
-        if (typeof t.id !== "string" || typeof t.title !== "string") {
-          throw new Error("任务字段类型错误（id / title 必须为字符串）");
+      for (const task of parsed.tasks) {
+        if (typeof task.id !== "string" || typeof task.title !== "string") {
+          throw new Error(t("settings.importBadTask"));
         }
-        if (!["todo", "doing", "done"].includes(t.status)) {
-          throw new Error("任务状态非法（需为 todo / doing / done）");
+        if (!["todo", "doing", "done"].includes(task.status)) {
+          throw new Error(t("settings.importBadStatus"));
         }
       }
       persistData(parsed);
-      setToast(`已导入 ${parsed.projects.length} 个项目、${parsed.tasks.length} 个任务`);
+      setToast(
+        t("settings.imported", {
+          projects: parsed.projects.length,
+          tasks: parsed.tasks.length,
+        })
+      );
     } catch (e) {
-      setToast(`导入失败: ${String(e)}`);
+      setToast(t("settings.importFailed", { err: String(e) }));
     }
   };
 
@@ -143,37 +157,59 @@ export default function Settings() {
     <div className="flex flex-col gap-4">
       {/* ── 页面标题（与其他页头部呼应） ── */}
       <div className="flex items-center gap-3">
-        <h2 className="text-xl font-bold">设置</h2>
-        <span className="text-xs text-dim">主题、刷新、成本与数据管理</span>
+        <h2 className="text-xl font-bold">{t("settings.pageTitle")}</h2>
+        <span className="text-xs text-dim">{t("settings.pageSub")}</span>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {/* ── 外观 ── */}
         <Card className="p-4">
-          <SectionTitle>外观</SectionTitle>
+          <SectionTitle>{t("settings.appearance")}</SectionTitle>
           <div className="flex items-center gap-2">
             <Btn
               variant={theme === "dark" ? "primary" : "ghost"}
               onClick={() => setTheme("dark")}
             >
-              深色
+              {t("settings.dark")}
             </Btn>
             <Btn
               variant={theme === "light" ? "primary" : "ghost"}
               onClick={() => setTheme("light")}
             >
-              浅色
+              {t("settings.light")}
             </Btn>
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-dim">
-            切换后图表主题将自动跟随；标题栏的置顶按钮随时可用。
+            {t("settings.appearanceHint")}
           </p>
+
+          {/* ── 语言 ── */}
+          <div className="mt-4 border-t border-line pt-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-dim">
+              <Globe size={13} />
+              {t("settings.language")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {LANG_OPTIONS.map((o) => (
+                <Btn
+                  key={o.code}
+                  variant={lang === o.code ? "primary" : "ghost"}
+                  onClick={() => setLang(o.code)}
+                >
+                  {o.label}
+                </Btn>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-dim">
+              {t("settings.languageHint")}
+            </p>
+          </div>
         </Card>
 
         {/* ── 刷新 ── */}
         <Card className="p-4">
-          <SectionTitle>运行时刷新</SectionTitle>
-          <Field label="进程 / 端口 / 开发服务器 / AI 进程刷新间隔">
+          <SectionTitle>{t("settings.refresh")}</SectionTitle>
+          <Field label={t("settings.refreshLabel")}>
             <div className="flex flex-wrap gap-2">
               {REFRESH_OPTIONS.map((o) => (
                 <Btn
@@ -184,23 +220,24 @@ export default function Settings() {
                     refreshRuntime();
                   }}
                 >
-                  {o.label}
+                  {t(o.key)}
                 </Btn>
               ))}
             </div>
           </Field>
           <p className="text-[11px] leading-relaxed text-dim">
-            说明：进程快照包含约 220ms 的 CPU 采样窗口，1 秒间隔已接近物理下限；间隔越短
-            CPU 占用越高。
+            {t("settings.refreshHint")}
           </p>
         </Card>
 
         {/* ── ⚡ 成本计量（新增主 section）── */}
         <Card className="p-4">
-          <SectionTitle extra={costDirty && <Badge tone="warn">未保存</Badge>}>
+          <SectionTitle
+            extra={costDirty && <Badge tone="warn">{t("settings.unsaved")}</Badge>}
+          >
             <span className="flex items-center gap-1.5">
               <DollarSign size={14} />
-              成本计量
+              {t("settings.cost")}
             </span>
           </SectionTitle>
 
@@ -208,11 +245,13 @@ export default function Settings() {
             {/* 预算设置 */}
             <div>
               <div className="mb-2 text-xs font-medium text-dim">
-                预算限制（设为 0 表示不限）
+                {t("settings.budgetLabel")}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-dim">日预算 (USD)</span>
+                  <span className="mb-1 block text-[11px] text-dim">
+                    {t("settings.dailyBudget")}
+                  </span>
                   <input
                     type="number"
                     step="0.5"
@@ -227,7 +266,9 @@ export default function Settings() {
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-dim">月预算 (USD)</span>
+                  <span className="mb-1 block text-[11px] text-dim">
+                    {t("settings.monthlyBudget")}
+                  </span>
                   <input
                     type="number"
                     step="5"
@@ -245,7 +286,7 @@ export default function Settings() {
             </div>
 
             {/* 告警阈值 */}
-            <Field label="超支告警阈值（达到百分比时发出系统通知）">
+            <Field label={t("settings.alertLabel")}>
               <div className="flex flex-wrap gap-2">
                 {ALERT_OPTIONS.map((o) => (
                   <Btn
@@ -255,14 +296,14 @@ export default function Settings() {
                     }
                     onClick={() => updateCost({ alert_threshold_pct: o.value })}
                   >
-                    {o.label}
+                    {t(o.key)}
                   </Btn>
                 ))}
               </div>
             </Field>
 
             {/* 计价偏好 */}
-            <Field label="计价方式">
+            <Field label={t("settings.pricingLabel")}>
               <div className="flex flex-col gap-2">
                 <label className="flex items-center gap-2 text-xs">
                   <input
@@ -271,7 +312,7 @@ export default function Settings() {
                     onChange={(e) => updateCost({ include_estimated: e.target.checked })}
                     className="rounded border-line accent-accent"
                   />
-                  <span>计入启发式估算记录（无 usage 文件按 4 chars/token 粗估）</span>
+                  <span>{t("settings.includeEstimated")}</span>
                 </label>
               </div>
             </Field>
@@ -279,22 +320,24 @@ export default function Settings() {
             {/* 当前状态展示 */}
             {costOverview && (
               <div className="rounded-lg border border-line bg-panel2 p-3">
-                <div className="mb-2 text-xs font-medium text-dim">当前计量状态</div>
+                <div className="mb-2 text-xs font-medium text-dim">
+                  {t("settings.statusTitle")}
+                </div>
                 <div className="grid grid-cols-3 gap-3 text-xs">
                   <div>
-                    <div className="text-dim">总记录</div>
+                    <div className="text-dim">{t("settings.recordCount")}</div>
                     <div className="font-mono font-medium">
                       {costOverview.record_count}
                     </div>
                   </div>
                   <div>
-                    <div className="text-dim">实测 / 估算</div>
+                    <div className="text-dim">{t("settings.measuredEstimated")}</div>
                     <div className="font-mono font-medium">
                       {costOverview.measured_count} / {costOverview.estimated_count}
                     </div>
                   </div>
                   <div>
-                    <div className="text-dim">累计成本</div>
+                    <div className="text-dim">{t("settings.totalCost")}</div>
                     <div className="font-mono font-medium">
                       ${costOverview.total_cost.toFixed(2)}
                     </div>
@@ -306,7 +349,7 @@ export default function Settings() {
             {/* 操作按钮 */}
             <div className="flex gap-2">
               <Btn variant="primary" onClick={saveCostConfig} disabled={!costDirty}>
-                <RefreshCw size={14} /> 应用成本设置
+                <RefreshCw size={14} /> {t("settings.applyCost")}
               </Btn>
               <Btn
                 onClick={() =>
@@ -318,26 +361,25 @@ export default function Settings() {
                   })
                 }
               >
-                <Eraser size={14} /> 恢复默认
+                <Eraser size={14} /> {t("settings.restoreDefaults")}
               </Btn>
             </div>
           </div>
 
           <p className="mt-3 text-[11px] leading-relaxed text-dim">
-            计量数据来源：~/.claude/projects 与 ~/.codex/sessions 下 *.jsonl
-            会话文件。定价表内置 40+ 主流模型公开价格，可按需在 AI 会话页手动触发扫描。
+            {t("settings.costNote")}
           </p>
         </Card>
 
         {/* ── 数据备份（右列，与刷新/外观同排） ── */}
         <Card className="p-4 xl:row-span-2">
-          <SectionTitle>数据</SectionTitle>
+          <SectionTitle>{t("settings.data")}</SectionTitle>
           <div className="flex flex-wrap gap-2">
             <Btn onClick={exportJson}>
-              <Download size={14} /> 导出 JSON
+              <Download size={14} /> {t("settings.exportJson")}
             </Btn>
             <Btn onClick={() => fileRef.current?.click()}>
-              <Upload size={14} /> 导入 JSON
+              <Upload size={14} /> {t("settings.importJson")}
             </Btn>
             <input
               ref={fileRef}
@@ -352,17 +394,18 @@ export default function Settings() {
             />
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-dim">
-            数据存储位置：
+            {t("settings.dataLocation")}:
             {isTauri() ? (
               <>
-                桌面端{" "}
+                {" "}
+                {t("settings.dataDesktop")}{" "}
                 <span className="font-mono">
                   %APPDATA%\com.workbench.desktop\data.json
                 </span>
-                ，不上传任何服务器；改动防抖 300ms 后自动落盘。
+                {t("settings.dataLocalNote")}
               </>
             ) : (
-              <>浏览器预览模式下不持久化，导入导出仅作演示。</>
+              <> {t("settings.dataBrowserNote")}</>
             )}
           </p>
         </Card>
@@ -370,23 +413,17 @@ export default function Settings() {
 
       {/* ── 关于 ── */}
       <Card className="p-4">
-        <SectionTitle>关于</SectionTitle>
+        <SectionTitle>{t("settings.about")}</SectionTitle>
         <div className="flex flex-col gap-1.5 text-xs text-dim">
           <div className="flex items-center gap-2">
-            版本 <Badge tone="dim">v0.1.0</Badge>
-            模式{" "}
+            {t("settings.version")} <Badge tone="dim">v{APP_VERSION}</Badge>
+            {t("settings.mode")}{" "}
             <Badge tone={isTauri() ? "ok" : "warn"}>
-              {isTauri() ? "Tauri 桌面端" : "浏览器预览"}
+              {isTauri() ? t("settings.modeTauri") : t("settings.modeBrowser")}
             </Badge>
           </div>
-          <p>
-            进程与端口数据来自本机 sysinfo 与 netstat；AI 会话另支持 opencode
-            本地服务（默认端口 4096）、Claude Code / Codex CLI
-            会话记录文件扫描、成本计量与预算告警。
-          </p>
-          <p className="text-warn">
-            结束进程是不可逆操作，执行前请确认没有未保存的工作。
-          </p>
+          <p>{t("settings.aboutNote")}</p>
+          <p className="text-warn">{t("settings.killWarning")}</p>
         </div>
       </Card>
     </div>

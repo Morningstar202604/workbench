@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FolderOpen, Pencil, Pin, Plus, Trash2 } from "lucide-react";
 import { EChart } from "../lib/echarts";
 import { chartGapColor, horizontalBarOption } from "../lib/chartTheme";
@@ -7,12 +7,13 @@ import { useShallow } from "zustand/react/shallow";
 import { openExternal } from "../lib/api";
 import { Badge, Btn, Card, Empty, Field, Modal, Table, Td, Tr, inputCls } from "../ui";
 import { shortPath } from "../lib/util";
+import { useT } from "../lib/i18n";
 import type { Project } from "../types";
 
-const STATUS_MAP: Record<string, { label: string; tone: string; color: string }> = {
-  active: { label: "活跃", tone: "ok", color: "#34d399" },
-  paused: { label: "暂停", tone: "warn", color: "#fbbf24" },
-  archived: { label: "归档", tone: "dim", color: "#64748b" },
+const STATUS_MAP: Record<string, { tone: string; color: string }> = {
+  active: { tone: "ok", color: "#34d399" },
+  paused: { tone: "warn", color: "#fbbf24" },
+  archived: { tone: "dim", color: "#64748b" },
 };
 
 interface Draft {
@@ -35,6 +36,8 @@ const emptyDraft: Draft = {
 };
 
 export default function Projects() {
+  const t = useT();
+
   const { data, devs, addProject, updateProject, deleteProject, setView, theme } =
     useStore(
       useShallow((s) => ({
@@ -48,6 +51,18 @@ export default function Projects() {
       }))
     );
   const [draft, setDraft] = useState<Draft | null>(null);
+
+  const statusLabel = useCallback(
+    (s: string) =>
+      s === "active"
+        ? t("projects.statusActive")
+        : s === "paused"
+          ? t("projects.statusPaused")
+          : s === "archived"
+            ? t("projects.statusArchived")
+            : s,
+    [t]
+  );
 
   const runningDirs = useMemo(
     () => devs.map((d) => d.project_dir?.toLowerCase() ?? "").filter(Boolean),
@@ -70,18 +85,18 @@ export default function Projects() {
     const m = new Map<string, number>();
     for (const p of data.projects) m.set(p.status, (m.get(p.status) ?? 0) + 1);
     return [...m.entries()].map(([s, c]) => ({
-      name: STATUS_MAP[s]?.label ?? s,
+      name: statusLabel(s),
       value: c,
       itemStyle: { color: STATUS_MAP[s]?.color ?? "#64748b" },
     }));
-  }, [data.projects]);
+  }, [data.projects, statusLabel]);
 
   // 任务数 Top5 项目
   const taskCountData = useMemo(() => {
     return data.projects
       .map((p) => ({
         name: p.name.length > 10 ? p.name.slice(0, 10) + "…" : p.name,
-        count: data.tasks.filter((t) => t.project_id === p.id).length,
+        count: data.tasks.filter((task) => task.project_id === p.id).length,
       }))
       .filter((d) => d.count > 0)
       .sort((a, b) => b.count - a.count)
@@ -127,7 +142,7 @@ export default function Projects() {
       status: draft.status,
       tags: draft.tags
         .split(/[,，]/)
-        .map((t) => t.trim())
+        .map((tag) => tag.trim())
         .filter(Boolean),
       pinned: draft.pinned,
       note: draft.note,
@@ -142,7 +157,7 @@ export default function Projects() {
       {/* ── 顶部图表 ── */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card className="p-4">
-          <h3 className="mb-2 text-sm font-medium">状态分布</h3>
+          <h3 className="mb-2 text-sm font-medium">{t("projects.statusDistTitle")}</h3>
           {data.projects.length > 0 ? (
             <>
               <EChart
@@ -164,50 +179,56 @@ export default function Projects() {
                         className="inline-block h-1.5 w-1.5 rounded-full"
                         style={{ background: v.color }}
                       />
-                      {v.label} <span className="font-mono text-text">{count}</span>
+                      {statusLabel(k)}{" "}
+                      <span className="font-mono text-text">{count}</span>
                     </span>
                   );
                 })}
               </div>
             </>
           ) : (
-            <Empty>暂无项目</Empty>
+            <Empty>{t("projects.emptyProjects")}</Empty>
           )}
         </Card>
         <Card className="p-4 md:col-span-2">
-          <h3 className="mb-2 text-sm font-medium">任务数 Top 项目</h3>
+          <h3 className="mb-2 text-sm font-medium">{t("projects.topTasksTitle")}</h3>
           {taskCountData.length > 0 ? (
             <EChart option={taskBarOption} style={{ height: 160 }} notMerge lazyUpdate />
           ) : (
-            <Empty>没有关联任务的项目</Empty>
+            <Empty>{t("projects.noLinkedTasks")}</Empty>
           )}
         </Card>
       </div>
 
       {/* ── 顶部操作 ── */}
       <div className="flex items-center gap-3">
-        <span className="text-sm text-dim">共 {data.projects.length} 个项目</span>
+        <span className="text-sm text-dim">
+          {t("projects.totalCount", { count: data.projects.length })}
+        </span>
         <Btn
           variant="primary"
           className="ml-auto"
           onClick={() => setDraft({ ...emptyDraft })}
         >
-          <Plus size={14} /> 新建项目
+          <Plus size={14} /> {t("projects.new")}
         </Btn>
       </div>
 
       {data.projects.length === 0 ? (
         <Card>
           <Empty>
-            还没有项目。点「新建项目」把本机目录登记进来，运行中的开发服务器会自动打上「运行中」标记。
+            {t("projects.emptyHint", {
+              newProject: t("projects.new"),
+              running: t("projects.running"),
+            })}
           </Empty>
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {sorted.map((p) => {
             const st = STATUS_MAP[p.status] ?? STATUS_MAP.active;
-            const tasks = data.tasks.filter((t) => t.project_id === p.id);
-            const doing = tasks.filter((t) => t.status === "doing").length;
+            const tasks = data.tasks.filter((task) => task.project_id === p.id);
+            const doing = tasks.filter((task) => task.status === "doing").length;
             return (
               <Card
                 key={p.id}
@@ -217,18 +238,18 @@ export default function Projects() {
                   <span className="font-semibold">{p.name}</span>
                   {p.pinned && <Pin size={12} className="mt-1 text-accent" />}
                   <div className="ml-auto flex gap-1">
-                    <Badge tone={st.tone}>{st.label}</Badge>
-                    {isRunning(p) && <Badge tone="ok">运行中</Badge>}
+                    <Badge tone={st.tone}>{statusLabel(p.status)}</Badge>
+                    {isRunning(p) && <Badge tone="ok">{t("projects.running")}</Badge>}
                   </div>
                 </div>
                 <div className="truncate font-mono text-[11px] text-dim" title={p.path}>
-                  {p.path ? shortPath(p.path, 60) : "未绑定路径"}
+                  {p.path ? shortPath(p.path, 60) : t("projects.unboundPath")}
                 </div>
                 {p.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1">
-                    {p.tags.map((t) => (
-                      <Badge key={t} tone="dim">
-                        {t}
+                    {p.tags.map((tag) => (
+                      <Badge key={tag} tone="dim">
+                        {tag}
                       </Badge>
                     ))}
                   </div>
@@ -238,15 +259,19 @@ export default function Projects() {
                     className="text-accent hover:underline"
                     onClick={() => setView("tasks")}
                   >
-                    {tasks.length} 个任务
+                    {t("projects.taskCount", { count: tasks.length })}
                   </button>
-                  {doing > 0 && <Badge tone="accent">{doing} 进行中</Badge>}
+                  {doing > 0 && (
+                    <Badge tone="accent">
+                      {t("projects.doingCount", { count: doing })}
+                    </Badge>
+                  )}
                 </div>
                 <div className="mt-1 flex gap-1.5 border-t border-line/60 pt-2">
                   {p.path && (
                     <Btn
                       className="!px-2 !py-1 !text-xs"
-                      title="打开目录"
+                      title={t("projects.openDir")}
                       onClick={() => openExternal(p.path)}
                     >
                       <FolderOpen size={12} />
@@ -254,7 +279,7 @@ export default function Projects() {
                   )}
                   <Btn
                     className="!px-2 !py-1 !text-xs"
-                    title="编辑"
+                    title={t("projects.edit")}
                     onClick={() =>
                       setDraft({
                         id: p.id,
@@ -272,9 +297,9 @@ export default function Projects() {
                   <Btn
                     variant="danger"
                     className="!px-2 !py-1 !text-xs"
-                    title="删除项目（任务会保留但解除关联）"
+                    title={t("projects.deleteTitle")}
                     onClick={() => {
-                      if (confirm(`删除项目「${p.name}」？关联的任务会保留但解除关联。`))
+                      if (confirm(t("projects.deleteConfirm", { name: p.name })))
                         deleteProject(p.id);
                     }}
                   >
@@ -288,14 +313,22 @@ export default function Projects() {
       )}
 
       <Card className="p-4">
-        <h3 className="mb-2 text-sm font-medium">表格视图</h3>
-        <Table head={["项目", "状态", "路径", "任务数", "运行中"]}>
+        <h3 className="mb-2 text-sm font-medium">{t("projects.tableView")}</h3>
+        <Table
+          head={[
+            t("projects.colProject"),
+            t("projects.status"),
+            t("projects.colPath"),
+            t("projects.colTasks"),
+            t("projects.running"),
+          ]}
+        >
           {sorted.map((p) => (
             <Tr key={p.id}>
               <Td className="font-medium">{p.name}</Td>
               <Td>
                 <Badge tone={STATUS_MAP[p.status]?.tone ?? "dim"}>
-                  {STATUS_MAP[p.status]?.label ?? p.status}
+                  {statusLabel(p.status)}
                 </Badge>
               </Td>
               <Td
@@ -305,13 +338,13 @@ export default function Projects() {
                 {p.path || "-"}
               </Td>
               <Td className="text-xs text-dim">
-                {data.tasks.filter((t) => t.project_id === p.id).length}
+                {data.tasks.filter((task) => task.project_id === p.id).length}
               </Td>
               <Td>
                 {isRunning(p) ? (
-                  <Badge tone="ok">是</Badge>
+                  <Badge tone="ok">{t("projects.yes")}</Badge>
                 ) : (
-                  <Badge tone="dim">否</Badge>
+                  <Badge tone="dim">{t("projects.no")}</Badge>
                 )}
               </Td>
             </Tr>
@@ -321,28 +354,28 @@ export default function Projects() {
 
       <Modal
         open={!!draft}
-        title={draft?.id ? "编辑项目" : "新建项目"}
+        title={draft?.id ? t("projects.editTitle") : t("projects.new")}
         onClose={() => setDraft(null)}
         footer={
           <>
-            <Btn onClick={() => setDraft(null)}>取消</Btn>
+            <Btn onClick={() => setDraft(null)}>{t("projects.cancel")}</Btn>
             <Btn variant="primary" onClick={submit}>
-              保存
+              {t("projects.save")}
             </Btn>
           </>
         }
       >
         {draft && (
           <>
-            <Field label="项目名称">
+            <Field label={t("projects.fieldName")}>
               <input
                 className={inputCls}
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                placeholder="例如：商城前端重构"
+                placeholder={t("projects.placeholderName")}
               />
             </Field>
-            <Field label="本机路径（绑定后运行中的开发服务器会自动标记）">
+            <Field label={t("projects.fieldPath")}>
               <input
                 className={inputCls}
                 value={draft.path}
@@ -350,26 +383,26 @@ export default function Projects() {
                 placeholder="C:\proj\shop-web"
               />
             </Field>
-            <Field label="状态">
+            <Field label={t("projects.status")}>
               <select
                 className={inputCls}
                 value={draft.status}
                 onChange={(e) => setDraft({ ...draft, status: e.target.value })}
               >
-                <option value="active">活跃</option>
-                <option value="paused">暂停</option>
-                <option value="archived">归档</option>
+                <option value="active">{t("projects.statusActive")}</option>
+                <option value="paused">{t("projects.statusPaused")}</option>
+                <option value="archived">{t("projects.statusArchived")}</option>
               </select>
             </Field>
-            <Field label="标签（逗号分隔）">
+            <Field label={t("projects.fieldTags")}>
               <input
                 className={inputCls}
                 value={draft.tags}
                 onChange={(e) => setDraft({ ...draft, tags: e.target.value })}
-                placeholder="前端, v2"
+                placeholder={t("projects.placeholderTags")}
               />
             </Field>
-            <Field label="备注">
+            <Field label={t("projects.fieldNote")}>
               <textarea
                 className={inputCls}
                 rows={3}
@@ -383,7 +416,7 @@ export default function Projects() {
                 checked={draft.pinned}
                 onChange={(e) => setDraft({ ...draft, pinned: e.target.checked })}
               />
-              置顶显示
+              {t("projects.pinLabel")}
             </label>
           </>
         )}

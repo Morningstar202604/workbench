@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { setLang } from "./i18n";
 import {
   dueLabel,
   formatBytes,
@@ -10,6 +11,9 @@ import {
   formatUptime,
   shortPath,
 } from "./util";
+
+// 锁定界面语言：日期/时长文案按中文断言（默认语言是英语）
+setLang("zh");
 
 describe("formatBytes", () => {
   it("0 与负值显示 0 B", () => {

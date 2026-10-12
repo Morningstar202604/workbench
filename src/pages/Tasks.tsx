@@ -17,21 +17,52 @@ import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { Badge, Btn, Empty, Field, Modal, SectionTitle, inputCls } from "../ui";
 import { dueLabel } from "../lib/util";
+import { useT } from "../lib/i18n";
 import type { Task } from "../types";
 
-const COLUMNS: { key: string; label: string; color: string }[] = [
-  { key: "todo", label: "待办", color: "#64748b" },
-  { key: "doing", label: "进行中", color: "#22d3ee" },
-  { key: "done", label: "已完成", color: "#34d399" },
+type TFunc = (key: string, vars?: Record<string, string | number>) => string;
+
+const COLUMNS: { key: string; color: string }[] = [
+  { key: "todo", color: "#64748b" },
+  { key: "doing", color: "#22d3ee" },
+  { key: "done", color: "#34d399" },
 ];
 
-const PRIORITIES: Record<string, { label: string; tone: string }> = {
-  low: { label: "低", tone: "dim" },
-  normal: { label: "普通", tone: "accent" },
-  high: { label: "高", tone: "danger" },
+const PRIORITIES: Record<string, { tone: string }> = {
+  low: { tone: "dim" },
+  normal: { tone: "accent" },
+  high: { tone: "danger" },
 };
 
+function columnLabel(key: string, t: TFunc): string {
+  switch (key) {
+    case "todo":
+      return t("tasks.colTodo");
+    case "doing":
+      return t("tasks.colDoing");
+    case "done":
+      return t("tasks.colDone");
+    default:
+      return key;
+  }
+}
+
+function priorityLabel(key: string, t: TFunc): string {
+  switch (key) {
+    case "low":
+      return t("tasks.priorityLow");
+    case "normal":
+      return t("tasks.priorityNormal");
+    case "high":
+      return t("tasks.priorityHigh");
+    default:
+      return key;
+  }
+}
+
 export default function Tasks() {
+  const t = useT();
+
   const { data, addTask, moveTask, updateTask, deleteTask, theme } = useStore(
     useShallow((s) => ({
       data: s.data,
@@ -54,7 +85,8 @@ export default function Tasks() {
     data.projects.find((p) => p.id === id)?.name ?? null;
 
   const visible = useMemo(
-    () => data.tasks.filter((t) => !projectFilter || t.project_id === projectFilter),
+    () =>
+      data.tasks.filter((task) => !projectFilter || task.project_id === projectFilter),
     [data.tasks, projectFilter]
   );
 
@@ -69,13 +101,17 @@ export default function Tasks() {
   // ── 图表：优先级分布 ──────────────────────────────────────
   const priorityDist = useMemo(() => {
     const m: Record<string, number> = { low: 0, normal: 0, high: 0 };
-    for (const t of data.tasks) m[t.priority] = (m[t.priority] ?? 0) + 1;
+    for (const task of data.tasks) m[task.priority] = (m[task.priority] ?? 0) + 1;
     return [
-      { name: "低", value: m.low, itemStyle: { color: "#64748b" } },
-      { name: "普通", value: m.normal, itemStyle: { color: "#22d3ee" } },
-      { name: "高", value: m.high, itemStyle: { color: "#ef4444" } },
+      { name: t("tasks.priorityLow"), value: m.low, itemStyle: { color: "#64748b" } },
+      {
+        name: t("tasks.priorityNormal"),
+        value: m.normal,
+        itemStyle: { color: "#22d3ee" },
+      },
+      { name: t("tasks.priorityHigh"), value: m.high, itemStyle: { color: "#ef4444" } },
     ].filter((d) => d.value > 0);
-  }, [data.tasks]);
+  }, [data.tasks, t]);
 
   const priorityPieOption = useMemo(
     () => ({
@@ -98,7 +134,8 @@ export default function Tasks() {
   const completionRate = useMemo(() => {
     if (!data.tasks.length) return 0;
     return Math.round(
-      (data.tasks.filter((t) => t.status === "done").length / data.tasks.length) * 100
+      (data.tasks.filter((task) => task.status === "done").length / data.tasks.length) *
+        100
     );
   }, [data.tasks]);
 
@@ -108,7 +145,7 @@ export default function Tasks() {
     if (!over) return;
     const status = String(over);
     if (!COLUMNS.some((c) => c.key === status)) return;
-    const task = data.tasks.find((t) => t.id === id);
+    const task = data.tasks.find((item) => item.id === id);
     if (task && task.status !== status) moveTask(id, status);
   };
 
@@ -118,7 +155,7 @@ export default function Tasks() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="rounded-xl border border-line bg-panel2 p-4">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <BarChart3 size={14} className="text-warn" /> 优先级分布
+            <BarChart3 size={14} className="text-warn" /> {t("tasks.priorityDist")}
           </div>
           {data.tasks.length > 0 ? (
             <>
@@ -144,13 +181,15 @@ export default function Tasks() {
               </div>
             </>
           ) : (
-            <div className="text-xs text-dim py-6 text-center">暂无任务</div>
+            <div className="text-xs text-dim py-6 text-center">
+              {t("tasks.emptyTasks")}
+            </div>
           )}
         </div>
 
         {/* 完成率进度 */}
         <div className="rounded-xl border border-line bg-panel2 p-4 flex flex-col">
-          <div className="text-sm font-medium">完成率</div>
+          <div className="text-sm font-medium">{t("tasks.completionRate")}</div>
           <div className="flex flex-1 items-center justify-center">
             <div className="relative flex h-24 w-24 items-center justify-center">
               <svg className="h-24 w-24 -rotate-90">
@@ -179,21 +218,22 @@ export default function Tasks() {
             </div>
           </div>
           <div className="text-center text-xs text-dim">
-            {data.tasks.filter((t) => t.status === "done").length} / {data.tasks.length}
+            {data.tasks.filter((task) => task.status === "done").length} /{" "}
+            {data.tasks.length}
           </div>
         </div>
 
         {/* 各列数量 */}
         <div className="rounded-xl border border-line bg-panel2 p-4">
-          <div className="text-sm font-medium mb-3">任务分布</div>
+          <div className="text-sm font-medium mb-3">{t("tasks.taskDist")}</div>
           <div className="space-y-3">
             {COLUMNS.map((c) => {
-              const count = data.tasks.filter((t) => t.status === c.key).length;
+              const count = data.tasks.filter((task) => task.status === c.key).length;
               const pct = data.tasks.length > 0 ? (count / data.tasks.length) * 100 : 0;
               return (
                 <div key={c.key}>
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-dim">{c.label}</span>
+                    <span className="text-dim">{columnLabel(c.key, t)}</span>
                     <span className="font-mono text-text">{count}</span>
                   </div>
                   <div className="h-1.5 rounded-full bg-bg overflow-hidden">
@@ -211,15 +251,15 @@ export default function Tasks() {
 
       {/* ── 筛选 ── */}
       <div className="flex flex-wrap items-center gap-3">
-        <SectionTitle>看板</SectionTitle>
+        <SectionTitle>{t("tasks.board")}</SectionTitle>
         <label className="ml-auto flex items-center gap-2 text-xs text-dim">
-          按项目筛选
+          {t("tasks.filterByProject")}
           <select
             className="rounded-lg border border-line bg-panel2 px-2 py-1 text-xs text-text outline-none"
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
           >
-            <option value="">全部项目</option>
+            <option value="">{t("tasks.allProjects")}</option>
             {data.projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -236,12 +276,12 @@ export default function Tasks() {
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {COLUMNS.map((col) => {
-            const tasks = visible.filter((t) => t.status === col.key);
+            const tasks = visible.filter((task) => task.status === col.key);
             return (
               <Column
                 key={col.key}
                 colKey={col.key}
-                label={col.label}
+                label={columnLabel(col.key, t)}
                 count={tasks.length}
                 color={col.color}
                 draft={drafts[col.key] ?? ""}
@@ -254,15 +294,15 @@ export default function Tasks() {
                 }}
               >
                 {tasks.length === 0 ? (
-                  <Empty>拖动任务到这里，或在下方输入添加</Empty>
+                  <Empty>{t("tasks.columnEmptyHint")}</Empty>
                 ) : (
-                  tasks.map((t) => (
+                  tasks.map((task) => (
                     <TaskCard
-                      key={t.id}
-                      task={t}
-                      projectName={projectName(t.project_id)}
-                      onEdit={() => setTaskDraft({ ...t })}
-                      onDelete={() => deleteTask(t.id)}
+                      key={task.id}
+                      task={task}
+                      projectName={projectName(task.project_id)}
+                      onEdit={() => setTaskDraft({ ...task })}
+                      onDelete={() => deleteTask(task.id)}
                     />
                   ))
                 )}
@@ -274,38 +314,38 @@ export default function Tasks() {
 
       <Modal
         open={!!taskDraft}
-        title="编辑任务"
+        title={t("tasks.editTask")}
         onClose={() => setTaskDraft(null)}
         footer={
           <>
-            <Btn onClick={() => setTaskDraft(null)}>取消</Btn>
+            <Btn onClick={() => setTaskDraft(null)}>{t("tasks.cancel")}</Btn>
             <Btn variant="primary" onClick={commitTask}>
-              完成
+              {t("tasks.done")}
             </Btn>
           </>
         }
       >
         {taskDraft && (
           <>
-            <Field label="标题">
+            <Field label={t("tasks.fieldTitle")}>
               <input
                 className={inputCls}
                 value={taskDraft.title}
                 onChange={(e) => patchTask({ title: e.target.value })}
               />
             </Field>
-            <Field label="优先级">
+            <Field label={t("tasks.fieldPriority")}>
               <select
                 className={inputCls}
                 value={taskDraft.priority}
                 onChange={(e) => patchTask({ priority: e.target.value })}
               >
-                <option value="low">低</option>
-                <option value="normal">普通</option>
-                <option value="high">高</option>
+                <option value="low">{t("tasks.priorityLow")}</option>
+                <option value="normal">{t("tasks.priorityNormal")}</option>
+                <option value="high">{t("tasks.priorityHigh")}</option>
               </select>
             </Field>
-            <Field label="截止日期">
+            <Field label={t("tasks.fieldDue")}>
               <input
                 type="date"
                 className={inputCls}
@@ -313,13 +353,13 @@ export default function Tasks() {
                 onChange={(e) => patchTask({ due: e.target.value || null })}
               />
             </Field>
-            <Field label="所属项目">
+            <Field label={t("tasks.fieldProject")}>
               <select
                 className={inputCls}
                 value={taskDraft.project_id ?? ""}
                 onChange={(e) => patchTask({ project_id: e.target.value || null })}
               >
-                <option value="">未关联</option>
+                <option value="">{t("tasks.unassigned")}</option>
                 {data.projects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -353,6 +393,7 @@ function Column({
   onDraft: (v: string) => void;
   onAdd: () => void;
 }) {
+  const t = useT();
   const { setNodeRef, isOver } = useDroppable({ id: colKey });
   return (
     <div
@@ -370,14 +411,14 @@ function Column({
       <div className="mt-2 flex gap-1.5">
         <input
           className={inputCls}
-          placeholder="添加任务，回车确认"
+          placeholder={t("tasks.addPlaceholder")}
           value={draft}
           onChange={(e) => onDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") onAdd();
           }}
         />
-        <Btn variant="primary" className="!px-2.5" title="添加" onClick={onAdd}>
+        <Btn variant="primary" className="!px-2.5" title={t("tasks.add")} onClick={onAdd}>
           <Plus size={14} />
         </Btn>
       </div>
@@ -396,6 +437,7 @@ function TaskCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const t = useT();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
   });
@@ -418,12 +460,16 @@ function TaskCard({
         <button className="flex-1 text-left text-sm" onClick={onEdit}>
           {task.title}
         </button>
-        <button className="text-dim hover:text-danger" title="删除" onClick={onDelete}>
+        <button
+          className="text-dim hover:text-danger"
+          title={t("tasks.delete")}
+          onClick={onDelete}
+        >
           <Trash2 size={12} />
         </button>
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-        <Badge tone={pri.tone}>{pri.label}</Badge>
+        <Badge tone={pri.tone}>{priorityLabel(task.priority, t)}</Badge>
         {due.tone !== "muted" && <Badge tone={due.tone}>{due.text}</Badge>}
         {projectName && <Badge tone="dim">{projectName}</Badge>}
       </div>

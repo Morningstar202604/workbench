@@ -1,84 +1,93 @@
-# 贡献指南 Contributing
+# Contributing
 
-感谢你有兴趣为「工作台」做贡献。本文档说明本地开发、提交规范与验收门槛。
+Thanks for your interest in contributing to Workbench. This document covers
+local development, commit conventions, and the acceptance gates.
 
-## 开发环境
+## Development environment
 
-| 依赖 | 版本要求 | 说明 |
-|------|----------|------|
-| Node.js | ≥ 20（CI 用 22，LTS 均可） | 前端构建与测试 |
-| Rust | ≥ 1.77（`src-tauri/Cargo.toml` 的 `rust-version`） | 后端与桌面壳 |
-| Windows | 10 / 11 | **当前唯一验证平台**，见下方「平台范围」 |
-| WebView2 Runtime | 随 Windows 11 预装 | Windows 10 需手动安装 |
+| Dependency | Version | Notes |
+|------------|---------|-------|
+| Node.js | ≥ 20 (CI uses 22; any LTS is fine) | frontend build & tests |
+| Rust | ≥ 1.77 (`rust-version` in `src-tauri/Cargo.toml`) | backend & desktop shell |
+| Windows | 10 / 11 | **the only verified platform**, see "Platform scope" |
+| WebView2 Runtime | preinstalled on Windows 11 | Windows 10 needs a manual install |
 
 ```bash
-npm install            # 安装前端依赖
-npm run tauri dev      # 启动桌面开发模式（含热更新）
+npm install            # install frontend dependencies
+npm run tauri dev      # desktop dev mode (hot reload)
 ```
 
-只想调前端界面时，用浏览器演示模式即可，不需要 Rust 工具链：
+Frontend-only work can use the browser demo mode — no Rust toolchain needed:
 
 ```bash
-npm run dev            # http://localhost:5173，自动注入演示数据
+npm run dev            # http://localhost:5173, demo data injected automatically
 ```
 
-## 提交前必须跑
+## Run before committing
 
-CI 会把这四道门全部跑一遍，本地先过一遍能省一个来回：
+CI runs all of these gates; passing them locally first saves a round trip:
 
 ```bash
-npm run format:check   # Prettier 格式检查
-npm run lint           # ESLint（零警告）
-npm test               # 前端单测（vitest）
-npm run build          # tsc --noEmit + vite build
+npm run format:check   # Prettier
+npm run lint           # ESLint (zero warnings)
+npm test               # frontend unit tests (vitest)
+npm run build          # tsc + vite build
 
 cd src-tauri
-cargo test             # 后端单测 + IPC 契约导出
-cargo clippy --all-targets -- -D warnings   # 零警告
+cargo test             # backend tests + IPC contract export
+cargo clippy --all-targets -- -D warnings   # zero warnings
 ```
 
-### 改了 Rust 结构体后必做
+### After changing a Rust struct
 
-前端的跨 IPC 类型由 Rust 结构体生成，**不要手写**：
+Frontend IPC types are generated from Rust structs — **do not hand-write them**:
 
 ```bash
 cd src-tauri
-cargo test --test export_bindings   # 重新生成 src/generated/*.ts
+cargo test --test export_bindings   # regenerates src/generated/*.ts
 ```
 
-`src/generated/` 入库作为契约快照，CI 会比对：若 Rust 改了而生成物没更新，直接失败。
+`src/generated/` is committed as the contract snapshot; CI compares it and
+fails if the Rust side changed without regenerating.
 
-## 分支与提交
+## Branches & commits
 
-- 从 `main` 切分支，命名如 `feat/xxx`、`fix/xxx`
-- 提交信息用 [Conventional Commits](https://www.conventionalcommits.org/)：
+- Branch off `main`, named `feat/xxx`, `fix/xxx`, …
+- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/):
   `feat:` / `fix:` / `docs:` / `refactor:` / `test:` / `chore:` / `ci:`
-- 一个提交只做一件事，便于 review 与回溯
+- One commit does one thing — easier to review and to revert
 
-## 代码约定
+## Code conventions
 
-- **TypeScript**：strict 全开，`noUnusedLocals` / `noUnusedParameters` 生效；禁止 `any`
-- **Rust**：`cargo fmt` + `cargo clippy -- -D warnings` 零警告
-- **样式**：Tailwind CSS 4 + CSS 变量双主题；颜色不要硬编码，走 `global.css` 的 `@theme`
-- **图表**：ECharts 选项里的颜色**必须给真实色值**（ECharts 不解析 CSS 变量）；
-  主题相关取值走 `src/lib/chartTheme.ts`，并在 `useMemo` 依赖里带上 `theme`
-- **注释**：解释「为什么」而非「是什么」。删掉代码时连同它的历史注释一起删
+- **TypeScript**: strict everywhere, `noUnusedLocals` / `noUnusedParameters`
+  on; `any` is not allowed
+- **Rust**: `cargo fmt` + `cargo clippy -- -D warnings` with zero warnings
+- **Styling**: Tailwind CSS 4 + CSS variables for the dual theme; never
+  hardcode colors, go through `@theme` in `global.css`
+- **Charts**: ECharts options need **real color values** (ECharts cannot parse
+  CSS variables); theme-dependent values come from `src/lib/chartTheme.ts`,
+  and `theme` must be listed in `useMemo` dependencies
+- **Comments**: explain "why", not "what". When deleting code, delete its
+  history comments too
 
-## 平台范围
+## Platform scope
 
-当前只在 Windows 上开发、测试与打包：
+Development, testing and packaging are Windows-only today:
 
-- 端口采集写死 `cmd /c netstat -ano`（`ports.rs` 的 POSIX 分支存在但未被执行）
-- 安装包仅产出 NSIS
-- 欢迎提交 macOS / Linux 支持，但请**同时**补上对应平台的实际验证记录
+- Port collection shells out to `cmd /c netstat -ano` (the POSIX branch in
+  `ports.rs` exists but is never exercised)
+- Only the NSIS installer is produced
+- PRs adding macOS / Linux support are welcome, but must come with actual
+  verification notes for those platforms
 
-## 提交 PR
+## Opening a PR
 
-1. 确认上述门禁本地全绿
-2. PR 描述里写清：改了什么、为什么、怎么验证的
-3. 涉及界面的改动请附截图（用浏览器演示模式截，避免泄漏真实数据）
+1. Make sure all gates above pass locally
+2. Describe in the PR: what changed, why, and how you verified it
+3. UI changes: attach screenshots (use browser demo mode so no real data leaks)
 
-## 报告问题
+## Reporting issues
 
-- 缺陷与功能建议走 [Issues](https://github.com/X33834/workbench/issues)（含模板）
-- 安全问题**不要**开公开 issue，见 [SECURITY.md](SECURITY.md)
+- Bugs and feature requests go to
+  [Issues](https://github.com/X33834/workbench/issues) (templates provided)
+- Security issues must **not** be filed publicly — see [SECURITY.md](SECURITY.md)

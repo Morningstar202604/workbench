@@ -15,6 +15,7 @@ import { chartGapColor, horizontalBarOption } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { openExternal } from "../lib/api";
+import { useT } from "../lib/i18n";
 import { Badge, Btn, Card, Empty, SectionTitle, StatCard } from "../ui";
 import type { DevServer, PortEntry } from "../types";
 
@@ -26,11 +27,13 @@ function frameworkDist(servers: DevServer[]) {
 }
 
 // ── 端口区间分布 ──────────────────────────────────────────
-function portHeatmap(ports: PortEntry[]) {
+// 端口区间的展示标签由调用方传入的 t 翻译（t 随语言稳定），保证切换语言后刷新。
+type TFunc = (key: string, vars?: Record<string, string | number>) => string;
+function portHeatmap(ports: PortEntry[], label: TFunc) {
   const ranges = [
-    { label: "知名端口 1-1023", min: 1, max: 1023, count: 0 },
-    { label: "注册端口 1024-49151", min: 1024, max: 49151, count: 0 },
-    { label: "动态端口 49152+", min: 49152, max: 65535, count: 0 },
+    { label: label("servers.portRange.wellKnown"), min: 1, max: 1023, count: 0 },
+    { label: label("servers.portRange.registered"), min: 1024, max: 49151, count: 0 },
+    { label: label("servers.portRange.dynamic"), min: 49152, max: 65535, count: 0 },
   ];
   for (const p of ports) {
     for (const r of ranges) {
@@ -54,6 +57,7 @@ const COLORS = [
 ];
 
 export default function Servers() {
+  const t = useT();
   const {
     devs,
     ports,
@@ -92,7 +96,7 @@ export default function Servers() {
   }, [procs]);
 
   const frameworkData = useMemo(() => frameworkDist(devs), [devs]);
-  const heatmapData = useMemo(() => portHeatmap(listening), [listening]);
+  const heatmapData = useMemo(() => portHeatmap(listening, t), [listening, t]);
 
   // 框架分布饼图
   const frameworkPieOption = useMemo(() => {
@@ -145,21 +149,21 @@ export default function Servers() {
       <div className="grid grid-cols-3 gap-3">
         <StatCard
           icon={Server}
-          label="开发服务"
+          label={t("servers.stats.devServers")}
           value={devs.length}
           tone="ok"
           bar="bg-ok"
         />
         <StatCard
           icon={Network}
-          label="TCP 监听"
+          label={t("servers.stats.tcpListening")}
           value={listening.length}
           tone="accent"
           bar="bg-accent"
         />
         <StatCard
           icon={BarChart3}
-          label="框架种类"
+          label={t("servers.stats.frameworkKinds")}
           value={frameworkData.length}
           tone="warn"
           bar="bg-warn"
@@ -169,7 +173,7 @@ export default function Servers() {
       {/* ── 图表区 ── */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card className="p-4">
-          <SectionTitle>框架分布</SectionTitle>
+          <SectionTitle>{t("servers.frameworkDist")}</SectionTitle>
           {frameworkData.length > 0 ? (
             <>
               <EChart
@@ -194,16 +198,16 @@ export default function Servers() {
               </div>
             </>
           ) : (
-            <Empty icon={Server}>没有检测到开发服务器</Empty>
+            <Empty icon={Server}>{t("servers.frameworkEmpty")}</Empty>
           )}
         </Card>
 
         <Card className="p-4">
-          <SectionTitle>端口分布</SectionTitle>
+          <SectionTitle>{t("servers.portDist")}</SectionTitle>
           {listening.length > 0 ? (
             <EChart option={portBarOption} style={{ height: 180 }} notMerge lazyUpdate />
           ) : (
-            <Empty icon={Network}>未检测到监听端口</Empty>
+            <Empty icon={Network}>{t("servers.portEmpty")}</Empty>
           )}
         </Card>
       </div>
@@ -213,17 +217,14 @@ export default function Servers() {
         <SectionTitle
           extra={
             <Btn onClick={refreshRuntime} className="!py-1 !text-xs">
-              刷新
+              {t("servers.refresh")}
             </Btn>
           }
         >
-          开发服务器（{devs.length}）
+          {t("servers.devServersTitle", { count: devs.length })}
         </SectionTitle>
         {devs.length === 0 ? (
-          <Empty>
-            当前没有检测到运行中的开发服务器。启动 npm run dev / uvicorn
-            等后会出现在这里。
-          </Empty>
+          <Empty>{t("servers.noDevServers")}</Empty>
         ) : (
           <div className="flex flex-col gap-2">
             {devs.map((d) => {
@@ -257,10 +258,10 @@ export default function Servers() {
                       }
                     >
                       {d.confidence === "high"
-                        ? "高置信"
+                        ? t("servers.confidence.high")
                         : d.confidence === "medium"
-                          ? "中置信"
-                          : "低置信"}
+                          ? t("servers.confidence.medium")
+                          : t("servers.confidence.low")}
                     </Badge>
                     <span
                       className="ml-auto truncate font-mono text-xs text-dim hidden md:block"
@@ -275,7 +276,7 @@ export default function Servers() {
                     >
                       <Btn
                         className="!px-2 !py-1 !text-xs"
-                        title="在浏览器打开"
+                        title={t("servers.openInBrowser")}
                         onClick={() => openExternal(`http://localhost:${d.port}`)}
                       >
                         <ExternalLink size={12} />
@@ -283,7 +284,7 @@ export default function Servers() {
                       {d.project_dir && (
                         <Btn
                           className="!px-2 !py-1 !text-xs"
-                          title="打开项目目录"
+                          title={t("servers.openProjectDir")}
                           onClick={() => d.project_dir && openExternal(d.project_dir)}
                         >
                           <FolderOpen size={12} />
@@ -292,7 +293,7 @@ export default function Servers() {
                       <Btn
                         variant="danger"
                         className="!px-2 !py-1 !text-xs"
-                        title="结束进程"
+                        title={t("servers.killProcess")}
                         onClick={() => {
                           const p = procs.find((x) => x.pid === d.pid);
                           if (p) setKillTarget(p);
@@ -306,22 +307,22 @@ export default function Servers() {
                   {/* 展开详情 */}
                   {expanded && (
                     <div className="border-t border-line bg-panel/50 px-4 py-3 space-y-2 text-sm">
-                      <DetailRow label="进程">
+                      <DetailRow label={t("servers.detail.process")}>
                         <span className="font-mono">
                           {d.process_name} · PID {d.pid}
                         </span>
                       </DetailRow>
-                      <DetailRow label="协议">
+                      <DetailRow label={t("servers.detail.protocol")}>
                         <Badge>{d.protocol}</Badge>
                       </DetailRow>
                       {d.project_dir && (
                         <>
-                          <DetailRow label="项目目录">
+                          <DetailRow label={t("servers.detail.projectDir")}>
                             <span className="font-mono text-xs" title={d.project_dir}>
                               {d.project_dir}
                             </span>
                           </DetailRow>
-                          <DetailRow label="Git 分支">
+                          <DetailRow label={t("servers.detail.gitBranch")}>
                             {branch === undefined ? (
                               <Btn
                                 className="!px-2 !py-0.5 !text-[10px]"
@@ -334,13 +335,13 @@ export default function Servers() {
                             ) : (
                               <Badge tone="dim">
                                 <GitBranch size={10} className="mr-1 inline" />
-                                {branch || "非 git 仓库"}
+                                {branch || t("servers.notGitRepo")}
                               </Badge>
                             )}
                           </DetailRow>
                         </>
                       )}
-                      <DetailRow label="命令行">
+                      <DetailRow label={t("servers.detail.commandLine")}>
                         <code className="block break-all rounded bg-bg px-2 py-1 text-[11px] text-dim">
                           {d.cmd_line}
                         </code>
@@ -356,9 +357,11 @@ export default function Servers() {
 
       {/* ── 全部监听端口 ── */}
       <Card className="p-4">
-        <SectionTitle>全部 TCP 监听端口（{listening.length}）</SectionTitle>
+        <SectionTitle>
+          {t("servers.allTcpPorts", { count: listening.length })}
+        </SectionTitle>
         {listening.length === 0 ? (
-          <Empty>没有 TCP 监听端口</Empty>
+          <Empty>{t("servers.noTcpPorts")}</Empty>
         ) : (
           <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {listening.map((p) => (
@@ -376,7 +379,7 @@ export default function Servers() {
                 <button
                   className="ml-auto text-dim hover:text-accent"
                   onClick={() => openExternal(`http://localhost:${p.local_port}`)}
-                  title="打开"
+                  title={t("servers.open")}
                 >
                   <ExternalLink size={11} />
                 </button>

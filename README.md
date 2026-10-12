@@ -1,317 +1,364 @@
-# 工作台 Workbench
+# Workbench
 
-> Tauri 2 桌面端 · 系统运维仪表盘 · AI 会话成本计量
+**English** | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+
+> Tauri 2 desktop app · Local system dashboard · AI session cost metering
 
 [![CI](https://github.com/X33834/workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/X33834/workbench/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/X33834/workbench?color=22d3ee&label=release)](https://github.com/X33834/workbench/releases/latest)
 [![License](https://img.shields.io/github/license/X33834/workbench?color=34d399)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078d4)](#系统要求)
+[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078d4)](#system-requirements)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri&logoColor=white)](https://tauri.app/)
-[![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=white)](https://react.dev/)
+[![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)](https://react.dev/)
 
-一个本地优先、隐私可控的桌面运维工作台。数据仅存本机，双主题。
-**当前只在 Windows 上开发与打包**（端口采集走 `netstat -ano`，安装目标为 NSIS）；
-macOS / Linux 尚未接入采集与打包，属未验证状态。
+A local-first, privacy-preserving desktop workbench for your machine: processes,
+ports, dev servers, and AI coding-session token costs — all visible in one place.
+All data stays on your device. Dark & light themes. UI available in **English,
+简体中文 and 日本語**.
 
-**🌐 项目主页：[https://x33834.github.io/workbench/](https://x33834.github.io/workbench/)**
+**Windows-only for now**: port collection uses `netstat -ano` and packaging
+targets NSIS. macOS / Linux are untested and not yet packaged.
+
+**🌐 Project homepage** — every mirror hosts its own copy of the landing page
+(see the mirror table below); each copy automatically links back to its own
+repository and releases.
 
 ---
 
-## 下载
+## Download
 
-无需配置开发环境，下载即用（Windows 10 / 11 x64）：
+No dev environment needed (Windows 10 / 11 x64). Each GitHub mirror below
+publishes **its own Release** with the same installer — pick the platform you
+prefer:
 
-| 方式 | 文件 | 说明 |
-|------|------|------|
-| **推荐** | [`Workbench_0.1.0_x64-setup.exe`](https://github.com/X33834/workbench/releases/latest) | NSIS 安装包，约 3 MB，双击安装 |
-| 免安装 | [`workbench.exe`](https://github.com/X33834/workbench/releases/latest) | 单文件直接运行，不写注册表 |
+| Channel | File | Notes |
+|---------|------|-------|
+| **Recommended** | `Workbench_<version>_x64-setup.exe` (Releases → latest) | NSIS installer, ~3 MB |
+| Portable | `workbench.exe` (Releases → latest) | Single file, no registry writes |
 
-> 安装包未做代码签名，Windows SmartScreen 可能提示「未知发布者」——
-> 点「更多信息 → 仍要运行」即可。这是证书需要付费所致，不是文件有风险。
+> The installer is not code-signed, so Windows SmartScreen may show an
+> "Unknown publisher" warning — choose **More info → Run anyway**. This is
+> because signing certificates cost money, not because the file is unsafe.
 
-镜像仓库（内容一致，任选其一；各站的下载入口见其 Release 页）：
+### Mirrors
 
-| 平台 | 仓库 | 落地页 |
-|------|------|--------|
+Identical code, five platforms; each runs its own CI and publishes its own
+releases where supported:
+
+| Platform | Repository | Landing page |
+|----------|------------|--------------|
 | GitHub | [X33834/workbench](https://github.com/X33834/workbench) | [x33834.github.io/workbench](https://x33834.github.io/workbench/) |
 | GitHub | [badhope/workbench](https://github.com/badhope/workbench) | [badhope.github.io/workbench](https://badhope.github.io/workbench/) |
 | GitHub | [Morningstar202604/workbench](https://github.com/Morningstar202604/workbench) | [morningstar202604.github.io/workbench](https://morningstar202604.github.io/workbench/) |
-| Gitee | [badhope/workbench](https://gitee.com/badhope/workbench) | — |
-| GitCode | [badhope/workbench](https://gitcode.com/badhope/workbench) | — |
+| Gitee | [badhope/workbench](https://gitee.com/badhope/workbench) | — (downloads on its Releases page) |
+| GitCode | [badhope/workbench](https://gitcode.com/badhope/workbench) | — (downloads on its Releases page) |
 
 ---
 
-## 界面预览
+## Screenshots
 
-> 以下截图截自**浏览器演示模式**（`npm run preview`）：非 Tauri 环境会注入
-> `src/lib/demo.ts` 的静态演示数据，所有路径均为占位串，不含任何真实机器信息。
+> Captured in **browser demo mode** (`npm run preview`): outside Tauri the app
+> injects static demo data from `src/lib/demo.ts`; all paths and host names are
+> placeholders, no real machine data.
 
-| 概览 | 进程监控 |
-|------|----------|
-| ![概览](docs/screenshots/01-overview.png) | ![进程监控](docs/screenshots/02-processes.png) |
-| CPU / 内存趋势、磁盘与进程分类 | 全进程快照、虚拟滚动、杀进程二次确认 |
+| Overview | Processes |
+|----------|-----------|
+| ![Overview](docs/screenshots/01-overview.png) | ![Processes](docs/screenshots/02-processes.png) |
+| CPU / memory trends, disks, process groups | Full snapshot, virtual scrolling, kill confirmation |
 
-| 服务与端口 | AI 会话与成本计量 |
-|------------|-------------------|
-| ![服务与端口](docs/screenshots/03-servers.png) | ![AI 会话](docs/screenshots/04-ai-sessions.png) |
-| netstat 端口识别与开发框架标注 | 会话预览、token 计量、预算与模型分解 |
+| Servers & ports | AI sessions & cost |
+|-----------------|--------------------|
+| ![Servers](docs/screenshots/03-servers.png) | ![AI sessions](docs/screenshots/04-ai-sessions.png) |
+| netstat parsing, dev-framework tags | Session preview, token metering, budgets |
 
-| 项目管理 | 任务看板 |
-|----------|----------|
-| ![项目管理](docs/screenshots/05-projects.png) | ![任务看板](docs/screenshots/06-tasks.png) |
-| 本地项目、Git 分支检测、卡片/表格双视图 | 拖拽看板，待办 / 进行中 / 已完成 |
+| Projects | Tasks |
+|----------|-------|
+| ![Projects](docs/screenshots/05-projects.png) | ![Tasks](docs/screenshots/06-tasks.png) |
+| Local projects, Git branch detection | Drag-and-drop kanban |
 
-| 设置 | 运行日志 |
-|------|----------|
-| ![设置](docs/screenshots/07-settings.png) | ![运行日志](docs/screenshots/08-logs.png) |
-| 主题、刷新间隔、预算与数据导入导出 | 内置日志查看器，按需尾部读取 |
+| Settings | Logs |
+|----------|------|
+| ![Settings](docs/screenshots/07-settings.png) | ![Logs](docs/screenshots/08-logs.png) |
+| Theme, refresh interval, budgets, import/export | Built-in log viewer, tail reading |
 
-截图可自行重生（需先 `npm run build` 并启动 `npm run preview`，另开一个
-`chrome --headless=new --remote-debugging-port=9222`，然后
-`node scripts/shoot_docs.mjs`）。脚本内置演示模式断言，页面未出现演示标记时
-直接拒绝截图，避免把真实数据写进仓库。
+Regenerate screenshots yourself: `npm run build`, then `npm run preview`,
+then run a headless Chrome with
+`--remote-debugging-port=9222`, then `node scripts/shoot_docs.mjs`.
+The script asserts demo mode is active and refuses to shoot otherwise, so real
+data can never leak into the repo.
 
-## 功能概览
+## Features
 
-| 模块 | 能力 |
-|------|------|
-| 🖥 **概览** | CPU / 内存趋势图、磁盘占用环形图、进程分类统计 |
-| ⚙ **进程** | 全进程快照、CPU / 内存排序、虚拟滚动（只渲染视口内的行）、杀进程二次确认、AI 代理识别 |
-| 🌐 **服务与端口** | netstat 端口监听识别、开发框架标注（Vite/Next/Django…） |
-| 🤖 **AI 会话** | opencode 在线会话、本地 Claude/Codex 会话预览 |
-| 💰 **成本计量** | token 消耗统计、按日/月趋势、预算告警、Anthropic 缓存折扣计价 |
-| 📁 **项目** | 本地项目管理、Git 分支自动检测 |
-| ✅ **任务** | 看板式任务板（拖拽切换） |
-| ⚙ **设置** | 主题/刷新间隔可调、预算告警自定义、JSON 数据导入导出 |
-| 📋 **运行日志** | 内置日志查看器、自动刷新 |
+| Module | What it does |
+|--------|--------------|
+| 🖥 **Overview** | CPU / memory trend charts, disk usage donut, process group stats |
+| ⚙ **Processes** | Full snapshot, CPU / memory sorting, virtual scrolling (viewport-only rows), kill with confirmation, AI agent detection |
+| 🌐 **Servers & ports** | netstat listener detection, dev-framework tags (Vite / Next / Django…) |
+| 🤖 **AI sessions** | opencode online sessions, local Claude / Codex session preview |
+| 💰 **Cost metering** | Token usage, daily trends, budget alerts, Anthropic cache pricing |
+| 📁 **Projects** | Local project registry, automatic Git branch detection |
+| ✅ **Tasks** | Kanban board (drag to change status) |
+| ⚙ **Settings** | Theme / refresh interval, budget thresholds, JSON import & export |
+| 📋 **Logs** | Built-in viewer, auto refresh, tail reading |
 
-## 成本计量
+## Cost metering
 
-- **三级降级**：measured（API 上报 usage）→ estimated（字符数启发式）→ zero_pricing
-- **40+ 模型价格内置**；`pricing_overrides.json` 覆盖当前**只读**（需手工放置文件，UI 未提供编辑入口）
-- **Anthropic 缓存语义**：`input_tokens` 不含缓存，`cache_read_input_tokens` 按 0.1×、`cache_creation_input_tokens` 按 1.25× 独立计价
-- **按日归属**：measured 与 estimated 记录都按 JSONL 行级 `timestamp` 落到各自那一天（无时间戳时回退上一天 / 文件 mtime 日），会话追加只改最新一天，趋势图不会重写历史
-- **未定价不冒充消费**：型号推断失败标 `unknown` 并记为 `zero_pricing`，不会按某个具体型号编造单价
-- **幂等且防重复**：每个会话文件在库中只保留最新一组记录（按 `file_path` 整组替换），文件变化不会叠加旧快照
-- **估算可关闭**：设置页 `计入估算记录` 开关实时影响总览 / 趋势 / 模型分解聚合
-- **预算告警**：系统通知，防重复打扰
-- **扫描范围**：成本扫描覆盖 `~/.claude/projects` 与 `~/.codex/sessions` 全部会话文件（UI 预览仍只展示最近 10 条）
+- **Three-level confidence**: measured (API-reported usage) → estimated
+  (character heuristic) → zero_pricing
+- **40+ model prices built in**; `pricing_overrides.json` overrides are
+  currently **read-only** (drop the file in manually, no UI editor yet)
+- **Anthropic cache semantics**: `input_tokens` excludes cache;
+  `cache_read_input_tokens` billed at 0.1×, `cache_creation_input_tokens` at 1.25×
+- **Day attribution**: measured and estimated rows are bucketed per JSONL-line
+  `timestamp` (falls back to the previous day / file mtime when missing), so
+  appending to a session never rewrites historical days
+- **Unknown models are never priced**: unrecognized models are flagged
+  `unknown` and recorded as `zero_pricing` — no invented unit prices
+- **Idempotent**: each session file keeps only its latest snapshot (replaced
+  whole-group by `file_path`), so re-scans never stack stale rows
+- **Estimates can be disabled**: the "include estimated rows" toggle live-updates
+  overview / trend / model breakdowns
+- **Budget alerts**: system notifications, de-duplicated to avoid nagging
+- **Scan scope**: the cost scan covers every session file under
+  `~/.claude/projects` and `~/.codex/sessions` (the UI preview shows the
+  10 most recent)
 
-## 桌面行为
+## Desktop behavior
 
-- 关闭窗口 = 隐藏到托盘；托盘左键切换显示，托盘菜单「退出工作台」真正结束进程
-- 全局快捷键 `Ctrl+Shift+W` 切换窗口可见性（被占用时降级为警告，不影响启动）
-- 日志按启动滚动（>5MB 归档为 `workbench.log.1`），运行日志页按需尾部读取
-- 终止进程对 PID 0/4 与关键系统进程（csrss/lsass/services 等）直接拒绝
+- Closing the window hides to tray; tray left-click toggles visibility, the
+  tray menu really exits the process
+- Global hotkey `Ctrl+Shift+W` toggles window visibility (degrades to a warning
+  if the hotkey is taken; startup is never blocked)
+- Logs roll per launch (> 5 MB archives to `workbench.log.1`), the Logs page
+  reads on demand from the tail
+- Killing PID 0/4 and critical system processes (csrss / lsass / services …)
+  is rejected outright
 
-## 快速开始
+## Getting started
 
-### 系统要求
+### System requirements
 
-| 项 | 要求 |
-|----|------|
-| 操作系统 | Windows 10 / 11（x64）—— 仅此平台经过验证 |
-| 运行时 | WebView2 Runtime（Windows 11 预装；Windows 10 现代版本通常已含） |
-| 磁盘 | 约 30 MB（安装后），免安装版单文件约 13 MB |
-| 权限 | 无需管理员权限；进程终止需与目标进程同级权限 |
-| 网络 | 不需联网。仅在你主动使用 AI 会话页时会探测本地 opencode 服务 |
+| Item | Requirement |
+|------|-------------|
+| OS | Windows 10 / 11 (x64) — the only verified platform |
+| Runtime | WebView2 Runtime (preinstalled on Windows 11; recent Windows 10 usually has it) |
+| Disk | ~30 MB installed; portable single file ~13 MB |
+| Privileges | No admin required; killing a process needs same-or-higher privileges |
+| Network | None required. The only optional probe is the local opencode service when you open the AI sessions page |
 
-### 从 Release 安装（推荐）
+### Install from Releases (recommended)
 
-1. 到 [Releases](https://github.com/X33834/workbench/releases/latest) 下载 `Workbench_0.1.0_x64-setup.exe`
-2. 若 SmartScreen 拦截：点「更多信息」→「仍要运行」
-3. 安装后从开始菜单启动「工作台」
+1. Grab `Workbench_<version>_x64-setup.exe` from the
+   [latest release](https://github.com/X33834/workbench/releases/latest)
+2. If SmartScreen appears: **More info → Run anyway**
+3. Launch "Workbench" from the Start menu
 
-### 从源码构建
+### Build from source
 
-环境要求：[Node.js](https://nodejs.org/) ≥ 20、
-[Rust](https://www.rust-lang.org/tools/install) ≥ 1.77、WebView2。
+Requires [Node.js](https://nodejs.org/) ≥ 20,
+[Rust](https://www.rust-lang.org/tools/install) ≥ 1.77, WebView2.
 
 ```bash
 npm install
 ```
 
-### IPC 契约类型生成
+### IPC contract types
 
-前端引用的跨 IPC 类型不在 `src/types.ts` 手写，而是由 Rust 结构体生成：
+Types crossing the IPC boundary are not hand-written in `src/types.ts`; they
+are generated from the Rust structs:
 
 ```bash
 cd src-tauri
-cargo test --test export_bindings   # 重新生成 src/generated/*.ts
+cargo test --test export_bindings   # regenerates src/generated/*.ts
 ```
 
-`src/types.ts` 只做 re-export，`src/generated/` 作为契约快照入库。
-改完 Rust 结构体必须重跑上面这条命令，否则 CI 的漂移门禁会直接拦下。
+`src/types.ts` only re-exports; `src/generated/` is the committed contract
+snapshot. After changing a Rust struct you must re-run the command above,
+otherwise the CI drift gate will reject the PR.
 
-### 开发模式
+### Development
 
 ```bash
-npm run tauri dev      # 桌面开发模式（含热更新）
-npm run dev            # 仅前端，浏览器演示模式，无需 Rust
+npm run tauri dev      # desktop dev mode (hot reload)
+npm run dev            # frontend only, browser demo mode, no Rust needed
 ```
 
-### 生产构建
+### Production build
 
 ```bash
 npm run tauri build
 ```
 
-构建产物位于 `src-tauri/target/release/bundle/`。
+Artifacts land in `src-tauri/target/release/bundle/`.
 
-## 技术栈
+## Tech stack
 
-| 层 | 选型 |
-|------|------|
-| 运行时 | Tauri 2 (Rust + OS Webview) |
-| 前端框架 | React 18 + TypeScript（strict）+ Vite 6 |
-| 状态管理 | Zustand 5 (persist) |
-| 样式 | Tailwind CSS 4 + 双主题 CSS 变量 |
-| 图表 | ECharts 6（按需引入 + 暗/亮双主题注册） |
-| 虚拟滚动 | @tanstack/react-virtual 3（展开行高度可变，进入视口后实测回写行高） |
-| 状态订阅 | Zustand 5 `useShallow` 选择器 + 页面组件 `memo`（自身切片不变不重渲染） |
-| IPC 通道 | Tauri IPC + spawn_blocking |
-| IPC 契约 | ts-rs 10 由 Rust 结构体生成 `src/generated/*.ts`，CI 校验无漂移 |
-| 进程采集 | sysinfo |
-| 端口解析 | netstat 解析器（POSIX / Windows 双方言兼容） |
-| 质量门禁 | ESLint 9 + Prettier 3 + vitest 5 + clippy `-D warnings` |
+| Layer | Choice |
+|-------|--------|
+| Runtime | Tauri 2 (Rust + OS webview) |
+| Frontend | React 19 + TypeScript (strict) + Vite 8 |
+| State | Zustand 5 (persist) |
+| Styling | Tailwind CSS 4 + dual-theme CSS variables |
+| Charts | ECharts 6 (tree-shaken, dark/light themes registered) |
+| Virtualization | @tanstack/react-virtual 3 (variable-height expanded rows) |
+| Subscriptions | Zustand 5 `useShallow` selectors + `memo` page components |
+| IPC | Tauri IPC + spawn_blocking |
+| Contracts | ts-rs 12 generates `src/generated/*.ts` from Rust structs, CI drift-gated |
+| Process data | sysinfo |
+| Ports | netstat parser (POSIX / Windows dialects) |
+| i18n | English default, switchable 简体中文 / 日本語 |
+| Quality gates | ESLint 10 + Prettier 3 + vitest 5 + clippy `-D warnings` |
 
-## 项目结构
+## Project structure
 
 ```
 workbench/
-├── src/                    # 前端源码
-│   ├── pages/              # 8 个功能页面（按需 lazy 加载）
-│   ├── lib/                # store / api / echarts / chartTheme / util
-│   ├── generated/          # ts-rs 生成的 IPC 契约类型（勿手改）
-│   ├── ui.tsx              # 共享组件库
-│   ├── types.ts            # 类型 re-export 与前端专有类型
-│   ├── App.tsx             # 主应用入口
-│   └── styles/global.css   # 全局样式与主题变量
-├── src-tauri/              # Rust 后端
-│   ├── capabilities/       # Tauri 权限集（最小面）
-│   ├── icons/              # 应用图标（由 scripts/make_icons.py 生成）
+├── src/                    # frontend
+│   ├── pages/              # 8 feature pages (lazy loaded)
+│   ├── lib/                # store / api / echarts / chartTheme / i18n / util
+│   ├── generated/          # ts-rs generated IPC contract types (do not edit)
+│   ├── ui.tsx              # shared component library
+│   ├── types.ts            # type re-exports + frontend-only types
+│   ├── App.tsx             # app shell
+│   └── styles/global.css   # global styles & theme variables
+├── src-tauri/              # Rust backend
+│   ├── capabilities/       # Tauri permission set (minimal)
+│   ├── icons/              # app icons (generated by scripts/make_icons.py)
 │   ├── src/
-│   │   ├── commands.rs     # IPC 命令层
-│   │   ├── procs.rs        # 进程快照 + 终止
-│   │   ├── ports.rs        # netstat 解析
-│   │   ├── devserver.rs    # 开发框架识别
-│   │   ├── ai.rs           # AI 会话拉取
-│   │   ├── pricing.rs      # 模型价格匹配
-│   │   ├── session_meter.rs # JSONL token 成本解析
-│   │   ├── cost_store.rs   # 成本数据持久化
-│   │   ├── ipc_guard.rs    # IPC 入参白名单
-│   │   └── lib.rs          # Tauri 启动入口
-│   └── tests/              # IPC 契约导出测试
-├── docs/                   # GitHub Pages 落地页 + 截图
-├── scripts/                # 图标生成与截图辅助脚本
+│   │   ├── commands.rs     # IPC command layer
+│   │   ├── procs.rs        # process snapshot + kill
+│   │   ├── ports.rs        # netstat parsing
+│   │   ├── devserver.rs    # dev-framework detection
+│   │   ├── ai.rs           # AI session fetching
+│   │   ├── pricing.rs      # model price matching
+│   │   ├── session_meter.rs# JSONL token cost parsing
+│   │   ├── cost_store.rs   # cost data persistence
+│   │   ├── ipc_guard.rs    # IPC argument whitelist
+│   │   └── lib.rs          # Tauri bootstrap
+│   └── tests/              # IPC contract export test
+├── docs/                   # GitHub Pages landing page + screenshots
+├── scripts/                # icon & screenshot helper scripts
 └── .github/workflows/      # CI / Release / Pages
 ```
 
-## 开发与质量
+## Development & quality
 
 ```bash
-npm run format:check       # Prettier 格式检查
-npm run lint               # ESLint（零警告）
-npm run test               # 前端单测（vitest，48 个用例）
-npm run coverage           # 覆盖率
-npm run build              # tsc --noEmit + vite build
+npm run format:check       # Prettier
+npm run lint               # ESLint (zero warnings)
+npm run test               # frontend unit tests (vitest, 48 cases)
+npm run coverage           # coverage
+npm run build              # tsc + vite build
 
 cd src-tauri
-cargo test                 # 后端单测 + IPC 契约导出
-cargo clippy --all-targets -- -D warnings   # 零警告门禁
+cargo test                 # backend tests + IPC contract export
+cargo clippy --all-targets -- -D warnings   # zero-warning gate
 ```
 
-Rust 侧纯逻辑（netstat 解析、框架识别、价格匹配、token 提取、JSON 存储、IPC 守卫）
-都有 `#[cfg(test)]` 单测；前端有 vitest 单测覆盖 util / store / 共享组件 / 错误边界。
-CI 跑格式、静态检查、类型检查、构建、两侧单测、clippy 零警告，
-并校验 `src/generated/` 与 Rust 结构体一致。
+Pure Rust logic (netstat parsing, framework detection, price matching, token
+extraction, JSON storage, IPC guard) carries `#[cfg(test)]` unit tests; the
+frontend is covered by vitest (util / store / shared components / error
+boundary). CI runs formatting, lint, type check, build, both test suites,
+clippy with zero warnings, and verifies `src/generated/` matches the Rust
+structs.
 
-## 常见问题
+## FAQ
 
 <details>
-<summary>成本计量是怎么算的？准不准？</summary>
+<summary>How is the cost metering computed? Is it accurate?</summary>
 
-解析本机 Claude Code / Codex 会话 JSONL 中的 usage 字段，按内置的 40+ 模型价格计算。
-分三级可信度：
+It parses the `usage` fields in local Claude Code / Codex session JSONL files
+and prices them against 40+ built-in model prices, with three confidence
+levels:
 
-- **measured** —— 文件里有真实 usage 上报，最准
-- **estimated** —— 无 usage，按字符数启发式估算（可在设置里关掉）
-- **zero_pricing** —— 型号无法识别，标为不计费而**不**编造单价
+- **measured** — real usage reported by the API, most accurate
+- **estimated** — no usage, heuristic by character count (can be disabled)
+- **zero_pricing** — model unrecognized, recorded as free rather than priced
+  with a made-up unit price
 
-Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×）。
+Anthropic cache tokens follow the official semantics (read 0.1×,
+write 1.25×).
 </details>
 
 <details>
-<summary>会不会把数据上传到云端？</summary>
+<summary>Does it upload my data anywhere?</summary>
 
-不会。项目、任务、成本账本、日志都写在本机 app data 目录。应用只在本地做两件事：
-读 `netstat` 看端口、读本机 session 文件算成本。唯一的可选外连是探测本机 opencode
-服务（默认 4096 端口），失败只显示「未检测到」，不影响其它功能。
+No. Projects, tasks, the cost ledger and logs all live in the local app data
+directory. The app only does two local things: read `netstat` for ports, and
+read local session files for costs. The only optional network call is probing
+the local opencode service (default port 4096); on failure it just shows "not
+detected".
 </details>
 
 <details>
-<summary>杀进程会误杀系统关键进程吗？</summary>
+<summary>Can killing a process break my system?</summary>
 
-不会。PID 0/4 与 csrss、lsass、services 等关键系统进程被后端直接拒绝，
-前端另有二次确认；终止前会刷新并校验进程身份，避免 PID 复用导致误杀。
+No. PID 0/4 and critical system processes (csrss, lsass, services…) are
+rejected by the backend; the frontend asks for confirmation first; and the
+target identity is re-verified after refresh to avoid PID-reuse mistakes.
 </details>
 
 <details>
-<summary>关闭窗口后程序去哪了？怎么真正退出？</summary>
+<summary>Where did the window go after I closed it? How do I quit?</summary>
 
-隐藏到系统托盘（有意设计，便于常驻监控）。右键托盘图标选「退出工作台」才结束进程；
-快捷键 <code>Ctrl+Shift+W</code> 可随时显示 / 隐藏窗口。
+Hiding to the tray is intentional (the app is meant to keep monitoring). Right
+click the tray icon and choose "Quit"; the hotkey <code>Ctrl+Shift+W</code>
+toggles visibility anytime.
 </details>
 
 <details>
-<summary>Windows 提示「未知发布者」怎么办？</summary>
+<summary>Windows says "Unknown publisher" — what do I do?</summary>
 
-安装包未做代码签名（证书需付费），SmartScreen 因此会拦截。
-点「更多信息 → 仍要运行」即可，也可直接下载免安装 exe。
+The installer is not code-signed (certificates cost money), so SmartScreen
+steps in. Choose **More info → Run anyway**, or grab the portable exe instead.
 </details>
 
 ## Roadmap
 
-已完成与计划中的方向。欢迎在 Issues 里投票或提新想法。
+Done and planned. Vote or propose new ideas in the Issues.
 
-- [x] 进程 / 端口 / 开发服务器实时监控
-- [x] AI 会话成本计量与预算告警
-- [x] 项目与任务管理
-- [x] 深浅双主题、日志查看器
-- [ ] 跨平台支持（macOS / Linux 采集与打包）
-- [ ] 安装包代码签名
-- [ ] `pricing_overrides.json` 的 UI 编辑入口
-- [ ] 成本账本分片存储（支撑十万级记录）
-- [ ] 页面级端到端测试
-- [ ] 多语言界面（英文 / 日文）
+- [x] Real-time process / port / dev-server monitoring
+- [x] AI session cost metering with budget alerts
+- [x] Projects & task kanban
+- [x] Dark / light themes, log viewer
+- [x] Multilingual UI (English / 简体中文 / 日本語)
+- [ ] Cross-platform support (macOS / Linux collection & packaging)
+- [ ] Installer code signing
+- [ ] UI editor for `pricing_overrides.json`
+- [ ] Sharded cost ledger (100k+ records)
+- [ ] Page-level end-to-end tests
 
-## 已知限制
+## Known limitations
 
-- 仅 Windows 验证：端口采集写死 `cmd /c netstat -ano`，`ports.rs` 的 POSIX 分支当前不会被执行
-- 前端渲染行为仍以人工验证为主：vitest 覆盖 util / store / 共享组件 / 错误边界，
-  8 个页面的交互路径尚无端到端测试
-- 成本账本落在单个 `cost_data.json`（写操作已串行化），记录数很大时全量读写会开始吃力
-- `pricing_overrides.json` 只有读取路径，没有写入入口
-- 安装包未做代码签名，首次运行可能触发 SmartScreen 提示
+- Windows-only verified: port collection shells out to `cmd /c netstat -ano`;
+  the POSIX branch in `ports.rs` is currently never exercised
+- Frontend interaction paths rely on manual verification: vitest covers util /
+  store / shared components / error boundary, but the 8 pages have no E2E tests
+- The cost ledger is a single `cost_data.json` (writes are serialized); very
+  large histories will make full read/write sluggish
+- `pricing_overrides.json` is read-only by design for now, no write path
+- The installer is unsigned; first launch may trigger a SmartScreen prompt
+- The tray menu text is currently Chinese only (frontend UI is fully
+  trilingual)
 
-## 数据存储
+## Data storage
 
-| 文件 | 用途 | 位置 |
-|------|------|------|
-| `data.json` | 项目与任务 | `app data dir` |
-| `cost_data.json` | 成本记录 + 定价设置 | `app data dir` |
-| `pricing_overrides.json` | 用户自定义模型价格覆盖（只读，需手工放置） | `app data dir` |
-| `workbench.log` | 运行日志 | `app data dir` |
-| `*.corrupt-<时间戳>` | 数据文件解析失败时的原样备份（不会被下次保存覆盖） | `app data dir` |
+| File | Purpose | Location |
+|------|---------|----------|
+| `data.json` | Projects & tasks | app data dir |
+| `cost_data.json` | Cost records + pricing settings | app data dir |
+| `pricing_overrides.json` | User price overrides (read-only, drop in manually) | app data dir |
+| `workbench.log` | Runtime logs | app data dir |
+| `*.corrupt-<timestamp>` | Untouched backup of a data file that failed to parse (never overwritten by the next save) | app data dir |
 
-Windows 下 `app data dir` 为 `%APPDATA%\com.workbench.desktop`。
+On Windows the app data dir is `%APPDATA%\com.workbench.desktop`.
 
-## 参与贡献
+## Contributing
 
-- 贡献流程与代码约定见 [CONTRIBUTING.md](CONTRIBUTING.md)
-- 安全漏洞请走私密通道，见 [SECURITY.md](SECURITY.md)
-- 社区行为规范见 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- 版本变更记录见 [CHANGELOG.md](CHANGELOG.md)
+- Contribution workflow & conventions: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security vulnerabilities: private channel, see [SECURITY.md](SECURITY.md)
+- Community code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ## License
 

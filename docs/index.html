@@ -1,20 +1,20 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>工作台 Workbench — 本机运维仪表盘与 AI 会话成本计量</title>
+    <title>Workbench — Local system dashboard & AI session cost metering</title>
     <meta
       name="description"
-      content="Tauri 2 + React 18 打造的桌面运维工作台：进程 / 端口 / 开发服务器实时可视，AI 会话 token 成本计量与预算告警。数据仅存本机，MIT 开源。"
+      content="Desktop workbench built with Tauri 2 + React 19: live processes / ports / dev servers, AI session token costs and budget alerts. All data stays local. MIT licensed."
     />
     <meta name="theme-color" content="#0a0f1c" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="工作台 Workbench — 本机运维仪表盘与 AI 会话成本计量" />
+    <meta property="og:title" content="Workbench — Local system dashboard & AI session cost metering" />
     <meta
       property="og:description"
-      content="桌面优先的本机工作管理台。进程 / 端口 / 开发服务器实时可视，AI 会话成本计量。数据仅存本机。"
+      content="Desktop-first local workbench. Live processes / ports / dev servers, AI session cost metering. All data stays local."
     />
     <meta property="og:image" content="screenshots/01-overview.png" />
     <style>
@@ -38,7 +38,7 @@
         margin: 0;
         background: var(--bg);
         color: var(--text);
-        font: 16px/1.65 ui-sans-serif, system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+        font: 16px/1.65 ui-sans-serif, system-ui, "Segoe UI", "Microsoft YaHei", "Yu Gothic UI", Meiryo, sans-serif;
         -webkit-font-smoothing: antialiased;
       }
       a { color: var(--accent); text-decoration: none; }
@@ -53,7 +53,7 @@
         font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
       }
 
-      /* ── 顶部导航 ───────────────────────────── */
+      /* ── Top nav ────────────────────────────── */
       header {
         position: sticky;
         top: 0;
@@ -71,9 +71,17 @@
       .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
       .brand img { width: 32px; height: 32px; border-radius: 9px; }
       .brand small { display: block; font-size: 10px; color: var(--dim); font-weight: 400; }
-      .nav-links { margin-left: auto; display: flex; gap: 20px; font-size: 14px; }
+      .nav-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+      .nav-links { display: flex; gap: 20px; font-size: 14px; }
       .nav-links a { color: var(--dim); }
       .nav-links a:hover { color: var(--text); text-decoration: none; }
+      .lang { display: flex; gap: 4px; }
+      .lang button {
+        background: none; border: 1px solid transparent; color: var(--dim);
+        font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 8px; cursor: pointer;
+      }
+      .lang button:hover { color: var(--text); }
+      .lang button.on { color: var(--accent); border-color: var(--line); background: var(--panel); }
       @media (max-width: 720px) { .nav-links { display: none; } }
 
       /* ── Hero ───────────────────────────────── */
@@ -142,12 +150,12 @@
       .btn-primary:hover { border-color: transparent; }
       .meta { margin-top: 18px; font-size: 13px; color: var(--dim); }
 
-      /* ── 通用区块 ───────────────────────────── */
+      /* ── Sections ───────────────────────────── */
       section { padding: 56px 0; }
       .sec-title { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; }
       .sec-sub { color: var(--dim); margin: 0 0 32px; font-size: 15px; }
 
-      /* ── 功能网格 ───────────────────────────── */
+      /* ── Feature grid ───────────────────────── */
       .grid { display: grid; gap: 16px; }
       .g3 { grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); }
       .card {
@@ -164,7 +172,7 @@
         background: var(--accent-soft); font-size: 18px;
       }
 
-      /* ── 截图 ───────────────────────────────── */
+      /* ── Screenshots ────────────────────────── */
       .shots { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
       .shot {
         border: 1px solid var(--line); border-radius: var(--radius);
@@ -174,14 +182,14 @@
       .shot figcaption { padding: 12px 16px; font-size: 13px; color: var(--dim); }
       figure { margin: 0; }
 
-      /* ── 表格 ───────────────────────────────── */
+      /* ── Table ──────────────────────────────── */
       table { width: 100%; border-collapse: collapse; font-size: 14px; }
       th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); }
       th { color: var(--dim); font-weight: 600; }
       tr:last-child td { border-bottom: none; }
       .tbl-wrap { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
 
-      /* ── 步骤 ───────────────────────────────── */
+      /* ── Steps ──────────────────────────────── */
       ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 0; }
       ol.steps li {
         counter-increment: s;
@@ -202,7 +210,7 @@
       ol.steps strong { display: block; margin-bottom: 3px; }
       ol.steps span { color: var(--dim); font-size: 14px; }
 
-      /* ── 下载 ───────────────────────────────── */
+      /* ── Download ───────────────────────────── */
       .dl { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
       .dl .card { display: flex; flex-direction: column; }
       .dl .card .btn { margin-top: 16px; justify-content: center; }
@@ -221,7 +229,7 @@
       details summary { cursor: pointer; font-weight: 600; font-size: 15px; }
       details p { color: var(--dim); margin: 12px 0 0; font-size: 14px; }
 
-      /* ── 平台 ───────────────────────────────── */
+      /* ── Platforms ──────────────────────────── */
       .plats { display: flex; gap: 10px; flex-wrap: wrap; }
       .plat {
         display: inline-flex; align-items: center; gap: 8px;
@@ -244,16 +252,23 @@
     <header>
       <div class="wrap nav">
         <div class="brand">
-          <img src="logo.png" alt="工作台 Logo" />
-          <div>工作台<small>Workbench</small></div>
+          <img src="logo.png" alt="Workbench logo" />
+          <div>Workbench<small>工作台</small></div>
         </div>
-        <nav class="nav-links">
-          <a href="#features">功能</a>
-          <a href="#shots">截图</a>
-          <a href="#download">下载</a>
-          <a href="#faq">常见问题</a>
-          <a id="nav-repo" href="https://github.com/X33834/workbench">源码</a>
-        </nav>
+        <div class="nav-right">
+          <nav class="nav-links">
+            <a href="#features" data-i18n="nav.features">Features</a>
+            <a href="#shots" data-i18n="nav.screenshots">Screenshots</a>
+            <a href="#download" data-i18n="nav.download">Download</a>
+            <a href="#faq" data-i18n="nav.faq">FAQ</a>
+            <a id="nav-repo" href="https://github.com/X33834/workbench" data-i18n="nav.source">Source</a>
+          </nav>
+          <div class="lang" id="lang" role="group" aria-label="Language">
+            <button type="button" data-lang="en">EN</button>
+            <button type="button" data-lang="zh">中文</button>
+            <button type="button" data-lang="ja">日本語</button>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -261,239 +276,243 @@
       <!-- ── Hero ─────────────────────────────── -->
       <div class="hero">
         <div class="wrap hero-inner">
-          <div class="pill"><span class="dot"></span> v0.1.0 · Windows x64 · MIT 开源</div>
+          <div class="pill"><span class="dot"></span> <span data-i18n="hero.pill">v0.1.1 · Windows x64 · MIT licensed</span></div>
           <h1>
-            本机运维仪表盘<br />
-            <span class="grad">与 AI 会话成本计量</span>
+            <span data-i18n="hero.h1a">Your machine, at a glance</span><br />
+            <span class="grad" data-i18n="hero.h1b">with AI session cost metering</span>
           </h1>
-          <p class="sub">
-            进程、端口、开发服务器实时可视；统计 Claude Code / Codex / opencode 的 token
-            消耗与花费。<strong>数据仅存本机</strong>，不上传任何信息。
+          <p class="sub" data-i18n-html="hero.sub">
+            Live view of processes, ports and dev servers; token usage and spend for
+            Claude Code / Codex / opencode. <strong>All data stays on your device</strong> — nothing is uploaded.
           </p>
           <div class="cta">
-            <a class="btn btn-primary" id="cta-setup" href="#download">下载安装包</a>
-            <a class="btn" id="cta-portable" href="#download">免安装版 exe</a>
+            <a class="btn btn-primary" id="cta-setup" href="#download" data-i18n="hero.cta1">Download installer</a>
+            <a class="btn" id="cta-portable" href="#download" data-i18n="hero.cta2">Portable exe</a>
           </div>
-          <p class="meta">Windows 10 / 11 · 约 3 MB 安装包 · 无需管理员权限即可运行</p>
+          <p class="meta" data-i18n="hero.meta">Windows 10 / 11 · ~3 MB installer · runs without admin rights</p>
         </div>
       </div>
 
-      <!-- ── 功能 ─────────────────────────────── -->
+      <!-- ── Features ─────────────────────────── -->
       <section id="features" class="wrap">
-        <h2 class="sec-title">功能</h2>
-        <p class="sec-sub">九个模块，覆盖日常开发环境的「看得见」与「算得清」。</p>
+        <h2 class="sec-title" data-i18n="feat.title">Features</h2>
+        <p class="sec-sub" data-i18n="feat.sub">Nine modules covering the "see it" and "count it" of your daily dev environment.</p>
         <div class="grid g3">
           <div class="card">
             <div class="ico">🖥</div>
-            <h3>概览</h3>
-            <p>CPU / 内存实时趋势曲线、磁盘占用环形图、进程分类统计与系统信息一屏总览。</p>
+            <h3 data-i18n="f1t">Overview</h3>
+            <p data-i18n="f1p">Live CPU / memory trends, disk usage donut, process group stats and system info in one screen.</p>
           </div>
           <div class="card">
             <div class="ico">⚙</div>
-            <h3>进程监控</h3>
-            <p>全进程快照，CPU / 内存排序与筛选，虚拟滚动支撑上千行，杀进程二次确认。</p>
+            <h3 data-i18n="f2t">Processes</h3>
+            <p data-i18n="f2p">Full process snapshot, CPU / memory sorting and filtering, virtual scrolling for thousands of rows, kill confirmation.</p>
           </div>
           <div class="card">
             <div class="ico">🌐</div>
-            <h3>服务与端口</h3>
-            <p>解析 netstat 找出监听端口，自动标注 Vite / Next / uvicorn 等 30+ 开发框架。</p>
+            <h3 data-i18n="f3t">Servers &amp; ports</h3>
+            <p data-i18n="f3p">Parses netstat for listening ports and auto-tags 30+ dev frameworks such as Vite / Next / uvicorn.</p>
           </div>
           <div class="card">
             <div class="ico">🤖</div>
-            <h3>AI 会话</h3>
-            <p>opencode 在线会话与详情；本地 Claude Code / Codex 会话文件预览与消息统计。</p>
+            <h3 data-i18n="f4t">AI sessions</h3>
+            <p data-i18n="f4p">opencode online sessions with details; local Claude Code / Codex session file preview and message stats.</p>
           </div>
           <div class="card">
             <div class="ico">💰</div>
-            <h3>成本计量</h3>
-            <p>
-              token 与花费按日 / 按模型统计，内置 40+ 模型价格，支持 Anthropic
-              缓存折扣语义与预算告警。
-            </p>
+            <h3 data-i18n="f5t">Cost metering</h3>
+            <p data-i18n="f5p">Tokens and spend by day / by model, 40+ built-in model prices, Anthropic cache semantics and budget alerts.</p>
           </div>
           <div class="card">
             <div class="ico">📁</div>
-            <h3>项目与任务</h3>
-            <p>本地项目登记与 Git 分支自动检测；看板式任务板，拖拽即改状态。</p>
+            <h3 data-i18n="f6t">Projects &amp; tasks</h3>
+            <p data-i18n="f6p">Local project registry with automatic Git branch detection; kanban task board, drag to change status.</p>
           </div>
           <div class="card">
             <div class="ico">📋</div>
-            <h3>运行日志</h3>
-            <p>内置日志查看器，按启动滚动归档，支持尾部读取与自动刷新。</p>
+            <h3 data-i18n="f7t">Logs</h3>
+            <p data-i18n="f7p">Built-in log viewer with per-launch rotation, tail reading and auto refresh.</p>
           </div>
           <div class="card">
             <div class="ico">🎛</div>
-            <h3>设置</h3>
-            <p>深浅双主题、刷新间隔调节、预算与告警阈值、数据 JSON 导入导出。</p>
+            <h3 data-i18n="f8t">Settings</h3>
+            <p data-i18n="f8p">Dark / light themes, refresh interval, budget and alert thresholds, JSON import &amp; export.</p>
           </div>
           <div class="card">
             <div class="ico">🔒</div>
-            <h3>隐私优先</h3>
-            <p>
-              全部数据落本机 app data 目录；CSP 收紧到 self，打开路径走后端白名单校验。
-            </p>
+            <h3 data-i18n="f9t">Privacy first</h3>
+            <p data-i18n="f9p">Everything lands in the local app data directory; CSP locked to self; opened paths go through a backend whitelist.</p>
           </div>
         </div>
       </section>
 
-      <!-- ── 截图 ─────────────────────────────── -->
+      <!-- ── Screenshots ──────────────────────── -->
       <section id="shots" class="wrap">
-        <h2 class="sec-title">界面</h2>
-        <p class="sec-sub">
-          截自浏览器演示模式（<code>npm run preview</code>），路径与主机名均为占位数据。
+        <h2 class="sec-title" data-i18n="shots.title">Screenshots</h2>
+        <p class="sec-sub" data-i18n-html="shots.sub">
+          Captured in browser demo mode (<code>npm run preview</code>) — paths and host names are placeholders.
         </p>
         <div class="shots">
           <figure class="shot">
-            <img src="screenshots/01-overview.png" alt="概览页：资源趋势、磁盘与进程分类" loading="lazy" />
-            <figcaption>概览 — 资源趋势、磁盘占用与进程分类</figcaption>
+            <img src="screenshots/01-overview.png" alt="Overview: resource trends, disks and process groups" loading="lazy" />
+            <figcaption data-i18n="s1">Overview — resource trends, disk usage and process groups</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/02-processes.png" alt="进程页：虚拟滚动的进程表" loading="lazy" />
-            <figcaption>进程 — 虚拟滚动表格，支持排序与筛选</figcaption>
+            <img src="screenshots/02-processes.png" alt="Processes: virtual-scrolled process table" loading="lazy" />
+            <figcaption data-i18n="s2">Processes — virtual-scrolled table with sorting and filtering</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/03-servers.png" alt="服务与端口页：框架识别与端口分布" loading="lazy" />
-            <figcaption>服务与端口 — 框架识别与端口分布</figcaption>
+            <img src="screenshots/03-servers.png" alt="Servers & ports: framework detection and port distribution" loading="lazy" />
+            <figcaption data-i18n="s3">Servers &amp; ports — framework detection and port distribution</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/04-ai-sessions.png" alt="AI 会话页：成本趋势与模型构成" loading="lazy" />
-            <figcaption>AI 会话 — token 成本趋势与模型构成</figcaption>
+            <img src="screenshots/04-ai-sessions.png" alt="AI sessions: cost trends and model breakdown" loading="lazy" />
+            <figcaption data-i18n="s4">AI sessions — token cost trends and model breakdown</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/05-projects.png" alt="项目页：卡片与表格双视图" loading="lazy" />
-            <figcaption>项目 — 卡片 / 表格双视图，Git 分支检测</figcaption>
+            <img src="screenshots/05-projects.png" alt="Projects: card and table views" loading="lazy" />
+            <figcaption data-i18n="s5">Projects — card / table views, Git branch detection</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/06-tasks.png" alt="任务页：拖拽看板" loading="lazy" />
-            <figcaption>任务 — 拖拽看板（待办 / 进行中 / 已完成）</figcaption>
+            <img src="screenshots/06-tasks.png" alt="Tasks: drag-and-drop kanban" loading="lazy" />
+            <figcaption data-i18n="s6">Tasks — drag-and-drop kanban (todo / in progress / done)</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/07-settings.png" alt="设置页：主题、刷新与预算" loading="lazy" />
-            <figcaption>设置 — 主题、刷新间隔与预算</figcaption>
+            <img src="screenshots/07-settings.png" alt="Settings: theme, refresh and budget" loading="lazy" />
+            <figcaption data-i18n="s7">Settings — theme, refresh interval and budget</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/08-logs.png" alt="运行日志页" loading="lazy" />
-            <figcaption>运行日志 — 内置查看器，自动刷新</figcaption>
+            <img src="screenshots/08-logs.png" alt="Logs" loading="lazy" />
+            <figcaption data-i18n="s8">Logs — built-in viewer with auto refresh</figcaption>
           </figure>
         </div>
       </section>
 
-      <!-- ── 下载 ─────────────────────────────── -->
+      <!-- ── Download ─────────────────────────── -->
       <section id="download" class="wrap">
-        <h2 class="sec-title">下载</h2>
-        <p class="sec-sub">Windows x64。安装包未做代码签名，首次运行 Windows 可能提示「未知发布者」。</p>
+        <h2 class="sec-title" data-i18n="dl.title">Download</h2>
+        <p class="sec-sub" data-i18n="dl.sub">Windows x64. The installer is not code-signed; Windows may warn "Unknown publisher" on first run.</p>
         <div class="dl">
           <div class="card">
-            <span class="tag rec">推荐</span>
-            <h3>NSIS 安装包</h3>
-            <p>双击安装，含开始菜单与卸载项，约 3 MB。</p>
-            <a class="btn btn-primary" id="dl-setup" href="#">下载安装包</a>
+            <span class="tag rec" data-i18n="dl.tag1">Recommended</span>
+            <h3 data-i18n="dl.t1">NSIS installer</h3>
+            <p data-i18n="dl.d1">Double-click to install, with Start-menu entry and uninstaller. ~3 MB.</p>
+            <a class="btn btn-primary" id="dl-setup" href="#" data-i18n="dl.b1">Download installer</a>
           </div>
           <div class="card">
-            <span class="tag">免安装</span>
-            <h3>独立 exe</h3>
-            <p>单文件直接运行，无需安装，适合放进 U 盘随身携带。</p>
-            <a class="btn" id="dl-portable" href="#">下载 exe</a>
+            <span class="tag" data-i18n="dl.tag2">Portable</span>
+            <h3 data-i18n="dl.t2">Standalone exe</h3>
+            <p data-i18n="dl.d2">Single file, runs as-is, no installation — fits on a USB stick.</p>
+            <a class="btn" id="dl-portable" href="#" data-i18n="dl.b2">Download exe</a>
           </div>
         </div>
 
-        <h3 style="margin: 34px 0 14px; font-size: 17px">从源码构建</h3>
+        <h3 style="margin: 34px 0 14px; font-size: 17px" data-i18n="dl.build">Build from source</h3>
         <div class="tbl-wrap">
           <table>
             <tbody>
-              <tr><td style="width: 190px">环境要求</td><td>Node.js ≥ 20、Rust ≥ 1.77、WebView2（Windows 11 预装）</td></tr>
-              <tr><td>安装依赖</td><td><code>npm install</code></td></tr>
-              <tr><td>开发模式</td><td><code>npm run tauri dev</code></td></tr>
-              <tr><td>产出安装包</td><td><code>npm run tauri build</code> → <code>src-tauri/target/release/bundle/nsis/</code></td></tr>
-              <tr><td>仅看界面</td><td><code>npm run dev</code>（浏览器演示模式，无需 Rust）</td></tr>
+              <tr>
+                <td style="width: 190px" data-i18n="dl.req">Requirements</td>
+                <td data-i18n="dl.reqv">Node.js ≥ 20, Rust ≥ 1.77, WebView2 (preinstalled on Windows 11)</td>
+              </tr>
+              <tr><td data-i18n="dl.deps">Install dependencies</td><td><code>npm install</code></td></tr>
+              <tr><td data-i18n="dl.dev">Dev mode</td><td><code>npm run tauri dev</code></td></tr>
+              <tr><td data-i18n="dl.pkg">Build installer</td><td><code>npm run tauri build</code> → <code>src-tauri/target/release/bundle/nsis/</code></td></tr>
+              <tr><td data-i18n="dl.uionly">UI only</td><td><code>npm run dev</code> (<span data-i18n="dl.uionlyv">browser demo mode, no Rust needed</span>)</td></tr>
             </tbody>
           </table>
         </div>
 
-        <h3 style="margin: 34px 0 14px; font-size: 17px">全新安装</h3>
+        <h3 style="margin: 34px 0 14px; font-size: 17px" data-i18n="dl.steps">Fresh install</h3>
         <ol class="steps">
           <li>
-            <strong>下载安装包</strong>
-            <span>点上方「下载安装包」，得到 <code>Workbench_0.1.0_x64-setup.exe</code>。</span>
+            <strong data-i18n="dl.step1t">Download the installer</strong>
+            <span data-i18n-html="dl.step1d">Click "Download installer" above to get <code>Workbench_0.1.1_x64-setup.exe</code>.</span>
           </li>
           <li>
-            <strong>放行 Windows 提示</strong>
-            <span>因未做代码签名，SmartScreen 可能拦截：点「更多信息」→「仍要运行」。</span>
+            <strong data-i18n="dl.step2t">Allow the Windows prompt</strong>
+            <span data-i18n="dl.step2d">The installer is unsigned, so SmartScreen may step in: choose "More info" → "Run anyway".</span>
           </li>
           <li>
-            <strong>完成安装并启动</strong>
-            <span>安装完成后从开始菜单启动「工作台」。</span>
+            <strong data-i18n="dl.step3t">Install and launch</strong>
+            <span data-i18n="dl.step3d">Once installed, launch Workbench from the Start menu.</span>
           </li>
           <li>
-            <strong>首次使用建议</strong>
-            <span>到「设置」调刷新间隔与预算；到「AI 会话」点「扫描成本」汇总历史用量。</span>
+            <strong data-i18n="dl.step4t">First-run tips</strong>
+            <span data-i18n-html="dl.step4d">Set the refresh interval and budget in "Settings"; on "AI sessions" click "Scan cost" to aggregate historical usage.</span>
           </li>
         </ol>
       </section>
 
       <!-- ── FAQ ──────────────────────────────── -->
       <section id="faq" class="wrap">
-        <h2 class="sec-title">常见问题</h2>
-        <p class="sec-sub">安装与使用中最常被问到的几点。</p>
+        <h2 class="sec-title" data-i18n="faq.title">FAQ</h2>
+        <p class="sec-sub" data-i18n="faq.sub">The questions that come up most around install and daily use.</p>
 
         <details>
-          <summary>Windows 提示「已保护你的电脑」或「未知发布者」，怎么办？</summary>
-          <p>
-            安装包未做代码签名（签名证书需付费），Windows SmartScreen 因此会有提示。
-            点「更多信息」→「仍要运行」即可。你也可以选择从源码自行构建，或直接下载免安装
-            exe。校验完整性可用 Release 页面提供的 SHA-256。
+          <summary data-i18n="q1">Windows says "Protected your PC" or "Unknown publisher" — what now?</summary>
+          <p data-i18n-html="a1">
+            The installer is not code-signed (signing certificates cost money), so Windows
+            SmartScreen steps in. Choose "More info" → "Run anyway". You can also build from
+            source, or grab the portable exe instead. Verify integrity with the SHA-256 published
+            on the Release page.
           </p>
         </details>
         <details>
-          <summary>会不会把我的数据上传到云端？</summary>
-          <p>
-            不会。所有数据（项目、任务、成本账本、日志）都写在本机的 app data 目录。
-            应用只在你本机发起两件事：读 <code>netstat</code> 看端口，读本机 session
-            文件算成本。唯一的可选外连是探测本地的 opencode 服务（默认 4096 端口），
-            失败也只是显示「未检测到」，不影响其它功能。
+          <summary data-i18n="q2">Will my data be uploaded to the cloud?</summary>
+          <p data-i18n-html="a2">
+            No. Everything (projects, tasks, the cost ledger, logs) is written to the local app
+            data directory. The app only does two local things: read <code>netstat</code> for
+            ports and read local session files for costs. The only optional network call is
+            probing the local opencode service (default port 4096); on failure it just shows
+            "not detected" and nothing else is affected.
           </p>
         </details>
         <details>
-          <summary>「成本计量」是怎么算出来的？准不准？</summary>
-          <p>
-            解析本机 Claude Code / Codex 会话 JSONL 文件中的 usage 字段，按内置的 40+
-            模型价格计算。分三级可信度：<strong>measured</strong>（文件里有真实 usage
-            上报）、<strong>estimated</strong>（无 usage，按字符数启发式估算，可在设置里关掉）、
-            <strong>zero_pricing</strong>（型号无法识别，标为不计费而<em>不</em>乱编单价）。
-            Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×）。
+          <summary data-i18n="q3">How is the cost metering computed? Is it accurate?</summary>
+          <p data-i18n-html="a3">
+            It parses the usage fields in local Claude Code / Codex session JSONL files and
+            prices them against 40+ built-in model prices, in three confidence levels:
+            <strong>measured</strong> (real usage reported in the file),
+            <strong>estimated</strong> (no usage — heuristic by character count, can be disabled
+            in Settings), <strong>zero_pricing</strong> (model unrecognized — recorded as free
+            rather than priced with an invented unit). Anthropic cache tokens follow the official
+            semantics (read 0.1×, write 1.25×).
           </p>
         </details>
         <details>
-          <summary>杀进程会不会误杀系统关键进程？</summary>
-          <p>
-            不会。PID 0/4 与 csrss、lsass、services 等关键系统进程被后端直接拒绝，
-            前端也有二次确认。此外终止前会刷新并校验进程身份，避免 PID 复用导致误杀。
+          <summary data-i18n="q4">Can killing a process break my system?</summary>
+          <p data-i18n="a4">
+            No. PID 0/4 and critical system processes (csrss, lsass, services…) are rejected by
+            the backend, and the frontend asks for confirmation. The target identity is also
+            re-verified after refresh, so PID reuse cannot cause a mistaken kill.
           </p>
         </details>
         <details>
-          <summary>关闭窗口后程序去哪了？怎么真正退出？</summary>
-          <p>
-            点关闭是隐藏到系统托盘（这是有意设计，便于常驻监控）。要真正结束进程，
-            右键托盘图标选「退出工作台」。快捷键 <code>Ctrl+Shift+W</code>
-            可随时显示 / 隐藏窗口。
+          <summary data-i18n="q5">Where did the window go after closing? How do I really quit?</summary>
+          <p data-i18n-html="a5">
+            Closing hides to the system tray (intentional — the app keeps monitoring). To truly
+            exit, right-click the tray icon and choose "Quit". The hotkey
+            <code>Ctrl+Shift+W</code> shows / hides the window anytime.
           </p>
         </details>
         <details>
-          <summary>支持 macOS / Linux 吗？</summary>
-          <p>
-            尚未验证。当前只在 Windows 上开发、测试与打包：端口采集写死
-            <code>netstat -ano</code>，安装包只产出 NSIS。代码里有 POSIX 分支但没有实际跑过，
-            因此不在 README 里声称支持。
+          <summary data-i18n="q6">Is macOS / Linux supported?</summary>
+          <p data-i18n-html="a6">
+            Not verified yet. Development, testing and packaging are Windows-only today: port
+            collection shells out to <code>netstat -ano</code> and only the NSIS installer is
+            produced. The code contains a POSIX branch, but it has never been exercised — so the
+            README does not claim support.
           </p>
         </details>
       </section>
 
-      <!-- ── 源码平台 ─────────────────────────── -->
+      <!-- ── Source platforms ─────────────────── -->
       <section class="wrap">
-        <h2 class="sec-title">源码</h2>
-        <p class="sec-sub">同一份代码镜像在四个平台，任选其一。</p>
+        <h2 class="sec-title" data-i18n="src.title">Source code</h2>
+        <p class="sec-sub" data-i18n="src.sub">The same code is mirrored across five platforms — pick whichever you like.</p>
         <div class="plats" id="plats">
-          <!-- 由页面脚本按当前域名填入，保证每个镜像都链到自己 -->
+          <!-- filled by the page script per current domain, so every mirror links to itself -->
         </div>
       </section>
     </main>
@@ -502,95 +521,324 @@
       <div class="wrap foot">
         <span>MIT License © 2026 x1882</span>
         <span class="sp">
-          <a id="foot-repo" href="https://github.com/X33834/workbench">仓库</a> ·
-          <a id="foot-issues" href="https://github.com/X33834/workbench/issues">问题反馈</a> ·
-          <a id="foot-changelog" href="https://github.com/X33834/workbench/blob/main/CHANGELOG.md">更新日志</a>
+          <a id="foot-repo" href="https://github.com/X33834/workbench" data-i18n="foot.repo">Repository</a> ·
+          <a id="foot-issues" href="https://github.com/X33834/workbench/issues" data-i18n="foot.issues">Issues</a> ·
+          <a id="foot-changelog" href="https://github.com/X33834/workbench/blob/main/CHANGELOG.md" data-i18n="foot.changelog">Changelog</a>
         </span>
       </div>
     </footer>
 
     <script>
       /*
-       * 一份页面服务多个镜像：按当前访问域名判定所在的托管平台与账号，
-       * 把仓库 / 下载 / 问题反馈等链接指向「当前这个镜像自己」，
-       * 避免从 Gitee 点进 GitHub、或从 A 账号点进 B 账号。
+       * One page serves every mirror: the current hostname decides which
+       * platform / account we are hosted on, and repo / download / issue links
+       * are pointed at *this* mirror itself — never at someone else's page.
        */
       (function () {
-        // GitHub 用户名的大小写不会保留在 DNS 主机名里（.github.io 恒为小写），
-        // 这里映射回规范写法，让链接与控制台里显示的用户名与账号实际一致。
+        /* ── i18n dictionary ─────────────────── */
+        var I18N = {
+          en: {
+            title: "Workbench — Local system dashboard & AI session cost metering",
+            "nav.features": "Features", "nav.screenshots": "Screenshots", "nav.download": "Download",
+            "nav.faq": "FAQ", "nav.source": "Source",
+            "hero.pill": "v0.1.1 · Windows x64 · MIT licensed",
+            "hero.h1a": "Your machine, at a glance",
+            "hero.h1b": "with AI session cost metering",
+            "hero.sub": 'Live view of processes, ports and dev servers; token usage and spend for Claude Code / Codex / opencode. <strong>All data stays on your device</strong> — nothing is uploaded.',
+            "hero.cta1": "Download installer", "hero.cta2": "Portable exe",
+            "hero.meta": "Windows 10 / 11 · ~3 MB installer · runs without admin rights",
+            "feat.title": "Features",
+            "feat.sub": 'Nine modules covering the "see it" and "count it" of your daily dev environment.',
+            "f1t": "Overview", "f1p": "Live CPU / memory trends, disk usage donut, process group stats and system info in one screen.",
+            "f2t": "Processes", "f2p": "Full process snapshot, CPU / memory sorting and filtering, virtual scrolling for thousands of rows, kill confirmation.",
+            "f3t": "Servers & ports", "f3p": "Parses netstat for listening ports and auto-tags 30+ dev frameworks such as Vite / Next / uvicorn.",
+            "f4t": "AI sessions", "f4p": "opencode online sessions with details; local Claude Code / Codex session file preview and message stats.",
+            "f5t": "Cost metering", "f5p": "Tokens and spend by day / by model, 40+ built-in model prices, Anthropic cache semantics and budget alerts.",
+            "f6t": "Projects & tasks", "f6p": "Local project registry with automatic Git branch detection; kanban task board, drag to change status.",
+            "f7t": "Logs", "f7p": "Built-in log viewer with per-launch rotation, tail reading and auto refresh.",
+            "f8t": "Settings", "f8p": "Dark / light themes, refresh interval, budget and alert thresholds, JSON import & export.",
+            "f9t": "Privacy first", "f9p": "Everything lands in the local app data directory; CSP locked to self; opened paths go through a backend whitelist.",
+            "shots.title": "Screenshots",
+            "shots.sub": 'Captured in browser demo mode (<code>npm run preview</code>) — paths and host names are placeholders.',
+            s1: "Overview — resource trends, disk usage and process groups",
+            s2: "Processes — virtual-scrolled table with sorting and filtering",
+            s3: "Servers & ports — framework detection and port distribution",
+            s4: "AI sessions — token cost trends and model breakdown",
+            s5: "Projects — card / table views, Git branch detection",
+            s6: "Tasks — drag-and-drop kanban (todo / in progress / done)",
+            s7: "Settings — theme, refresh interval and budget",
+            s8: "Logs — built-in viewer with auto refresh",
+            "dl.title": "Download",
+            "dl.sub": 'Windows x64. The installer is not code-signed; Windows may warn "Unknown publisher" on first run.',
+            "dl.tag1": "Recommended", "dl.t1": "NSIS installer",
+            "dl.d1": "Double-click to install, with Start-menu entry and uninstaller. ~3 MB.",
+            "dl.b1": "Download installer",
+            "dl.tag2": "Portable", "dl.t2": "Standalone exe",
+            "dl.d2": "Single file, runs as-is, no installation — fits on a USB stick.",
+            "dl.b2": "Download exe",
+            "dl.build": "Build from source",
+            "dl.req": "Requirements", "dl.reqv": "Node.js ≥ 20, Rust ≥ 1.77, WebView2 (preinstalled on Windows 11)",
+            "dl.deps": "Install dependencies", "dl.dev": "Dev mode", "dl.pkg": "Build installer",
+            "dl.uionly": "UI only", "dl.uionlyv": "browser demo mode, no Rust needed",
+            "dl.steps": "Fresh install",
+            "dl.step1t": "Download the installer",
+            "dl.step1d": 'Click "Download installer" above to get <code>Workbench_0.1.1_x64-setup.exe</code>.',
+            "dl.step2t": "Allow the Windows prompt",
+            "dl.step2d": 'The installer is unsigned, so SmartScreen may step in: choose "More info" → "Run anyway".',
+            "dl.step3t": "Install and launch",
+            "dl.step3d": "Once installed, launch Workbench from the Start menu.",
+            "dl.step4t": "First-run tips",
+            "dl.step4d": 'Set the refresh interval and budget in "Settings"; on "AI sessions" click "Scan cost" to aggregate historical usage.',
+            "faq.title": "FAQ",
+            "faq.sub": "The questions that come up most around install and daily use.",
+            q1: 'Windows says "Protected your PC" or "Unknown publisher" — what now?',
+            a1: 'The installer is not code-signed (signing certificates cost money), so Windows SmartScreen steps in. Choose "More info" → "Run anyway". You can also build from source, or grab the portable exe instead. Verify integrity with the SHA-256 published on the Release page.',
+            q2: "Will my data be uploaded to the cloud?",
+            a2: 'No. Everything (projects, tasks, the cost ledger, logs) is written to the local app data directory. The app only does two local things: read <code>netstat</code> for ports and read local session files for costs. The only optional network call is probing the local opencode service (default port 4096); on failure it just shows "not detected" and nothing else is affected.',
+            q3: "How is the cost metering computed? Is it accurate?",
+            a3: "It parses the usage fields in local Claude Code / Codex session JSONL files and prices them against 40+ built-in model prices, in three confidence levels: <strong>measured</strong> (real usage reported in the file), <strong>estimated</strong> (no usage — heuristic by character count, can be disabled in Settings), <strong>zero_pricing</strong> (model unrecognized — recorded as free rather than priced with an invented unit). Anthropic cache tokens follow the official semantics (read 0.1×, write 1.25×).",
+            q4: "Can killing a process break my system?",
+            a4: "No. PID 0/4 and critical system processes (csrss, lsass, services…) are rejected by the backend, and the frontend asks for confirmation. The target identity is also re-verified after refresh, so PID reuse cannot cause a mistaken kill.",
+            q5: "Where did the window go after closing? How do I really quit?",
+            a5: 'Closing hides to the system tray (intentional — the app keeps monitoring). To truly exit, right-click the tray icon and choose "Quit". The hotkey <code>Ctrl+Shift+W</code> shows / hides the window anytime.',
+            q6: "Is macOS / Linux supported?",
+            a6: "Not verified yet. Development, testing and packaging are Windows-only today: port collection shells out to <code>netstat -ano</code> and only the NSIS installer is produced. The code contains a POSIX branch, but it has never been exercised — so the README does not claim support.",
+            "src.title": "Source code",
+            "src.sub": "The same code is mirrored across five platforms — pick whichever you like.",
+            current: "(current)",
+            "foot.repo": "Repository", "foot.issues": "Issues", "foot.changelog": "Changelog",
+          },
+          zh: {
+            title: "工作台 Workbench — 本机运维仪表盘与 AI 会话成本计量",
+            "nav.features": "功能", "nav.screenshots": "截图", "nav.download": "下载",
+            "nav.faq": "常见问题", "nav.source": "源码",
+            "hero.pill": "v0.1.1 · Windows x64 · MIT 开源",
+            "hero.h1a": "本机运维仪表盘",
+            "hero.h1b": "与 AI 会话成本计量",
+            "hero.sub": '进程、端口、开发服务器实时可视；统计 Claude Code / Codex / opencode 的 token 消耗与花费。<strong>数据仅存本机</strong>，不上传任何信息。',
+            "hero.cta1": "下载安装包", "hero.cta2": "免安装版 exe",
+            "hero.meta": "Windows 10 / 11 · 约 3 MB 安装包 · 无需管理员权限即可运行",
+            "feat.title": "功能",
+            "feat.sub": "九个模块，覆盖日常开发环境的「看得见」与「算得清」。",
+            "f1t": "概览", "f1p": "CPU / 内存实时趋势曲线、磁盘占用环形图、进程分类统计与系统信息一屏总览。",
+            "f2t": "进程监控", "f2p": "全进程快照，CPU / 内存排序与筛选，虚拟滚动支撑上千行，杀进程二次确认。",
+            "f3t": "服务与端口", "f3p": "解析 netstat 找出监听端口，自动标注 Vite / Next / uvicorn 等 30+ 开发框架。",
+            "f4t": "AI 会话", "f4p": "opencode 在线会话与详情；本地 Claude Code / Codex 会话文件预览与消息统计。",
+            "f5t": "成本计量", "f5p": "token 与花费按日 / 按模型统计，内置 40+ 模型价格，支持 Anthropic 缓存折扣语义与预算告警。",
+            "f6t": "项目与任务", "f6p": "本地项目登记与 Git 分支自动检测；看板式任务板，拖拽即改状态。",
+            "f7t": "运行日志", "f7p": "内置日志查看器，按启动滚动归档，支持尾部读取与自动刷新。",
+            "f8t": "设置", "f8p": "深浅双主题、刷新间隔调节、预算与告警阈值、数据 JSON 导入导出。",
+            "f9t": "隐私优先", "f9p": "全部数据落本机 app data 目录；CSP 收紧到 self，打开路径走后端白名单校验。",
+            "shots.title": "界面",
+            "shots.sub": "截自浏览器演示模式（<code>npm run preview</code>），路径与主机名均为占位数据。",
+            s1: "概览 — 资源趋势、磁盘占用与进程分类",
+            s2: "进程 — 虚拟滚动表格，支持排序与筛选",
+            s3: "服务与端口 — 框架识别与端口分布",
+            s4: "AI 会话 — token 成本趋势与模型构成",
+            s5: "项目 — 卡片 / 表格双视图，Git 分支检测",
+            s6: "任务 — 拖拽看板（待办 / 进行中 / 已完成）",
+            s7: "设置 — 主题、刷新间隔与预算",
+            s8: "运行日志 — 内置查看器，自动刷新",
+            "dl.title": "下载",
+            "dl.sub": "Windows x64。安装包未做代码签名，首次运行 Windows 可能提示「未知发布者」。",
+            "dl.tag1": "推荐", "dl.t1": "NSIS 安装包",
+            "dl.d1": "双击安装，含开始菜单与卸载项，约 3 MB。",
+            "dl.b1": "下载安装包",
+            "dl.tag2": "免安装", "dl.t2": "独立 exe",
+            "dl.d2": "单文件直接运行，无需安装，适合放进 U 盘随身携带。",
+            "dl.b2": "下载 exe",
+            "dl.build": "从源码构建",
+            "dl.req": "环境要求", "dl.reqv": "Node.js ≥ 20、Rust ≥ 1.77、WebView2（Windows 11 预装）",
+            "dl.deps": "安装依赖", "dl.dev": "开发模式", "dl.pkg": "产出安装包",
+            "dl.uionly": "仅看界面", "dl.uionlyv": "浏览器演示模式，无需 Rust",
+            "dl.steps": "全新安装",
+            "dl.step1t": "下载安装包",
+            "dl.step1d": "点上方「下载安装包」，得到 <code>Workbench_0.1.1_x64-setup.exe</code>。",
+            "dl.step2t": "放行 Windows 提示",
+            "dl.step2d": "因未做代码签名，SmartScreen 可能拦截：点「更多信息」→「仍要运行」。",
+            "dl.step3t": "完成安装并启动",
+            "dl.step3d": "安装完成后从开始菜单启动「工作台」。",
+            "dl.step4t": "首次使用建议",
+            "dl.step4d": "到「设置」调刷新间隔与预算；到「AI 会话」点「扫描成本」汇总历史用量。",
+            "faq.title": "常见问题",
+            "faq.sub": "安装与使用中最常被问到的几点。",
+            q1: "Windows 提示「已保护你的电脑」或「未知发布者」，怎么办？",
+            a1: "安装包未做代码签名（签名证书需付费），Windows SmartScreen 因此会有提示。点「更多信息」→「仍要运行」即可。你也可以选择从源码自行构建，或直接下载免安装 exe。校验完整性可用 Release 页面提供的 SHA-256。",
+            q2: "会不会把我的数据上传到云端？",
+            a2: "不会。所有数据（项目、任务、成本账本、日志）都写在本机的 app data 目录。应用只在你本机发起两件事：读 <code>netstat</code> 看端口，读本机 session 文件算成本。唯一的可选外连是探测本地的 opencode 服务（默认 4096 端口），失败也只是显示「未检测到」，不影响其它功能。",
+            q3: "「成本计量」是怎么算出来的？准不准？",
+            a3: "解析本机 Claude Code / Codex 会话 JSONL 文件中的 usage 字段，按内置的 40+ 模型价格计算。分三级可信度：<strong>measured</strong>（文件里有真实 usage 上报）、<strong>estimated</strong>（无 usage，按字符数启发式估算，可在设置里关掉）、<strong>zero_pricing</strong>（型号无法识别，标为不计费而<em>不</em>乱编单价）。Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×）。",
+            q4: "杀进程会不会误杀系统关键进程？",
+            a4: "不会。PID 0/4 与 csrss、lsass、services 等关键系统进程被后端直接拒绝，前端也有二次确认。此外终止前会刷新并校验进程身份，避免 PID 复用导致误杀。",
+            q5: "关闭窗口后程序去哪了？怎么真正退出？",
+            a5: "点关闭是隐藏到系统托盘（这是有意设计，便于常驻监控）。要真正结束进程，右键托盘图标选「退出工作台」。快捷键 <code>Ctrl+Shift+W</code> 可随时显示 / 隐藏窗口。",
+            q6: "支持 macOS / Linux 吗？",
+            a6: "尚未验证。当前只在 Windows 上开发、测试与打包：端口采集写死 <code>netstat -ano</code>，安装包只产出 NSIS。代码里有 POSIX 分支但没有实际跑过，因此不在 README 里声称支持。",
+            "src.title": "源码",
+            "src.sub": "同一份代码镜像在五个平台，任选其一。",
+            current: "（当前）",
+            "foot.repo": "仓库", "foot.issues": "问题反馈", "foot.changelog": "更新日志",
+          },
+          ja: {
+            title: "Workbench — ローカル運用ダッシュボード & AI セッションコスト計測",
+            "nav.features": "機能", "nav.screenshots": "スクリーンショット", "nav.download": "ダウンロード",
+            "nav.faq": "FAQ", "nav.source": "ソース",
+            "hero.pill": "v0.1.1 · Windows x64 · MIT ライセンス",
+            "hero.h1a": "ローカル運用ダッシュボード",
+            "hero.h1b": "AI セッションコスト計測と一体に",
+            "hero.sub": "プロセス・ポート・開発サーバーをリアルタイム可視化。Claude Code / Codex / opencode のトークン消費と費用を集計。<strong>データは端末内にのみ保存</strong>され、一切アップロードされません。",
+            "hero.cta1": "インストーラーを入手", "hero.cta2": "ポータブル exe",
+            "hero.meta": "Windows 10 / 11 · 約 3 MB のインストーラー · 管理者権限不要で実行可能",
+            "feat.title": "機能",
+            "feat.sub": "9 つのモジュールで、日々の開発環境を「見える化」し「正確に数える」。",
+            "f1t": "概要", "f1p": "CPU / メモリのリアルタイム推移、ディスク使用率ドーナツ、プロセス分類とシステム情報を 1 画面で。",
+            "f2t": "プロセス", "f2p": "全プロセス snapshot、CPU / メモリのソートとフィルタ、数千行に耐える仮想スクロール、強制終了の二重確認。",
+            "f3t": "サーバー & ポート", "f3p": "netstat を解析してリッスンポートを検出し、Vite / Next / uvicorn など 30+ の開発フレームワークを自動判定。",
+            "f4t": "AI セッション", "f4p": "opencode のオンラインセッションと詳細。ローカルの Claude Code / Codex セッションファイルのプレビューとメッセージ統計。",
+            "f5t": "コスト計測", "f5p": "トークンと費用を日別 / モデル別に集計。40+ モデル価格を内蔵し、Anthropic キャッシュの課金と予算アラートに対応。",
+            "f6t": "プロジェクト & タスク", "f6p": "ローカルプロジェクト登録と Git ブランチ自動検出。カンバンタスクボードはドラッグで状態変更。",
+            "f7t": "ログ", "f7p": "内蔵ログビューア。起動単位でローテーションし、末尾読み取りと自動更新に対応。",
+            "f8t": "設定", "f8p": "ダーク / ライトテーマ、更新間隔、予算とアラートしきい値、JSON インポート & エクスポート。",
+            "f9t": "プライバシー第一", "f9p": "データはすべてローカルの app data ディレクトリへ。CSP は self に固定、パスを開く際はバックエンドのホワイトリストで検証。",
+            "shots.title": "スクリーンショット",
+            "shots.sub": "ブラウザデモモード（<code>npm run preview</code>）で撮影。パスとホスト名はすべてプレースホルダーです。",
+            s1: "概要 — リソース推移、ディスク、プロセス分類",
+            s2: "プロセス — ソート・フィルタ対応の仮想スクロールテーブル",
+            s3: "サーバー & ポート — フレームワーク判定とポート分布",
+            s4: "AI セッション — トークンコストの推移とモデル構成",
+            s5: "プロジェクト — カード / テーブル両ビュー、Git ブランチ検出",
+            s6: "タスク — ドラッグ＆ドロップのカンバン（todo / 進行中 / 完了）",
+            s7: "設定 — テーマ、更新間隔、予算",
+            s8: "ログ — 内蔵ビューア、自動更新",
+            "dl.title": "ダウンロード",
+            "dl.sub": "Windows x64。インストーラーはコード署名されていないため、初回実行時に「不明な発行元」と表示されることがあります。",
+            "dl.tag1": "推奨", "dl.t1": "NSIS インストーラー",
+            "dl.d1": "ダブルクリックでインストール。スタートメニュー登録とアンインストーラー付き。約 3 MB。",
+            "dl.b1": "インストーラーを入手",
+            "dl.tag2": "ポータブル", "dl.t2": "単体 exe",
+            "dl.d2": "単一ファイルでそのまま実行。インストール不要、USB メモリに入れて持ち運べます。",
+            "dl.b2": "exe を入手",
+            "dl.build": "ソースからビルド",
+            "dl.req": "必要環境", "dl.reqv": "Node.js ≥ 20、Rust ≥ 1.77、WebView2（Windows 11 は同梱）",
+            "dl.deps": "依存のインストール", "dl.dev": "開発モード", "dl.pkg": "インストーラー生成",
+            "dl.uionly": "UI のみ", "dl.uionlyv": "ブラウザデモモード。Rust 不要",
+            "dl.steps": "新規インストール",
+            "dl.step1t": "インストーラーをダウンロード",
+            "dl.step1d": "上の「インストーラーを入手」から <code>Workbench_0.1.1_x64-setup.exe</code> を入手します。",
+            "dl.step2t": "Windows の警告を許可",
+            "dl.step2d": "未署名のため SmartScreen が出ることがあります:「詳細情報」→「実行」を選択してください。",
+            "dl.step3t": "インストールして起動",
+            "dl.step3d": "インストール後、スタートメニューから Workbench を起動します。",
+            "dl.step4t": "初回利用のヒント",
+            "dl.step4d": "「設定」で更新間隔と予算を調整。「AI セッション」の「コストをスキャン」で履歴を集計できます。",
+            "faq.title": "FAQ",
+            "faq.sub": "インストールと日常利用でよくある質問。",
+            q1: "Windows が「PC を保護しました」や「不明な発行元」と表示します",
+            a1: "インストーラーはコード署名されていないため（署名証明書には費用がかかります）、Windows SmartScreen が警告します。「詳細情報」→「実行」で続行できます。ソースからビルドしたり、ポータブル版 exe を使うこともできます。整合性の検証には Release ページの SHA-256 をご利用ください。",
+            q2: "データをクラウドにアップロードしますか？",
+            a2: "いいえ。すべてのデータ（プロジェクト・タスク・コスト台帳・ログ）はローカルの app data ディレクトリに書き込まれます。アプリがローカルで行うのは <code>netstat</code> でポートを確認することと、ローカルのセッションファイルでコストを計算することだけです。唯一の任意の通信はローカル opencode サービス（既定ポート 4096）の探知で、失敗しても「未検出」と表示されるだけで他への影響はありません。",
+            q3: "コスト計測はどう計算されますか？正確ですか？",
+            a3: "ローカルの Claude Code / Codex セッション JSONL 内の usage フィールドを解析し、内蔵の 40+ モデル価格で計算します。信頼度は 3 段階: <strong>measured</strong>（ファイルに実際の usage あり）、<strong>estimated</strong>（usage なし、文字数ヒューリスティック、設定でオフ可）、<strong>zero_pricing</strong>（モデル不明 — 単価を捏造せず無課金として記録）。Anthropic のキャッシュトークンは公式の意味論に従います（読み 0.1 倍、書き 1.25 倍）。",
+            q4: "プロセスを殺してもシステムを壊しませんか？",
+            a4: "いいえ。PID 0/4 と重要システムプロセス（csrss、lsass、services 等）はバックエンドが拒否し、フロントエンドも確認を求めます。終了前に対象の同一性を再検証するため、PID 再利用による誤爆は起きません。",
+            q5: "閉じたウィンドウはどこへ？本当に終了するには？",
+            a5: "閉じるとシステムトレイに格納されます（常駐監視のための意図的な設計）。完全に終了するにはトレイアイコンを右クリックして「終了」を選択。<code>Ctrl+Shift+W</code> でいつでも表示 / 非表示を切り替えられます。",
+            q6: "macOS / Linux には対応していますか？",
+            a6: "未検証です。開発・テスト・パッケージングは Windows のみ: ポート取得は <code>netstat -ano</code> 固定で、インストーラーは NSIS のみ。コードには POSIX 分岐がありますが実行されたことがないため、README では対応を謳っていません。",
+            "src.title": "ソースコード",
+            "src.sub": "同じコードが 5 プラットフォームにミラーされています。お好きなものをどうぞ。",
+            current: "（現在）",
+            "foot.repo": "リポジトリ", "foot.issues": "Issues", "foot.changelog": "更新履歴",
+          },
+        };
+
+        function detectLang() {
+          try {
+            var saved = localStorage.getItem("wb-lang");
+            if (saved && I18N[saved]) return saved;
+          } catch (e) {}
+          return "en"; // English-first by design
+        }
+
+        function applyLang(lang) {
+          var d = I18N[lang] || I18N.en;
+          document.documentElement.lang = lang === "zh" ? "zh-CN" : lang;
+          document.title = d.title;
+          var meta = document.querySelector('meta[name="description"]');
+          if (meta) meta.setAttribute("content", d["hero.sub"].replace(/<[^>]+>/g, ""));
+          var nodes = document.querySelectorAll("[data-i18n],[data-i18n-html]");
+          for (var i = 0; i < nodes.length; i++) {
+            var el = nodes[i];
+            var key = el.getAttribute("data-i18n-html") || el.getAttribute("data-i18n");
+            var v = d[key];
+            if (v == null) continue;
+            if (el.hasAttribute("data-i18n-html")) el.innerHTML = v;
+            else el.textContent = v;
+          }
+          var btns = document.querySelectorAll("#lang button");
+          for (var j = 0; j < btns.length; j++) {
+            btns[j].classList.toggle("on", btns[j].getAttribute("data-lang") === lang);
+          }
+          try { localStorage.setItem("wb-lang", lang); } catch (e) {}
+        }
+
+        var lang = detectLang();
+        applyLang(lang);
+
+        var langBox = document.getElementById("lang");
+        if (langBox) {
+          langBox.addEventListener("click", function (ev) {
+            var b = ev.target.closest("button[data-lang]");
+            if (!b) return;
+            lang = b.getAttribute("data-lang");
+            applyLang(lang);
+            renderPlats();
+          });
+        }
+
+        /* ── per-mirror self links ───────────── */
+        // GitHub usernames keep their case only in URLs, not in DNS
+        // (<owner>.github.io is always lowercase) — map back to canonical form.
         var CANONICAL_OWNER = {
           x33834: "X33834",
           badhope: "badhope",
           morningstar202604: "Morningstar202604",
         };
 
-        var MIRRORS = {
-          host: location.hostname,
-          // GitHub Pages: <owner>.github.io/<repo>/
-          github: (function () {
-            var m = location.hostname.match(/^([^.]+)\.github\.io$/i);
-            if (!m) return null;
-            var parts = location.pathname.split("/").filter(Boolean);
-            var owner = m[1].toLowerCase();
-            return {
-              owner: CANONICAL_OWNER[owner] || m[1],
-              repo: parts[0] || "workbench",
-            };
-          })(),
-          gitee: /gitee\.(com|io)$/i.test(location.hostname)
-            ? { owner: "badhope", repo: "workbench", base: "https://gitee.com/badhope/workbench" }
-            : null,
-          gitcode: /gitcode\.(com|io)$/i.test(location.hostname)
-            ? { owner: "badhope", repo: "workbench", base: "https://gitcode.com/badhope/workbench" }
-            : null,
-        };
-
-        // 默认回退到主镜像
-        var repo = "https://github.com/X33834/workbench";
+        var repo = "https://github.com/X33834/workbench"; // fallback: primary mirror
         var releases = repo + "/releases";
         var issues = repo + "/issues";
         var changelog = repo + "/blob/main/CHANGELOG.md";
-        var platformName = "GitHub";
 
-        if (MIRRORS.github) {
-          repo = "https://github.com/" + MIRRORS.github.owner + "/" + MIRRORS.github.repo;
-          releases = repo + "/releases";
-          issues = repo + "/issues";
-          changelog = repo + "/blob/main/CHANGELOG.md";
-          platformName = "GitHub";
-        } else if (MIRRORS.gitee) {
-          repo = MIRRORS.gitee.base;
-          releases = repo + "/releases";
-          issues = repo + "/issues";
-          changelog = repo + "/blob/master/CHANGELOG.md";
-          platformName = "Gitee";
-        } else if (MIRRORS.gitcode) {
-          repo = MIRRORS.gitcode.base;
-          releases = repo + "/releases";
-          issues = repo + "/issues";
-          changelog = repo + "/blob/master/CHANGELOG.md";
-          platformName = "GitCode";
+        var gh = location.hostname.match(/^([^.]+)\.github\.io$/i);
+        if (gh) {
+          var parts = location.pathname.split("/").filter(Boolean);
+          var owner = CANONICAL_OWNER[gh[1].toLowerCase()] || gh[1];
+          repo = "https://github.com/" + owner + "/" + (parts[0] || "workbench");
+        } else if (/gitee\.(com|io)$/i.test(location.hostname)) {
+          repo = "https://gitee.com/badhope/workbench";
+        } else if (/gitcode\.(com|io)$/i.test(location.hostname)) {
+          repo = "https://gitcode.com/badhope/workbench";
         }
+        releases = repo + "/releases";
+        issues = repo + "/issues";
+        changelog = repo + "/blob/" + (/gitee|gitcode/i.test(repo) ? "master" : "main") + "/CHANGELOG.md";
 
-        function set(id, href, text) {
+        function set(id, href) {
           var el = document.getElementById(id);
-          if (!el) return;
-          el.href = href;
-          if (text) el.textContent = text;
+          if (el) el.href = href;
         }
 
         set("nav-repo", repo);
         set("foot-repo", repo);
         set("foot-issues", issues);
         set("foot-changelog", changelog);
-
-        var setupAsset = "Workbench_0.1.0_x64-setup.exe";
         set("cta-setup", releases);
         set("cta-portable", releases);
         set("dl-setup", releases + "/latest");
         set("dl-portable", releases + "/latest");
 
-        // 平台列表：标注当前所在镜像
+        // Platform list: mark the mirror we are currently on
         var plats = [
           { name: "GitHub (X33834)", url: "https://github.com/X33834/workbench" },
           { name: "GitHub (badhope)", url: "https://github.com/badhope/workbench" },
@@ -599,7 +847,9 @@
           { name: "GitCode (badhope)", url: "https://gitcode.com/badhope/workbench" },
         ];
         var box = document.getElementById("plats");
-        if (box) {
+        function renderPlats() {
+          if (!box) return;
+          box.innerHTML = "";
           plats.forEach(function (p) {
             var a = document.createElement("a");
             a.className = "plat";
@@ -610,10 +860,11 @@
               (here ? "var(--ok)" : "var(--line)") +
               '"></span>' +
               p.name +
-              (here ? ' <span style="color:var(--dim)">（当前）</span>' : "");
+              (here ? ' <span style="color:var(--dim)">' + (I18N[lang].current || "") + "</span>" : "");
             box.appendChild(a);
           });
         }
+        renderPlats();
       })();
     </script>
   </body>

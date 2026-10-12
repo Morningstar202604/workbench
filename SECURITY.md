@@ -1,51 +1,53 @@
-# 安全政策 Security Policy
+# Security Policy
 
-## 支持范围
+## Supported versions
 
-| 版本 | 是否接收安全修复 |
-|------|------------------|
+| Version | Security fixes |
+|---------|----------------|
 | 0.1.x | ✅ |
 
-## 报告漏洞
+## Reporting a vulnerability
 
-**请不要在公开 Issue 中披露安全问题。**
+**Please do not disclose security issues in public issues.**
 
-优先使用 GitHub 的私密报告通道：
+Prefer GitHub's private reporting channel:
 [Security Advisories](https://github.com/X33834/workbench/security/advisories/new)
 
-如果该通道不可用，请通过仓库主页公开的联系方式私下联系维护者。
+If that channel is unavailable, contact the maintainer privately through the
+contact information published on the repository home page.
 
-### 请在报告中包含
+### Please include
 
-- 受影响版本（`v0.1.0` 或 commit）
-- 复现步骤或最小 PoC
-- 影响面判断（能否远程触发、需要什么前提）
-- 你已知的缓解方式（如有）
+- Affected version (`v0.1.x` tag or commit)
+- Reproduction steps or a minimal PoC
+- Impact assessment (remotely triggerable? what preconditions?)
+- Known mitigations, if any
 
-### 响应预期
+### Response expectations
 
-| 阶段 | 时限 |
-|------|------|
-| 确认收到 | 3 个工作日内 |
-| 初步评估 | 7 个工作日内 |
-| 修复或缓解方案 | 视严重程度协商 |
+| Stage | Target |
+|-------|--------|
+| Acknowledgement | within 3 business days |
+| Initial assessment | within 7 business days |
+| Fix or mitigation | agreed based on severity |
 
-## 本项目已有的安全设计
+## Security design already in place
 
-工作台是**本机优先**的桌面应用，攻击面设计与常见 Web 应用不同，以下措施已落地：
+Workbench is a **local-first** desktop app; its attack surface differs from
+typical web apps. Measures already implemented:
 
-| 面 | 措施 |
-|----|------|
-| WebView 权限 | `capabilities/default.json` 取最小集；**不授予** `opener:allow-open-path` |
-| 打开目录 | 必须经后端 `open_known_path` 白名单校验，前端无法直开任意路径 |
-| IPC 入参 | `ipc_guard.rs` 对目录与端口做白名单，端口只允许复用刚探测成功的值 |
-| 会话 ID | `ai.rs` 校验字符集与长度，避免拼进 URL 时改写路径或查询串 |
-| 外部请求 | 禁止跟随重定向，`percent-encode` 双保险 |
-| 内容安全策略 | `tauri.conf.json` 的 CSP 收紧到 `self`，无远程资源 |
-| 数据完整性 | JSON 写入走原子替换；解析失败先保全为 `*.corrupt-<时间戳>` 再报错，不静默丢数据 |
-| 危险操作 | 终止进程对 PID 0/4 与关键系统进程直接拒绝；前端二次确认 |
-| 依赖 | CI 跑 `npm audit` 与 Dependabot 更新 |
+| Surface | Measure |
+|---------|---------|
+| WebView permissions | `capabilities/default.json` is minimal; `opener:allow-open-path` is **not** granted |
+| Opening directories | must pass the backend `open_known_path` whitelist; the frontend cannot open arbitrary paths |
+| IPC arguments | `ipc_guard.rs` whitelists directories and ports; ports must reuse a just-probed successful value |
+| Session ids | `ai.rs` validates charset and length, preventing path/query rewrites when embedded in URLs |
+| External requests | redirects never followed; `percent-encode` as a second layer |
+| Content security policy | CSP in `tauri.conf.json` tightened to `self`, no remote resources |
+| Data integrity | JSON writes use atomic replacement; on parse failure the file is preserved as `*.corrupt-<timestamp>` before erroring — data is never silently dropped |
+| Dangerous operations | killing PID 0/4 and critical system processes is rejected outright; the frontend asks for confirmation |
+| Dependencies | CI runs `npm audit`; Dependabot keeps dependencies current |
 
-## 上报后
+## After disclosure
 
-修复发布后，若你同意，我们会在 Release Notes 中致谢。
+Once a fix ships, we will credit you in the release notes if you agree.

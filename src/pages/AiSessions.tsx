@@ -20,6 +20,7 @@ import { EChart } from "../lib/echarts";
 import { chartGapColor } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
+import { useT } from "../lib/i18n";
 import {
   Badge,
   Btn,
@@ -50,6 +51,8 @@ const COLORS = ["#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#f87171", "#60a5fa"
 // ════════════════════════════════════════════════════════════
 
 export default function AiSessions() {
+  const t = useT();
+
   const {
     theme,
     ais,
@@ -122,10 +125,15 @@ export default function AiSessions() {
           params: { name: string; value: number; seriesName: string; marker: string }[]
         ) => {
           const p = params[0];
-          return `${p.name}<br/>成本: $${p.value.toFixed(3)}`;
+          return `${p.name}<br/>${t("ai.costTrendTooltip", { value: p.value.toFixed(3) })}`;
         },
       },
-      legend: { data: ["成本 (USD)"], top: 0, right: 8, textStyle: { fontSize: 10 } },
+      legend: {
+        data: [t("ai.costLegend")],
+        top: 0,
+        right: 8,
+        textStyle: { fontSize: 10 },
+      },
       xAxis: { type: "category", data: days, boundaryGap: false },
       yAxis: {
         type: "value",
@@ -133,7 +141,7 @@ export default function AiSessions() {
       },
       series: [
         {
-          name: "成本 (USD)",
+          name: t("ai.costLegend"),
           type: "line",
           smooth: true,
           data: costTrend.map((r) => Math.round(r.cost * 1000) / 1000),
@@ -157,7 +165,7 @@ export default function AiSessions() {
         },
       ],
     };
-  }, [costTrend]);
+  }, [costTrend, t]);
 
   // ── 图表：模型分解（饼图，按成本）──────────────────────
   const modelBreakdownChart = useMemo(() => {
@@ -263,7 +271,7 @@ export default function AiSessions() {
     for (const f of sessionFiles) counts[f.tool] = (counts[f.tool] ?? 0) + 1;
     const data = Object.entries(counts).map(([name, value]) => ({ name, value }));
     return {
-      tooltip: { trigger: "item", formatter: "{b}: {c} 个文件 ({d}%)" },
+      tooltip: { trigger: "item", formatter: t("ai.sessionToolTooltip") },
       series: [
         {
           type: "pie",
@@ -281,7 +289,7 @@ export default function AiSessions() {
         },
       ],
     };
-  }, [sessionFiles, theme]);
+  }, [sessionFiles, theme, t]);
 
   // ── 会话详情加载 ──────────────────────────────────────────
   const openSessionDetail = (port: number, id: string) => {
@@ -306,8 +314,10 @@ export default function AiSessions() {
         <div className="flex items-center gap-3 rounded-xl border border-danger/50 bg-danger/10 px-4 py-3 text-sm">
           <AlertTriangle size={16} className="text-danger shrink-0" />
           <span className="text-danger font-medium">
-            预算告警：今日 {budgetStatus.dailyPct.toFixed(0)}% / 本月{" "}
-            {budgetStatus.monthlyPct.toFixed(0)}% 已超限额
+            {t("ai.budgetExceeded", {
+              daily: budgetStatus.dailyPct.toFixed(0),
+              monthly: budgetStatus.monthlyPct.toFixed(0),
+            })}
           </span>
         </div>
       )}
@@ -315,9 +325,11 @@ export default function AiSessions() {
         <div className="flex items-center gap-3 rounded-xl border border-warn/50 bg-warn/10 px-4 py-3 text-sm">
           <AlertTriangle size={16} className="text-warn shrink-0" />
           <span className="text-warn font-medium">
-            预算提醒：今日 {budgetStatus.dailyPct.toFixed(0)}% / 本月{" "}
-            {budgetStatus.monthlyPct.toFixed(0)}% 接近 {costOverview?.alert_threshold_pct}
-            % 阈值
+            {t("ai.budgetNearLimit", {
+              daily: budgetStatus.dailyPct.toFixed(0),
+              monthly: budgetStatus.monthlyPct.toFixed(0),
+              threshold: costOverview?.alert_threshold_pct ?? 0,
+            })}
           </span>
         </div>
       )}
@@ -327,66 +339,77 @@ export default function AiSessions() {
         <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             icon={DollarSign}
-            label="今日成本"
+            label={t("ai.todayCost")}
             value={costOverview ? formatUsd(costOverview.today_cost) : "—"}
             tone="warn"
             bar="bg-warn"
             hint={
               costOverview
-                ? `${formatTokens(costOverview.today_input_tokens + costOverview.today_output_tokens)} tokens`
+                ? t("ai.tokensCount", {
+                    count: formatTokens(
+                      costOverview.today_input_tokens + costOverview.today_output_tokens
+                    ),
+                  })
                 : undefined
             }
           />
           <StatCard
             icon={TrendingUp}
-            label="本月成本"
+            label={t("ai.monthCost")}
             value={costOverview ? formatUsd(costOverview.month_cost) : "—"}
             tone="accent"
             bar="bg-accent"
             hint={
               costOverview
-                ? `${formatTokens(costOverview.month_input_tokens + costOverview.month_output_tokens)} tokens`
+                ? t("ai.tokensCount", {
+                    count: formatTokens(
+                      costOverview.month_input_tokens + costOverview.month_output_tokens
+                    ),
+                  })
                 : undefined
             }
           />
           <StatCard
             icon={Coins}
-            label="累计成本"
+            label={t("ai.totalCost")}
             value={costOverview ? formatUsd(costOverview.total_cost) : "—"}
             tone="ok"
             bar="bg-ok"
-            hint={costOverview ? `${costOverview.record_count} 条记录` : undefined}
+            hint={
+              costOverview
+                ? t("ai.recordCount", { count: costOverview.record_count })
+                : undefined
+            }
           />
           <StatCard
             icon={Hash}
-            label="累计 Token"
+            label={t("ai.totalTokens")}
             value={totalTokensDisplay}
             tone="text"
             bar="bg-accent"
             hint={
               costOverview
-                ? `实测 ${costOverview.measured_count} / 估算 ${costOverview.estimated_count}`
+                ? t("ai.tokensMeasuredEstimated", {
+                    measured: costOverview.measured_count,
+                    estimated: costOverview.estimated_count,
+                  })
                 : undefined
             }
           />
         </div>
         <div className="ml-3 flex shrink-0 flex-col gap-2">
-          <Btn
-            onClick={scanCosts}
-            disabled={costLoading}
-            title="扫描 session 文件提取 token 用量并计算成本"
-          >
+          <Btn onClick={scanCosts} disabled={costLoading} title={t("ai.scanCostsTitle")}>
             {costLoading ? <Spinner /> : <RefreshCw size={14} />}
-            {costLoading ? "扫描中…" : "扫描成本"}
+            {costLoading ? t("ai.scanning") : t("ai.scanCosts")}
           </Btn>
           <Btn
             onClick={() => {
-              if (confirm("确定清空所有成本记录？")) clearCosts();
+              if (confirm(t("ai.confirmClearCosts"))) clearCosts();
             }}
             className="!py-1 !text-xs"
-            title="清空成本数据"
+            title={t("ai.clearCostsTitle")}
           >
-            <Trash2 size={12} /> 清空
+            <Trash2 size={12} /> {t("ai.clear")}
           </Btn>
         </div>
       </div>
@@ -395,11 +418,11 @@ export default function AiSessions() {
       {costOverview &&
         (costOverview.daily_budget > 0 || costOverview.monthly_budget > 0) && (
           <Card className="p-4">
-            <SectionTitle>预算进度</SectionTitle>
+            <SectionTitle>{t("ai.budgetProgress")}</SectionTitle>
             <div className="grid gap-4 lg:grid-cols-2">
               {costOverview.daily_budget > 0 && (
                 <BudgetBar
-                  label="今日"
+                  label={t("ai.today")}
                   pct={costOverview.daily_pct}
                   spent={costOverview.today_cost}
                   total={costOverview.daily_budget}
@@ -407,7 +430,7 @@ export default function AiSessions() {
               )}
               {costOverview.monthly_budget > 0 && (
                 <BudgetBar
-                  label="本月"
+                  label={t("ai.thisMonth")}
                   pct={costOverview.monthly_pct}
                   spent={costOverview.month_cost}
                   total={costOverview.monthly_budget}
@@ -422,7 +445,7 @@ export default function AiSessions() {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
           {costTrendChart && (
             <Card className="p-4 lg:col-span-3">
-              <SectionTitle>成本趋势（近 14 天）</SectionTitle>
+              <SectionTitle>{t("ai.costTrendTitle")}</SectionTitle>
               <EChart
                 option={costTrendChart}
                 style={{ height: 200 }}
@@ -433,7 +456,7 @@ export default function AiSessions() {
           )}
           {modelBreakdownChart && (
             <Card className="p-4 lg:col-span-2">
-              <SectionTitle>模型成本构成</SectionTitle>
+              <SectionTitle>{t("ai.modelBreakdownTitle")}</SectionTitle>
               <EChart
                 option={modelBreakdownChart}
                 style={{ height: 200 }}
@@ -470,28 +493,28 @@ export default function AiSessions() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           icon={Sparkles}
-          label="AI 进程"
+          label={t("ai.aiProcesses")}
           value={ais.length}
           tone="warn"
           bar="bg-warn"
         />
         <StatCard
           icon={MessageSquare}
-          label="在线会话"
+          label={t("ai.onlineSessions")}
           value={sessions.length}
           tone="accent"
           bar="bg-accent"
         />
         <StatCard
           icon={Terminal}
-          label="本地会话文件"
+          label={t("ai.localSessionFiles")}
           value={sessionFiles.length}
           tone="ok"
           bar="bg-ok"
         />
         <StatCard
           icon={Hash}
-          label="总消息数"
+          label={t("ai.totalMessages")}
           value={totalMessages || "—"}
           tone="text"
           bar="bg-accent"
@@ -500,7 +523,7 @@ export default function AiSessions() {
 
       {/* ── AI 进程内存图 ── */}
       <Card className="p-4">
-        <SectionTitle>AI 进程内存占用</SectionTitle>
+        <SectionTitle>{t("ai.aiMemTitle")}</SectionTitle>
         {ais.length > 0 ? (
           <EChart
             option={aiMemChart}
@@ -509,19 +532,26 @@ export default function AiSessions() {
             lazyUpdate
           />
         ) : (
-          <Empty icon={Sparkles}>当前没有 AI 进程在运行</Empty>
+          <Empty icon={Sparkles}>{t("ai.noAiProcesses")}</Empty>
         )}
       </Card>
 
       {/* ── AI 代理进程列表 ── */}
       <Card className="p-4">
-        <SectionTitle>AI 代理进程（{ais.length}）</SectionTitle>
+        <SectionTitle>{t("ai.aiAgentProcesses", { count: ais.length })}</SectionTitle>
         {ais.length === 0 ? (
-          <Empty>
-            当前没有检测到 AI 编码代理进程（opencode / claude / codex / cursor 等）
-          </Empty>
+          <Empty>{t("ai.noAiAgents")}</Empty>
         ) : (
-          <Table head={["进程", "命中关键词", "PID", "内存", "启动时间", "命令行"]}>
+          <Table
+            head={[
+              t("ai.table.process"),
+              t("ai.table.matchedKeyword"),
+              t("ai.table.pid"),
+              t("ai.table.memory"),
+              t("ai.table.startedAt"),
+              t("ai.table.commandLine"),
+            ]}
+          >
             {ais.map((a) => (
               <Tr key={a.pid}>
                 <Td className="font-medium">
@@ -555,20 +585,22 @@ export default function AiSessions() {
         <SectionTitle
           extra={
             <Btn onClick={refreshAi} className="!py-1 !text-xs">
-              <RefreshCw size={12} /> 刷新
+              <RefreshCw size={12} /> {t("ai.refresh")}
             </Btn>
           }
         >
-          opencode 在线会话（{sessions.length}）
+          {t("ai.opencodeSessions", { count: sessions.length })}
         </SectionTitle>
         {sessions.length === 0 ? (
           <div className="flex flex-col gap-2">
-            <Empty>未能连接到 opencode 服务（默认端口 4096）</Empty>
+            <Empty>{t("ai.opencodeUnreachable")}</Empty>
             {sessionsErr && (
               <div className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
                 {sessionsErr}
                 <br />
-                提示：先运行 <span className="font-mono">opencode serve</span>，再点刷新。
+                {t("ai.opencodeHintPrefix")}{" "}
+                <span className="font-mono">opencode serve</span>
+                {t("ai.opencodeHintSuffix")}
               </div>
             )}
           </div>
@@ -612,17 +644,17 @@ export default function AiSessions() {
                       <div className="flex flex-wrap gap-4 text-xs">
                         <InfoChip
                           icon={Hash}
-                          label="消息数"
+                          label={t("ai.messageCount")}
                           value={String(sessionDetail.message_count)}
                         />
                         <InfoChip
                           icon={Clock}
-                          label="持续时间"
+                          label={t("ai.duration")}
                           value={formatDuration(sessionDetail.duration_seconds)}
                         />
                         <InfoChip
                           icon={Wrench}
-                          label="使用工具"
+                          label={t("ai.toolsUsed")}
                           value={String(toolsFromDetail.length)}
                         />
                       </div>
@@ -630,7 +662,7 @@ export default function AiSessions() {
                       {sessionDetail.first_message && (
                         <div>
                           <div className="mb-1 text-xs font-medium text-dim">
-                            首条消息
+                            {t("ai.firstMessage")}
                           </div>
                           <div className="rounded-lg border border-line bg-bg px-3 py-2 text-xs whitespace-pre-wrap max-h-[100px] overflow-y-auto">
                             {sessionDetail.first_message}
@@ -642,7 +674,7 @@ export default function AiSessions() {
                         sessionDetail.last_message !== sessionDetail.first_message && (
                           <div>
                             <div className="mb-1 text-xs font-medium text-dim">
-                              最近消息
+                              {t("ai.lastMessage")}
                             </div>
                             <div className="rounded-lg border border-line bg-bg px-3 py-2 text-xs whitespace-pre-wrap max-h-[100px] overflow-y-auto">
                               {sessionDetail.last_message}
@@ -653,7 +685,7 @@ export default function AiSessions() {
                       {toolsFromDetail.length > 0 && (
                         <div>
                           <div className="mb-1 text-xs font-medium text-dim">
-                            工具使用分布
+                            {t("ai.toolDistTitle")}
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {toolsFromDetail.map(([tool, count]) => (
@@ -676,11 +708,22 @@ export default function AiSessions() {
       {/* ── 本地会话文件 ── */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card className="p-4 xl:col-span-2">
-          <SectionTitle>本机会话记录（{sessionFiles.length}）</SectionTitle>
+          <SectionTitle>
+            {t("ai.localSessionRecords", { count: sessionFiles.length })}
+          </SectionTitle>
           {sessionFiles.length === 0 ? (
-            <Empty>没有找到 ~/.claude/projects 或 ~/.codex/sessions 下的会话记录</Empty>
+            <Empty>{t("ai.noLocalSessions")}</Empty>
           ) : (
-            <Table head={["工具", "项目", "消息数", "修改时间", "大小", "文件"]}>
+            <Table
+              head={[
+                t("ai.table.tool"),
+                t("ai.table.project"),
+                t("ai.table.messageCount"),
+                t("ai.table.modified"),
+                t("ai.table.size"),
+                t("ai.table.file"),
+              ]}
+            >
               {sessionFiles.map((f, i) => (
                 <Tr
                   key={i}
@@ -706,7 +749,7 @@ export default function AiSessions() {
                     className="max-w-[180px] truncate font-mono text-[11px] text-dim"
                     title={f.path}
                   >
-                    {f.path.split(/[\\/]/).pop()}
+                    {f.path.split(/[\\\\/]/).pop()}
                   </Td>
                 </Tr>
               ))}
@@ -715,7 +758,7 @@ export default function AiSessions() {
         </Card>
 
         <Card className="p-4">
-          <SectionTitle>工具分布</SectionTitle>
+          <SectionTitle>{t("ai.toolDist")}</SectionTitle>
           {sessionFiles.length > 0 ? (
             <>
               <EChart
@@ -744,7 +787,7 @@ export default function AiSessions() {
               </div>
             </>
           ) : (
-            <Empty icon={Terminal}>无数据</Empty>
+            <Empty icon={Terminal}>{t("ai.noData")}</Empty>
           )}
         </Card>
       </div>
@@ -761,29 +804,29 @@ export default function AiSessions() {
             <div className="grid grid-cols-3 gap-3 text-xs">
               <InfoChip
                 icon={Hash}
-                label="消息数"
+                label={t("ai.messageCount")}
                 value={String(previewFile.message_count)}
               />
               <InfoChip
                 icon={Clock}
-                label="修改时间"
+                label={t("ai.modifiedTime")}
                 value={fromNow(previewFile.modified)}
               />
               <InfoChip
                 icon={Terminal}
-                label="大小"
+                label={t("ai.size")}
                 value={formatBytes(previewFile.size)}
               />
             </div>
             {previewFile.first_line && (
               <div>
                 <div className="mb-1 flex items-center justify-between text-xs text-dim">
-                  <span>首条内容</span>
+                  <span>{t("ai.firstLine")}</span>
                   <Btn
                     className="!px-2 !py-0.5 !text-[10px]"
                     onClick={() => {
                       navigator.clipboard.writeText(previewFile.first_line);
-                      setToast("已复制");
+                      setToast(t("ai.copied"));
                     }}
                   >
                     <Copy size={10} />
@@ -798,12 +841,12 @@ export default function AiSessions() {
               previewFile.last_line !== previewFile.first_line && (
                 <div>
                   <div className="mb-1 flex items-center justify-between text-xs text-dim">
-                    <span>最近内容</span>
+                    <span>{t("ai.lastLine")}</span>
                     <Btn
                       className="!px-2 !py-0.5 !text-[10px]"
                       onClick={() => {
                         navigator.clipboard.writeText(previewFile.last_line);
-                        setToast("已复制");
+                        setToast(t("ai.copied"));
                       }}
                     >
                       <Copy size={10} />
@@ -814,7 +857,9 @@ export default function AiSessions() {
                   </pre>
                 </div>
               )}
-            <div className="text-[11px] text-dim break-all">文件: {previewFile.path}</div>
+            <div className="text-[11px] text-dim break-all">
+              {t("ai.fileLabel", { path: previewFile.path })}
+            </div>
           </div>
         </Modal>
       )}
@@ -855,6 +900,7 @@ function BudgetBar({
   spent: number;
   total: number;
 }) {
+  const t = useT();
   const clamped = Math.min(pct, 100);
   const exceeded = pct >= 100;
   const nearLimit = pct >= 80 && pct < 100;
@@ -862,7 +908,7 @@ function BudgetBar({
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-xs">
-        <span className="text-dim">{label}预算</span>
+        <span className="text-dim">{t("ai.budgetBarLabel", { label })}</span>
         <span className="font-mono">
           {formatUsd(spent)} / {formatUsd(total)} ({pct.toFixed(0)}%)
         </span>

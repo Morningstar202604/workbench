@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { t } from "./i18n";
 import { persist } from "zustand/middleware";
 import {
   clearCostRecords,
@@ -224,7 +225,7 @@ export const useStore = create<Store>()(
           const data = await loadData();
           set({ data: { ...emptyData, ...data } });
         } catch (e) {
-          set({ toast: `读取本地数据失败: ${String(e)}` });
+          set({ toast: t("store.loadFailed", { err: String(e) }) });
         }
         get().refreshRuntime();
         get().refreshAi();
@@ -267,7 +268,7 @@ export const useStore = create<Store>()(
             lastRefreshAt: Date.now(),
           });
         } catch (e) {
-          set({ loading: false, toast: `运行时数据刷新失败: ${String(e)}` });
+          set({ loading: false, toast: t("store.refreshFailed", { err: String(e) }) });
         } finally {
           refreshing = false;
         }
@@ -299,7 +300,7 @@ export const useStore = create<Store>()(
           set({
             sessionDetail: {
               id,
-              title: "(获取失败)",
+              title: t("store.detailFailed"),
               message_count: 0,
               first_message: "",
               last_message: "",
@@ -323,23 +324,23 @@ export const useStore = create<Store>()(
       killProcess: async (pid) => {
         try {
           await terminateProcess(pid);
-          set({ toast: `已发送终止信号给进程 ${pid}`, killTarget: null });
+          set({ toast: t("store.killSent", { pid }), killTarget: null });
           get().refreshRuntime();
         } catch (e) {
-          set({ toast: `终止失败: ${String(e)}` });
+          set({ toast: t("store.killFailed", { err: String(e) }) });
         }
       },
 
-      addTask: (t) => {
+      addTask: (input) => {
         const now = Math.floor(Date.now() / 1000);
         const task: Task = {
           id: uid(),
-          title: t.title?.trim() || "未命名任务",
-          status: t.status ?? "todo",
-          priority: t.priority ?? "normal",
-          due: t.due ?? null,
-          project_id: t.project_id ?? null,
-          tags: t.tags ?? [],
+          title: input.title?.trim() || t("store.unnamedTask"),
+          status: input.status ?? "todo",
+          priority: input.priority ?? "normal",
+          due: input.due ?? null,
+          project_id: input.project_id ?? null,
+          tags: input.tags ?? [],
           created_at: now,
           updated_at: now,
         };
@@ -367,7 +368,7 @@ export const useStore = create<Store>()(
       addProject: (p) => {
         const project: Project = {
           id: uid(),
-          name: p.name?.trim() || "未命名项目",
+          name: p.name?.trim() || t("store.unnamedProject"),
           path: p.path?.trim() ?? "",
           status: p.status ?? "active",
           tags: p.tags ?? [],
@@ -399,7 +400,9 @@ export const useStore = create<Store>()(
         if (!isTauri()) return; // 浏览器演示模式不持久化
         if (saveTimer) clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
-          saveData(next).catch((e) => set({ toast: `保存失败: ${String(e)}` }));
+          saveData(next).catch((e) =>
+            set({ toast: t("store.saveFailed", { err: String(e) }) })
+          );
         }, SAVE_DEBOUNCE_MS);
       },
 
@@ -419,10 +422,14 @@ export const useStore = create<Store>()(
           });
 
         const [overview, trend, breakdown, settings] = await Promise.all([
-          track("成本总览", getCostOverview(), null),
-          track("成本趋势", getCostTrend(14), [] as CostTrendRow[]),
-          track("模型分解", getModelBreakdown(), [] as ModelBreakdownRow[]),
-          track("成本设置", getCostSettings(), get().costSettings),
+          track(t("store.track.overview"), getCostOverview(), null),
+          track(t("store.track.trend"), getCostTrend(14), [] as CostTrendRow[]),
+          track(
+            t("store.track.breakdown"),
+            getModelBreakdown(),
+            [] as ModelBreakdownRow[]
+          ),
+          track(t("store.track.settings"), getCostSettings(), get().costSettings),
         ]);
         set({
           costOverview: overview,
@@ -430,7 +437,7 @@ export const useStore = create<Store>()(
           costModelBreakdown: breakdown,
           costSettings: settings,
         });
-        if (errors.length) set({ toast: `成本数据读取失败（${errors[0]}）` });
+        if (errors.length) set({ toast: t("store.costReadFailed", { err: errors[0] }) });
         // 页面加载也要走一次预算检查：原来只有手动扫描后才会触发告警，
         // 用户打开应用看到超支横幅但收不到系统通知，是告警漏发的时序洞。
         get().checkBudgetAlert();
@@ -446,11 +453,11 @@ export const useStore = create<Store>()(
             costTrend: result.trend,
             costModelBreakdown: result.model_breakdown,
             costLoading: false,
-            toast: `已扫描 ${result.new_records} 条新成本记录`,
+            toast: t("store.scanned", { count: result.new_records }),
           });
           get().checkBudgetAlert();
         } catch (e) {
-          set({ costLoading: false, toast: `成本扫描失败: ${String(e)}` });
+          set({ costLoading: false, toast: t("store.scanFailed", { err: String(e) }) });
         }
       },
 
@@ -468,9 +475,9 @@ export const useStore = create<Store>()(
         set({ costSettings: s });
         try {
           await saveCostSettings(s);
-          set({ toast: "成本设置已保存" });
+          set({ toast: t("store.settingsSaved") });
         } catch (e) {
-          set({ toast: `成本设置保存失败: ${String(e)}` });
+          set({ toast: t("store.settingsSaveFailed", { err: String(e) }) });
           return;
         }
         // 重新计算概览以反映设置变更
@@ -486,10 +493,10 @@ export const useStore = create<Store>()(
             costTrend: [],
             costModelBreakdown: [],
             costNotified: false,
-            toast: "已清空成本数据",
+            toast: t("store.cleared"),
           });
         } catch (e) {
-          set({ toast: `清空成本数据失败: ${String(e)}` });
+          set({ toast: t("store.clearFailed", { err: String(e) }) });
         }
       },
 
@@ -502,8 +509,12 @@ export const useStore = create<Store>()(
         if (exceeded && !get().costNotified) {
           set({ costNotified: true });
           notify(
-            "工作台成本告警",
-            `日 ${o.daily_pct.toFixed(0)}% / 月 ${o.monthly_pct.toFixed(0)}% 已超预算阈值 ${o.alert_threshold_pct}%`
+            t("store.alertTitle"),
+            t("store.alertBody", {
+              daily: o.daily_pct.toFixed(0),
+              monthly: o.monthly_pct.toFixed(0),
+              threshold: o.alert_threshold_pct,
+            })
           ).catch(() => {});
         }
         if (!exceeded) {
