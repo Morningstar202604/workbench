@@ -122,7 +122,12 @@ export default function App() {
     <div className="flex h-full overflow-hidden bg-bg text-text">
       <aside className="flex w-48 shrink-0 flex-col border-r border-line bg-panel">
         <div className="flex items-center gap-2 px-4 py-4">
-          <img src={logoUrl} alt="工作台 Logo" className="h-8 w-8 rounded-lg" draggable={false} />
+          <img
+            src={logoUrl}
+            alt="工作台 Logo"
+            className="h-8 w-8 rounded-lg"
+            draggable={false}
+          />
           <div>
             <div className="text-sm font-bold leading-tight">工作台</div>
             <div className="text-[10px] leading-tight text-dim">Workbench</div>
@@ -160,7 +165,9 @@ export default function App() {
           data-tauri-drag-region
         >
           <h1 className="text-base font-semibold">{TITLES[view]}</h1>
-          <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium ${tauri ? "text-ok border-ok/40 bg-ok/10" : "text-warn border-warn/40 bg-warn/10"}`}>
+          <span
+            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium ${tauri ? "text-ok border-ok/40 bg-ok/10" : "text-warn border-warn/40 bg-warn/10"}`}
+          >
             {tauri ? "实时" : "演示"}
           </span>
           <div className="ml-auto flex items-center gap-2 text-xs text-dim">
@@ -227,15 +234,18 @@ export default function App() {
         footer={
           <>
             <Btn onClick={() => setKillTarget(null)}>取消</Btn>
-            <Btn variant="danger" onClick={() => killTarget && killProcess(killTarget.pid)}>
+            <Btn
+              variant="danger"
+              onClick={() => killTarget && killProcess(killTarget.pid)}
+            >
               确认结束 {killTarget?.pid}
             </Btn>
           </>
         }
       >
         <p className="text-sm text-dim">
-          确定要结束进程 <span className="font-mono text-text">{killTarget?.name}</span>（PID{" "}
-          {killTarget?.pid}）吗？未保存的数据可能丢失，此操作不可恢复。
+          确定要结束进程 <span className="font-mono text-text">{killTarget?.name}</span>
+          （PID {killTarget?.pid}）吗？未保存的数据可能丢失，此操作不可恢复。
         </p>
       </Modal>
 

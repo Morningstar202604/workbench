@@ -1,10 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
-import {
-  BarChart3,
-  Plus,
-  Trash2,
-} from "lucide-react";
-import { EChart, chartGapColor } from "../lib/echarts";
+import { BarChart3, Plus, Trash2 } from "lucide-react";
+import { EChart } from "../lib/echarts";
+import { chartGapColor } from "../lib/chartTheme";
 import {
   DndContext,
   PointerSensor,
@@ -49,7 +46,9 @@ export default function Tasks() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [taskDraft, setTaskDraft] = useState<Task | null>(null);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
 
   const projectName = (id: string | null) =>
     data.projects.find((p) => p.id === id)?.name ?? null;
@@ -78,24 +77,29 @@ export default function Tasks() {
     ].filter((d) => d.value > 0);
   }, [data.tasks]);
 
-  const priorityPieOption = useMemo(() => ({
-    tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
-    series: [
-      {
-        type: "pie",
-        radius: ["44%", "66%"],
-        label: { show: false },
-        labelLine: { show: false },
-        itemStyle: { borderColor: chartGapColor(), borderWidth: 2 },
-        data: priorityDist,
-      },
-    ],
-  }), [priorityDist, theme]);
+  const priorityPieOption = useMemo(
+    () => ({
+      tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+      series: [
+        {
+          type: "pie",
+          radius: ["44%", "66%"],
+          label: { show: false },
+          labelLine: { show: false },
+          itemStyle: { borderColor: chartGapColor(theme), borderWidth: 2 },
+          data: priorityDist,
+        },
+      ],
+    }),
+    [priorityDist, theme]
+  );
 
   // 完成率统计
   const completionRate = useMemo(() => {
     if (!data.tasks.length) return 0;
-    return Math.round((data.tasks.filter((t) => t.status === "done").length / data.tasks.length) * 100);
+    return Math.round(
+      (data.tasks.filter((t) => t.status === "done").length / data.tasks.length) * 100
+    );
   }, [data.tasks]);
 
   const onDragEnd = (e: DragEndEvent) => {
@@ -118,11 +122,22 @@ export default function Tasks() {
           </div>
           {data.tasks.length > 0 ? (
             <>
-              <EChart option={priorityPieOption} style={{ height: 130 }} notMerge lazyUpdate />
+              <EChart
+                option={priorityPieOption}
+                style={{ height: 130 }}
+                notMerge
+                lazyUpdate
+              />
               <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                 {priorityDist.map((d) => (
-                  <span key={d.name} className="flex items-center gap-1 text-[11px] text-dim">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: (d.itemStyle as { color: string }).color }} />
+                  <span
+                    key={d.name}
+                    className="flex items-center gap-1 text-[11px] text-dim"
+                  >
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full"
+                      style={{ background: (d.itemStyle as { color: string }).color }}
+                    />
                     {d.name} <span className="font-mono text-text">{d.value}</span>
                   </span>
                 ))}
@@ -139,16 +154,28 @@ export default function Tasks() {
           <div className="flex flex-1 items-center justify-center">
             <div className="relative flex h-24 w-24 items-center justify-center">
               <svg className="h-24 w-24 -rotate-90">
-                <circle cx="48" cy="48" r="38" fill="none" stroke="var(--color-panel2)" strokeWidth="8" />
                 <circle
-                  cx="48" cy="48" r="38" fill="none"
+                  cx="48"
+                  cy="48"
+                  r="38"
+                  fill="none"
+                  stroke="var(--color-panel2)"
+                  strokeWidth="8"
+                />
+                <circle
+                  cx="48"
+                  cy="48"
+                  r="38"
+                  fill="none"
                   stroke="#34d399"
                   strokeWidth="8"
                   strokeLinecap="round"
                   strokeDasharray={`${(completionRate / 100) * 239} 239`}
                 />
               </svg>
-              <span className="absolute text-2xl font-bold text-ok">{completionRate}%</span>
+              <span className="absolute text-2xl font-bold text-ok">
+                {completionRate}%
+              </span>
             </div>
           </div>
           <div className="text-center text-xs text-dim">
@@ -202,7 +229,11 @@ export default function Tasks() {
         </label>
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragEnd={onDragEnd}
+      >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {COLUMNS.map((col) => {
             const tasks = visible.filter((t) => t.status === col.key);

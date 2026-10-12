@@ -2,7 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Cpu } from "lucide-react";
-import { Badge, Btn, Card, Empty, Field, Modal, SectionTitle, Spinner, StatCard, Table, Td, Tr } from "./ui";
+import {
+  Badge,
+  Btn,
+  Card,
+  Empty,
+  Field,
+  Modal,
+  SectionTitle,
+  Spinner,
+  StatCard,
+  Table,
+  Td,
+  Tr,
+} from "./ui";
 
 describe("Btn", () => {
   it("点击触发回调", async () => {

@@ -28,7 +28,10 @@ export function formatTime(ms: number): string {
   return dayjs(ms).format("MM-DD HH:mm");
 }
 
-export function dueLabel(due: string | null): { text: string; tone: "normal" | "warn" | "danger" | "muted" } {
+export function dueLabel(due: string | null): {
+  text: string;
+  tone: "normal" | "warn" | "danger" | "muted";
+} {
   if (!due) return { text: "无期限", tone: "muted" };
   const d = dayjs(due);
   if (!d.isValid()) return { text: due, tone: "normal" };

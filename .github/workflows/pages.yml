@@ -1,0 +1,46 @@
+name: Deploy Pages
+
+# 把 docs/ 目录作为 GitHub Pages 发布。
+# 三个镜像仓库（X33834 / Morningstar202604 / badhope）各自运行本 workflow，
+# 但发布的是**同一份 docs/**：落地页内的链接按访问域名自动切换，
+# 因此不需要为每个账号单独做一套页面。
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一仓库内串行发布，避免并发导致部署互相覆盖
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: 发布落地页
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 确认落地页存在
+        run: |
+          test -f docs/index.html || { echo "::error::缺少 docs/index.html"; exit 1; }
+          test -f docs/screenshots/01-overview.png || { echo "::error::缺少截图"; exit 1; }
+          echo "落地页与截图就绪"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4

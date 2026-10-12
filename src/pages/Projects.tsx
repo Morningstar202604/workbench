@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { FolderOpen, Pencil, Pin, Plus, Trash2 } from "lucide-react";
-import { EChart, chartGapColor } from "../lib/echarts";
+import { EChart } from "../lib/echarts";
+import { chartGapColor, horizontalBarOption } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { openExternal } from "../lib/api";
@@ -24,20 +25,28 @@ interface Draft {
   note: string;
 }
 
-const emptyDraft: Draft = { name: "", path: "", status: "active", tags: "", pinned: false, note: "" };
+const emptyDraft: Draft = {
+  name: "",
+  path: "",
+  status: "active",
+  tags: "",
+  pinned: false,
+  note: "",
+};
 
 export default function Projects() {
-  const { data, devs, addProject, updateProject, deleteProject, setView, theme } = useStore(
-    useShallow((s) => ({
-      data: s.data,
-      devs: s.devs,
-      addProject: s.addProject,
-      updateProject: s.updateProject,
-      deleteProject: s.deleteProject,
-      setView: s.setView,
-      theme: s.theme,
-    }))
-  );
+  const { data, devs, addProject, updateProject, deleteProject, setView, theme } =
+    useStore(
+      useShallow((s) => ({
+        data: s.data,
+        devs: s.devs,
+        addProject: s.addProject,
+        updateProject: s.updateProject,
+        deleteProject: s.deleteProject,
+        setView: s.setView,
+        theme: s.theme,
+      }))
+    );
   const [draft, setDraft] = useState<Draft | null>(null);
 
   const runningDirs = useMemo(
@@ -46,7 +55,10 @@ export default function Projects() {
   );
 
   const isRunning = (p: Project) =>
-    !!p.path && runningDirs.some((dir) => dir === p.path.toLowerCase() || dir.startsWith(p.path.toLowerCase()));
+    !!p.path &&
+    runningDirs.some(
+      (dir) => dir === p.path.toLowerCase() || dir.startsWith(p.path.toLowerCase())
+    );
 
   const sorted = useMemo(
     () => [...data.projects].sort((a, b) => Number(b.pinned) - Number(a.pinned)),
@@ -76,48 +88,36 @@ export default function Projects() {
       .slice(0, 6);
   }, [data.projects, data.tasks]);
 
-  const statusPieOption = useMemo(() => ({
-    tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
-    series: [
-      {
-        type: "pie",
-        radius: ["46%", "68%"],
-        label: { show: false },
-        labelLine: { show: false },
-        itemStyle: { borderColor: chartGapColor(), borderWidth: 2 },
-        data: statusDist,
-      },
-    ],
-  }), [statusDist, theme]);
-
-  const taskBarOption = useMemo(() => {
-    return {
-      grid: { left: 90, right: 24, top: 8, bottom: 8 },
-      xAxis: { type: "value", show: false },
-      yAxis: {
-        type: "category",
-        data: taskCountData.map((d) => d.name),
-        inverse: true,
-        axisLabel: { fontSize: 9 },
-        axisLine: { show: false },
-        axisTick: { show: false },
-      },
+  const statusPieOption = useMemo(
+    () => ({
+      tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
       series: [
         {
-          type: "bar",
-          data: taskCountData.map((d) => ({
-            value: d.count,
-            itemStyle: {
-              color: { type: "linear", x: 0, y: 0, x2: 1, y2: 0, colorStops: [{ offset: 0, color: "#a78bfa60" }, { offset: 1, color: "#a78bfa" }] },
-              borderRadius: [0, 4, 4, 0],
-            },
-          })),
-          barWidth: 12,
-          label: { show: true, position: "right", fontSize: 10 },
+          type: "pie",
+          radius: ["46%", "68%"],
+          label: { show: false },
+          labelLine: { show: false },
+          itemStyle: { borderColor: chartGapColor(theme), borderWidth: 2 },
+          data: statusDist,
         },
       ],
-    };
-  }, [taskCountData]);
+    }),
+    [statusDist, theme]
+  );
+
+  const taskBarOption = useMemo(
+    () =>
+      horizontalBarOption({
+        labels: taskCountData.map((d) => d.name),
+        values: taskCountData.map((d) => ({ value: d.count, color: "#a78bfa" })),
+        theme,
+        left: 90,
+        fontSize: 9,
+        inverse: true,
+        barWidth: 12,
+      }),
+    [taskCountData, theme]
+  );
 
   const submit = () => {
     if (!draft?.name.trim()) return;
@@ -145,14 +145,25 @@ export default function Projects() {
           <h3 className="mb-2 text-sm font-medium">状态分布</h3>
           {data.projects.length > 0 ? (
             <>
-              <EChart option={statusPieOption} style={{ height: 140 }} notMerge lazyUpdate />
+              <EChart
+                option={statusPieOption}
+                style={{ height: 140 }}
+                notMerge
+                lazyUpdate
+              />
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                 {Object.entries(STATUS_MAP).map(([k, v]) => {
                   const count = data.projects.filter((p) => p.status === k).length;
                   if (!count) return null;
                   return (
-                    <span key={k} className="flex items-center gap-1 text-[11px] text-dim">
-                      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: v.color }} />
+                    <span
+                      key={k}
+                      className="flex items-center gap-1 text-[11px] text-dim"
+                    >
+                      <span
+                        className="inline-block h-1.5 w-1.5 rounded-full"
+                        style={{ background: v.color }}
+                      />
                       {v.label} <span className="font-mono text-text">{count}</span>
                     </span>
                   );
@@ -176,14 +187,20 @@ export default function Projects() {
       {/* ── 顶部操作 ── */}
       <div className="flex items-center gap-3">
         <span className="text-sm text-dim">共 {data.projects.length} 个项目</span>
-        <Btn variant="primary" className="ml-auto" onClick={() => setDraft({ ...emptyDraft })}>
+        <Btn
+          variant="primary"
+          className="ml-auto"
+          onClick={() => setDraft({ ...emptyDraft })}
+        >
           <Plus size={14} /> 新建项目
         </Btn>
       </div>
 
       {data.projects.length === 0 ? (
         <Card>
-          <Empty>还没有项目。点「新建项目」把本机目录登记进来，运行中的开发服务器会自动打上「运行中」标记。</Empty>
+          <Empty>
+            还没有项目。点「新建项目」把本机目录登记进来，运行中的开发服务器会自动打上「运行中」标记。
+          </Empty>
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -192,7 +209,10 @@ export default function Projects() {
             const tasks = data.tasks.filter((t) => t.project_id === p.id);
             const doing = tasks.filter((t) => t.status === "doing").length;
             return (
-              <Card key={p.id} className="flex flex-col gap-2 p-4 hover:border-accentsoft transition-colors">
+              <Card
+                key={p.id}
+                className="flex flex-col gap-2 p-4 hover:border-accentsoft transition-colors"
+              >
                 <div className="flex items-start gap-2">
                   <span className="font-semibold">{p.name}</span>
                   {p.pinned && <Pin size={12} className="mt-1 text-accent" />}
@@ -207,19 +227,28 @@ export default function Projects() {
                 {p.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {p.tags.map((t) => (
-                      <Badge key={t} tone="dim">{t}</Badge>
+                      <Badge key={t} tone="dim">
+                        {t}
+                      </Badge>
                     ))}
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-xs text-dim">
-                  <button className="text-accent hover:underline" onClick={() => setView("tasks")}>
+                  <button
+                    className="text-accent hover:underline"
+                    onClick={() => setView("tasks")}
+                  >
                     {tasks.length} 个任务
                   </button>
                   {doing > 0 && <Badge tone="accent">{doing} 进行中</Badge>}
                 </div>
                 <div className="mt-1 flex gap-1.5 border-t border-line/60 pt-2">
                   {p.path && (
-                    <Btn className="!px-2 !py-1 !text-xs" title="打开目录" onClick={() => openExternal(p.path)}>
+                    <Btn
+                      className="!px-2 !py-1 !text-xs"
+                      title="打开目录"
+                      onClick={() => openExternal(p.path)}
+                    >
                       <FolderOpen size={12} />
                     </Btn>
                   )}
@@ -245,7 +274,8 @@ export default function Projects() {
                     className="!px-2 !py-1 !text-xs"
                     title="删除项目（任务会保留但解除关联）"
                     onClick={() => {
-                      if (confirm(`删除项目「${p.name}」？关联的任务会保留但解除关联。`)) deleteProject(p.id);
+                      if (confirm(`删除项目「${p.name}」？关联的任务会保留但解除关联。`))
+                        deleteProject(p.id);
                     }}
                   >
                     <Trash2 size={12} />
@@ -264,13 +294,26 @@ export default function Projects() {
             <Tr key={p.id}>
               <Td className="font-medium">{p.name}</Td>
               <Td>
-                <Badge tone={STATUS_MAP[p.status]?.tone ?? "dim"}>{STATUS_MAP[p.status]?.label ?? p.status}</Badge>
+                <Badge tone={STATUS_MAP[p.status]?.tone ?? "dim"}>
+                  {STATUS_MAP[p.status]?.label ?? p.status}
+                </Badge>
               </Td>
-              <Td className="max-w-[280px] truncate font-mono text-[11px] text-dim" title={p.path}>
+              <Td
+                className="max-w-[280px] truncate font-mono text-[11px] text-dim"
+                title={p.path}
+              >
                 {p.path || "-"}
               </Td>
-              <Td className="text-xs text-dim">{data.tasks.filter((t) => t.project_id === p.id).length}</Td>
-              <Td>{isRunning(p) ? <Badge tone="ok">是</Badge> : <Badge tone="dim">否</Badge>}</Td>
+              <Td className="text-xs text-dim">
+                {data.tasks.filter((t) => t.project_id === p.id).length}
+              </Td>
+              <Td>
+                {isRunning(p) ? (
+                  <Badge tone="ok">是</Badge>
+                ) : (
+                  <Badge tone="dim">否</Badge>
+                )}
+              </Td>
             </Tr>
           ))}
         </Table>

@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>工作台 Workbench — 本机运维仪表盘与 AI 会话成本计量</title>
+    <meta
+      name="description"
+      content="Tauri 2 + React 18 打造的桌面运维工作台：进程 / 端口 / 开发服务器实时可视，AI 会话 token 成本计量与预算告警。数据仅存本机，MIT 开源。"
+    />
+    <meta name="theme-color" content="#0a0f1c" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="工作台 Workbench — 本机运维仪表盘与 AI 会话成本计量" />
+    <meta
+      property="og:description"
+      content="桌面优先的本机工作管理台。进程 / 端口 / 开发服务器实时可视，AI 会话成本计量。数据仅存本机。"
+    />
+    <meta property="og:image" content="screenshots/01-overview.png" />
+    <style>
+      :root {
+        --bg: #0a0f1c;
+        --panel: #111a2b;
+        --panel2: #162034;
+        --line: #23304a;
+        --text: #e6edf7;
+        --dim: #93a2b8;
+        --accent: #22d3ee;
+        --accent-soft: #16323d;
+        --ok: #34d399;
+        --warn: #fbbf24;
+        --radius: 14px;
+        --maxw: 1100px;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 16px/1.65 ui-sans-serif, system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
+      code {
+        background: var(--panel2);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 1px 6px;
+        font-size: 0.88em;
+        font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      }
+
+      /* ── 顶部导航 ───────────────────────────── */
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        backdrop-filter: blur(12px);
+        background: color-mix(in srgb, var(--bg) 82%, transparent);
+        border-bottom: 1px solid var(--line);
+      }
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        height: 62px;
+      }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+      .brand img { width: 32px; height: 32px; border-radius: 9px; }
+      .brand small { display: block; font-size: 10px; color: var(--dim); font-weight: 400; }
+      .nav-links { margin-left: auto; display: flex; gap: 20px; font-size: 14px; }
+      .nav-links a { color: var(--dim); }
+      .nav-links a:hover { color: var(--text); text-decoration: none; }
+      @media (max-width: 720px) { .nav-links { display: none; } }
+
+      /* ── Hero ───────────────────────────────── */
+      .hero {
+        position: relative;
+        padding: 84px 0 56px;
+        overflow: hidden;
+        text-align: center;
+      }
+      .hero::before,
+      .hero::after {
+        content: "";
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(80px);
+        pointer-events: none;
+      }
+      .hero::before {
+        width: 420px; height: 420px; top: -160px; right: -80px;
+        background: color-mix(in srgb, var(--accent) 22%, transparent);
+      }
+      .hero::after {
+        width: 360px; height: 360px; bottom: -180px; left: -80px;
+        background: color-mix(in srgb, #a78bfa 16%, transparent);
+      }
+      .hero-inner { position: relative; }
+      .pill {
+        display: inline-flex; align-items: center; gap: 8px;
+        border: 1px solid var(--line); background: var(--panel);
+        border-radius: 999px; padding: 6px 14px;
+        font-size: 13px; color: var(--dim); margin-bottom: 22px;
+      }
+      .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--ok); }
+      h1 {
+        font-size: clamp(30px, 5.4vw, 52px);
+        line-height: 1.14;
+        margin: 0 0 18px;
+        letter-spacing: -0.02em;
+      }
+      h1 .grad {
+        background: linear-gradient(120deg, var(--accent), #a78bfa);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .sub {
+        font-size: clamp(15px, 2.1vw, 18px);
+        color: var(--dim);
+        max-width: 680px;
+        margin: 0 auto 30px;
+      }
+      .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+      .btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 12px 22px; border-radius: 11px;
+        font-size: 15px; font-weight: 600;
+        border: 1px solid var(--line);
+        background: var(--panel); color: var(--text);
+        cursor: pointer; transition: transform 0.15s, border-color 0.15s;
+      }
+      .btn:hover { text-decoration: none; transform: translateY(-1px); border-color: var(--accent); }
+      .btn-primary {
+        background: linear-gradient(120deg, var(--accent), #38bdf8);
+        color: #06121a; border-color: transparent;
+      }
+      .btn-primary:hover { border-color: transparent; }
+      .meta { margin-top: 18px; font-size: 13px; color: var(--dim); }
+
+      /* ── 通用区块 ───────────────────────────── */
+      section { padding: 56px 0; }
+      .sec-title { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; }
+      .sec-sub { color: var(--dim); margin: 0 0 32px; font-size: 15px; }
+
+      /* ── 功能网格 ───────────────────────────── */
+      .grid { display: grid; gap: 16px; }
+      .g3 { grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 22px;
+      }
+      .card h3 { margin: 0 0 8px; font-size: 16px; }
+      .card p { margin: 0; color: var(--dim); font-size: 14px; }
+      .ico {
+        width: 36px; height: 36px; border-radius: 10px;
+        display: grid; place-items: center; margin-bottom: 14px;
+        background: var(--accent-soft); font-size: 18px;
+      }
+
+      /* ── 截图 ───────────────────────────────── */
+      .shots { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+      .shot {
+        border: 1px solid var(--line); border-radius: var(--radius);
+        overflow: hidden; background: var(--panel);
+      }
+      .shot img { width: 100%; display: block; }
+      .shot figcaption { padding: 12px 16px; font-size: 13px; color: var(--dim); }
+      figure { margin: 0; }
+
+      /* ── 表格 ───────────────────────────────── */
+      table { width: 100%; border-collapse: collapse; font-size: 14px; }
+      th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+      th { color: var(--dim); font-weight: 600; }
+      tr:last-child td { border-bottom: none; }
+      .tbl-wrap { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
+
+      /* ── 步骤 ───────────────────────────────── */
+      ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 0; }
+      ol.steps li {
+        counter-increment: s;
+        position: relative;
+        padding: 0 0 22px 46px;
+        border-left: 1px solid var(--line);
+        margin-left: 15px;
+      }
+      ol.steps li:last-child { border-left-color: transparent; padding-bottom: 0; }
+      ol.steps li::before {
+        content: counter(s);
+        position: absolute; left: -15px; top: -2px;
+        width: 30px; height: 30px; border-radius: 999px;
+        background: var(--panel2); border: 1px solid var(--line);
+        display: grid; place-items: center;
+        font-size: 13px; font-weight: 700; color: var(--accent);
+      }
+      ol.steps strong { display: block; margin-bottom: 3px; }
+      ol.steps span { color: var(--dim); font-size: 14px; }
+
+      /* ── 下载 ───────────────────────────────── */
+      .dl { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+      .dl .card { display: flex; flex-direction: column; }
+      .dl .card .btn { margin-top: 16px; justify-content: center; }
+      .tag {
+        display: inline-block; font-size: 11px; padding: 3px 9px;
+        border-radius: 999px; border: 1px solid var(--line);
+        color: var(--dim); margin-bottom: 10px; width: fit-content;
+      }
+      .tag.rec { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+      /* ── FAQ ────────────────────────────────── */
+      details {
+        background: var(--panel); border: 1px solid var(--line);
+        border-radius: 11px; padding: 15px 18px; margin-bottom: 10px;
+      }
+      details summary { cursor: pointer; font-weight: 600; font-size: 15px; }
+      details p { color: var(--dim); margin: 12px 0 0; font-size: 14px; }
+
+      /* ── 平台 ───────────────────────────────── */
+      .plats { display: flex; gap: 10px; flex-wrap: wrap; }
+      .plat {
+        display: inline-flex; align-items: center; gap: 8px;
+        border: 1px solid var(--line); background: var(--panel);
+        border-radius: 10px; padding: 10px 16px; font-size: 14px; color: var(--text);
+      }
+      .plat:hover { border-color: var(--accent); text-decoration: none; }
+
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 30px 0 44px;
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .foot { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+      .foot .sp { margin-left: auto; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap nav">
+        <div class="brand">
+          <img src="logo.png" alt="工作台 Logo" />
+          <div>工作台<small>Workbench</small></div>
+        </div>
+        <nav class="nav-links">
+          <a href="#features">功能</a>
+          <a href="#shots">截图</a>
+          <a href="#download">下载</a>
+          <a href="#faq">常见问题</a>
+          <a id="nav-repo" href="https://github.com/X33834/workbench">源码</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <!-- ── Hero ─────────────────────────────── -->
+      <div class="hero">
+        <div class="wrap hero-inner">
+          <div class="pill"><span class="dot"></span> v0.1.0 · Windows x64 · MIT 开源</div>
+          <h1>
+            本机运维仪表盘<br />
+            <span class="grad">与 AI 会话成本计量</span>
+          </h1>
+          <p class="sub">
+            进程、端口、开发服务器实时可视；统计 Claude Code / Codex / opencode 的 token
+            消耗与花费。<strong>数据仅存本机</strong>，不上传任何信息。
+          </p>
+          <div class="cta">
+            <a class="btn btn-primary" id="cta-setup" href="#download">下载安装包</a>
+            <a class="btn" id="cta-portable" href="#download">免安装版 exe</a>
+          </div>
+          <p class="meta">Windows 10 / 11 · 约 3 MB 安装包 · 无需管理员权限即可运行</p>
+        </div>
+      </div>
+
+      <!-- ── 功能 ─────────────────────────────── -->
+      <section id="features" class="wrap">
+        <h2 class="sec-title">功能</h2>
+        <p class="sec-sub">九个模块，覆盖日常开发环境的「看得见」与「算得清」。</p>
+        <div class="grid g3">
+          <div class="card">
+            <div class="ico">🖥</div>
+            <h3>概览</h3>
+            <p>CPU / 内存实时趋势曲线、磁盘占用环形图、进程分类统计与系统信息一屏总览。</p>
+          </div>
+          <div class="card">
+            <div class="ico">⚙</div>
+            <h3>进程监控</h3>
+            <p>全进程快照，CPU / 内存排序与筛选，虚拟滚动支撑上千行，杀进程二次确认。</p>
+          </div>
+          <div class="card">
+            <div class="ico">🌐</div>
+            <h3>服务与端口</h3>
+            <p>解析 netstat 找出监听端口，自动标注 Vite / Next / uvicorn 等 30+ 开发框架。</p>
+          </div>
+          <div class="card">
+            <div class="ico">🤖</div>
+            <h3>AI 会话</h3>
+            <p>opencode 在线会话与详情；本地 Claude Code / Codex 会话文件预览与消息统计。</p>
+          </div>
+          <div class="card">
+            <div class="ico">💰</div>
+            <h3>成本计量</h3>
+            <p>
+              token 与花费按日 / 按模型统计，内置 40+ 模型价格，支持 Anthropic
+              缓存折扣语义与预算告警。
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📁</div>
+            <h3>项目与任务</h3>
+            <p>本地项目登记与 Git 分支自动检测；看板式任务板，拖拽即改状态。</p>
+          </div>
+          <div class="card">
+            <div class="ico">📋</div>
+            <h3>运行日志</h3>
+            <p>内置日志查看器，按启动滚动归档，支持尾部读取与自动刷新。</p>
+          </div>
+          <div class="card">
+            <div class="ico">🎛</div>
+            <h3>设置</h3>
+            <p>深浅双主题、刷新间隔调节、预算与告警阈值、数据 JSON 导入导出。</p>
+          </div>
+          <div class="card">
+            <div class="ico">🔒</div>
+            <h3>隐私优先</h3>
+            <p>
+              全部数据落本机 app data 目录；CSP 收紧到 self，打开路径走后端白名单校验。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── 截图 ─────────────────────────────── -->
+      <section id="shots" class="wrap">
+        <h2 class="sec-title">界面</h2>
+        <p class="sec-sub">
+          截自浏览器演示模式（<code>npm run preview</code>），路径与主机名均为占位数据。
+        </p>
+        <div class="shots">
+          <figure class="shot">
+            <img src="screenshots/01-overview.png" alt="概览页：资源趋势、磁盘与进程分类" loading="lazy" />
+            <figcaption>概览 — 资源趋势、磁盘占用与进程分类</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/02-processes.png" alt="进程页：虚拟滚动的进程表" loading="lazy" />
+            <figcaption>进程 — 虚拟滚动表格，支持排序与筛选</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/03-servers.png" alt="服务与端口页：框架识别与端口分布" loading="lazy" />
+            <figcaption>服务与端口 — 框架识别与端口分布</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/04-ai-sessions.png" alt="AI 会话页：成本趋势与模型构成" loading="lazy" />
+            <figcaption>AI 会话 — token 成本趋势与模型构成</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/05-projects.png" alt="项目页：卡片与表格双视图" loading="lazy" />
+            <figcaption>项目 — 卡片 / 表格双视图，Git 分支检测</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/06-tasks.png" alt="任务页：拖拽看板" loading="lazy" />
+            <figcaption>任务 — 拖拽看板（待办 / 进行中 / 已完成）</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/07-settings.png" alt="设置页：主题、刷新与预算" loading="lazy" />
+            <figcaption>设置 — 主题、刷新间隔与预算</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/08-logs.png" alt="运行日志页" loading="lazy" />
+            <figcaption>运行日志 — 内置查看器，自动刷新</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ── 下载 ─────────────────────────────── -->
+      <section id="download" class="wrap">
+        <h2 class="sec-title">下载</h2>
+        <p class="sec-sub">Windows x64。安装包未做代码签名，首次运行 Windows 可能提示「未知发布者」。</p>
+        <div class="dl">
+          <div class="card">
+            <span class="tag rec">推荐</span>
+            <h3>NSIS 安装包</h3>
+            <p>双击安装，含开始菜单与卸载项，约 3 MB。</p>
+            <a class="btn btn-primary" id="dl-setup" href="#">下载安装包</a>
+          </div>
+          <div class="card">
+            <span class="tag">免安装</span>
+            <h3>独立 exe</h3>
+            <p>单文件直接运行，无需安装，适合放进 U 盘随身携带。</p>
+            <a class="btn" id="dl-portable" href="#">下载 exe</a>
+          </div>
+        </div>
+
+        <h3 style="margin: 34px 0 14px; font-size: 17px">从源码构建</h3>
+        <div class="tbl-wrap">
+          <table>
+            <tbody>
+              <tr><td style="width: 190px">环境要求</td><td>Node.js ≥ 20、Rust ≥ 1.77、WebView2（Windows 11 预装）</td></tr>
+              <tr><td>安装依赖</td><td><code>npm install</code></td></tr>
+              <tr><td>开发模式</td><td><code>npm run tauri dev</code></td></tr>
+              <tr><td>产出安装包</td><td><code>npm run tauri build</code> → <code>src-tauri/target/release/bundle/nsis/</code></td></tr>
+              <tr><td>仅看界面</td><td><code>npm run dev</code>（浏览器演示模式，无需 Rust）</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="margin: 34px 0 14px; font-size: 17px">全新安装</h3>
+        <ol class="steps">
+          <li>
+            <strong>下载安装包</strong>
+            <span>点上方「下载安装包」，得到 <code>Workbench_0.1.0_x64-setup.exe</code>。</span>
+          </li>
+          <li>
+            <strong>放行 Windows 提示</strong>
+            <span>因未做代码签名，SmartScreen 可能拦截：点「更多信息」→「仍要运行」。</span>
+          </li>
+          <li>
+            <strong>完成安装并启动</strong>
+            <span>安装完成后从开始菜单启动「工作台」。</span>
+          </li>
+          <li>
+            <strong>首次使用建议</strong>
+            <span>到「设置」调刷新间隔与预算；到「AI 会话」点「扫描成本」汇总历史用量。</span>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ── FAQ ──────────────────────────────── -->
+      <section id="faq" class="wrap">
+        <h2 class="sec-title">常见问题</h2>
+        <p class="sec-sub">安装与使用中最常被问到的几点。</p>
+
+        <details>
+          <summary>Windows 提示「已保护你的电脑」或「未知发布者」，怎么办？</summary>
+          <p>
+            安装包未做代码签名（签名证书需付费），Windows SmartScreen 因此会有提示。
+            点「更多信息」→「仍要运行」即可。你也可以选择从源码自行构建，或直接下载免安装
+            exe。校验完整性可用 Release 页面提供的 SHA-256。
+          </p>
+        </details>
+        <details>
+          <summary>会不会把我的数据上传到云端？</summary>
+          <p>
+            不会。所有数据（项目、任务、成本账本、日志）都写在本机的 app data 目录。
+            应用只在你本机发起两件事：读 <code>netstat</code> 看端口，读本机 session
+            文件算成本。唯一的可选外连是探测本地的 opencode 服务（默认 4096 端口），
+            失败也只是显示「未检测到」，不影响其它功能。
+          </p>
+        </details>
+        <details>
+          <summary>「成本计量」是怎么算出来的？准不准？</summary>
+          <p>
+            解析本机 Claude Code / Codex 会话 JSONL 文件中的 usage 字段，按内置的 40+
+            模型价格计算。分三级可信度：<strong>measured</strong>（文件里有真实 usage
+            上报）、<strong>estimated</strong>（无 usage，按字符数启发式估算，可在设置里关掉）、
+            <strong>zero_pricing</strong>（型号无法识别，标为不计费而<em>不</em>乱编单价）。
+            Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×）。
+          </p>
+        </details>
+        <details>
+          <summary>杀进程会不会误杀系统关键进程？</summary>
+          <p>
+            不会。PID 0/4 与 csrss、lsass、services 等关键系统进程被后端直接拒绝，
+            前端也有二次确认。此外终止前会刷新并校验进程身份，避免 PID 复用导致误杀。
+          </p>
+        </details>
+        <details>
+          <summary>关闭窗口后程序去哪了？怎么真正退出？</summary>
+          <p>
+            点关闭是隐藏到系统托盘（这是有意设计，便于常驻监控）。要真正结束进程，
+            右键托盘图标选「退出工作台」。快捷键 <code>Ctrl+Shift+W</code>
+            可随时显示 / 隐藏窗口。
+          </p>
+        </details>
+        <details>
+          <summary>支持 macOS / Linux 吗？</summary>
+          <p>
+            尚未验证。当前只在 Windows 上开发、测试与打包：端口采集写死
+            <code>netstat -ano</code>，安装包只产出 NSIS。代码里有 POSIX 分支但没有实际跑过，
+            因此不在 README 里声称支持。
+          </p>
+        </details>
+      </section>
+
+      <!-- ── 源码平台 ─────────────────────────── -->
+      <section class="wrap">
+        <h2 class="sec-title">源码</h2>
+        <p class="sec-sub">同一份代码镜像在四个平台，任选其一。</p>
+        <div class="plats" id="plats">
+          <!-- 由页面脚本按当前域名填入，保证每个镜像都链到自己 -->
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap foot">
+        <span>MIT License © 2026 x1882</span>
+        <span class="sp">
+          <a id="foot-repo" href="https://github.com/X33834/workbench">仓库</a> ·
+          <a id="foot-issues" href="https://github.com/X33834/workbench/issues">问题反馈</a> ·
+          <a id="foot-changelog" href="https://github.com/X33834/workbench/blob/main/CHANGELOG.md">更新日志</a>
+        </span>
+      </div>
+    </footer>
+
+    <script>
+      /*
+       * 一份页面服务多个镜像：按当前访问域名判定所在的托管平台与账号，
+       * 把仓库 / 下载 / 问题反馈等链接指向「当前这个镜像自己」，
+       * 避免从 Gitee 点进 GitHub、或从 A 账号点进 B 账号。
+       */
+      (function () {
+        // GitHub 用户名的大小写不会保留在 DNS 主机名里（.github.io 恒为小写），
+        // 这里映射回规范写法，让链接与控制台里显示的用户名与账号实际一致。
+        var CANONICAL_OWNER = {
+          x33834: "X33834",
+          badhope: "badhope",
+          morningstar202604: "Morningstar202604",
+        };
+
+        var MIRRORS = {
+          host: location.hostname,
+          // GitHub Pages: <owner>.github.io/<repo>/
+          github: (function () {
+            var m = location.hostname.match(/^([^.]+)\.github\.io$/i);
+            if (!m) return null;
+            var parts = location.pathname.split("/").filter(Boolean);
+            var owner = m[1].toLowerCase();
+            return {
+              owner: CANONICAL_OWNER[owner] || m[1],
+              repo: parts[0] || "workbench",
+            };
+          })(),
+          gitee: /gitee\.(com|io)$/i.test(location.hostname)
+            ? { owner: "badhope", repo: "workbench", base: "https://gitee.com/badhope/workbench" }
+            : null,
+          gitcode: /gitcode\.(com|io)$/i.test(location.hostname)
+            ? { owner: "badhope", repo: "workbench", base: "https://gitcode.com/badhope/workbench" }
+            : null,
+        };
+
+        // 默认回退到主镜像
+        var repo = "https://github.com/X33834/workbench";
+        var releases = repo + "/releases";
+        var issues = repo + "/issues";
+        var changelog = repo + "/blob/main/CHANGELOG.md";
+        var platformName = "GitHub";
+
+        if (MIRRORS.github) {
+          repo = "https://github.com/" + MIRRORS.github.owner + "/" + MIRRORS.github.repo;
+          releases = repo + "/releases";
+          issues = repo + "/issues";
+          changelog = repo + "/blob/main/CHANGELOG.md";
+          platformName = "GitHub";
+        } else if (MIRRORS.gitee) {
+          repo = MIRRORS.gitee.base;
+          releases = repo + "/releases";
+          issues = repo + "/issues";
+          changelog = repo + "/blob/master/CHANGELOG.md";
+          platformName = "Gitee";
+        } else if (MIRRORS.gitcode) {
+          repo = MIRRORS.gitcode.base;
+          releases = repo + "/releases";
+          issues = repo + "/issues";
+          changelog = repo + "/blob/master/CHANGELOG.md";
+          platformName = "GitCode";
+        }
+
+        function set(id, href, text) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.href = href;
+          if (text) el.textContent = text;
+        }
+
+        set("nav-repo", repo);
+        set("foot-repo", repo);
+        set("foot-issues", issues);
+        set("foot-changelog", changelog);
+
+        var setupAsset = "Workbench_0.1.0_x64-setup.exe";
+        set("cta-setup", releases);
+        set("cta-portable", releases);
+        set("dl-setup", releases + "/latest");
+        set("dl-portable", releases + "/latest");
+
+        // 平台列表：标注当前所在镜像
+        var plats = [
+          { name: "GitHub (X33834)", url: "https://github.com/X33834/workbench" },
+          { name: "GitHub (badhope)", url: "https://github.com/badhope/workbench" },
+          { name: "GitHub (Morningstar202604)", url: "https://github.com/Morningstar202604/workbench" },
+          { name: "Gitee (badhope)", url: "https://gitee.com/badhope/workbench" },
+          { name: "GitCode (badhope)", url: "https://gitcode.com/badhope/workbench" },
+        ];
+        var box = document.getElementById("plats");
+        if (box) {
+          plats.forEach(function (p) {
+            var a = document.createElement("a");
+            a.className = "plat";
+            a.href = p.url;
+            var here = p.url === repo;
+            a.innerHTML =
+              '<span style="width:7px;height:7px;border-radius:99px;display:inline-block;background:' +
+              (here ? "var(--ok)" : "var(--line)") +
+              '"></span>' +
+              p.name +
+              (here ? ' <span style="color:var(--dim)">（当前）</span>' : "");
+            box.appendChild(a);
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { EChart, chartGapColor, chartLineColor } from "../lib/echarts";
+import { EChart } from "../lib/echarts";
+import { chartGapColor, chartLineColor, horizontalBarOption } from "../lib/chartTheme";
 import {
   Activity,
   Cpu,
@@ -26,10 +27,67 @@ interface Category {
   color: string;
 }
 
-const BROWSER_TOKENS = ["chrome", "firefox", "edge", "msedge", "brave", "opera", "safari"];
-const DEV_TOKENS = ["node", "deno", "bun", "npm", "pnpm", "yarn", "webpack", "vite", "rustc", "cargo", "go", "java", "python", "vscode", "code", "jetbrains", "idea", "pycharm", "webstorm", "goland"];
-const AI_TOKENS = ["claude", "opencode", "copilot", "codex", "ollama", "continue", "tabnine", "cursor", "aider", "gemini", "windsurf", "qwen", "iflow", "cline", "roo"];
-const SYSTEM_TOKENS = ["system", "svchost", "lsass", "csrss", "services", "winlogon", "dwm", "registry", "smss", "taskhost", "spoolsv"];
+const BROWSER_TOKENS = [
+  "chrome",
+  "firefox",
+  "edge",
+  "msedge",
+  "brave",
+  "opera",
+  "safari",
+];
+const DEV_TOKENS = [
+  "node",
+  "deno",
+  "bun",
+  "npm",
+  "pnpm",
+  "yarn",
+  "webpack",
+  "vite",
+  "rustc",
+  "cargo",
+  "go",
+  "java",
+  "python",
+  "vscode",
+  "code",
+  "jetbrains",
+  "idea",
+  "pycharm",
+  "webstorm",
+  "goland",
+];
+const AI_TOKENS = [
+  "claude",
+  "opencode",
+  "copilot",
+  "codex",
+  "ollama",
+  "continue",
+  "tabnine",
+  "cursor",
+  "aider",
+  "gemini",
+  "windsurf",
+  "qwen",
+  "iflow",
+  "cline",
+  "roo",
+];
+const SYSTEM_TOKENS = [
+  "system",
+  "svchost",
+  "lsass",
+  "csrss",
+  "services",
+  "winlogon",
+  "dwm",
+  "registry",
+  "smss",
+  "taskhost",
+  "spoolsv",
+];
 
 /** 按非字母数字切 token，避免 "go" 命中 "google"、"amp" 命中 "sample" 这类子串误判。 */
 function tokenize(s: string): Set<string> {
@@ -57,12 +115,12 @@ function categorizeProcs(
     const cat = hasAny(nameTokens, BROWSER_TOKENS)
       ? "浏览器"
       : hasAny(allTokens, AI_TOKENS)
-      ? "AI工具"
-      : hasAny(allTokens, DEV_TOKENS)
-      ? "开发工具"
-      : hasAny(nameTokens, SYSTEM_TOKENS)
-      ? "系统"
-      : "其他";
+        ? "AI工具"
+        : hasAny(allTokens, DEV_TOKENS)
+          ? "开发工具"
+          : hasAny(nameTokens, SYSTEM_TOKENS)
+            ? "系统"
+            : "其他";
     cats[cat].count++;
     cats[cat].mem += p.memory;
   }
@@ -135,8 +193,9 @@ export default function Overview() {
     .sort((a, b) => (a.due ?? "").localeCompare(b.due ?? ""))
     .slice(0, 5);
 
-  const memTotalGb = sysinfo ? sysinfo.total_memory / (1024 ** 3) : 0;
-  const memUsedPct = memTotalGb > 0 ? Math.round((memTotal / 1024 / 1024 / 1024 / memTotalGb) * 100) : 0;
+  const memTotalGb = sysinfo ? sysinfo.total_memory / 1024 ** 3 : 0;
+  const memUsedPct =
+    memTotalGb > 0 ? Math.round((memTotal / 1024 / 1024 / 1024 / memTotalGb) * 100) : 0;
 
   // ─── 图表选项 ───────────────────────────────────────────
 
@@ -150,8 +209,18 @@ export default function Overview() {
       legend: { top: 0, icon: "roundRect", itemWidth: 12, itemHeight: 4 },
       xAxis: { type: "category", data: times, axisLabel: { fontSize: 10 } },
       yAxis: [
-        { type: "value", name: "CPU%", axisLabel: { fontSize: 10 }, splitLine: { lineStyle: { type: "dashed" } } },
-        { type: "value", name: "GB", axisLabel: { fontSize: 10 }, splitLine: { show: false } },
+        {
+          type: "value",
+          name: "CPU%",
+          axisLabel: { fontSize: 10 },
+          splitLine: { lineStyle: { type: "dashed" } },
+        },
+        {
+          type: "value",
+          name: "GB",
+          axisLabel: { fontSize: 10 },
+          splitLine: { show: false },
+        },
       ],
       series: [
         {
@@ -163,7 +232,17 @@ export default function Overview() {
           lineStyle: { color: ACCENT, width: 2 },
           itemStyle: { color: ACCENT },
           areaStyle: {
-            color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: ACCENT + "40" }, { offset: 1, color: ACCENT + "05" }] },
+            color: {
+              type: "linear",
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: ACCENT + "40" },
+                { offset: 1, color: ACCENT + "05" },
+              ],
+            },
           },
         },
         {
@@ -176,7 +255,17 @@ export default function Overview() {
           lineStyle: { color: WARN, width: 2 },
           itemStyle: { color: WARN },
           areaStyle: {
-            color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: WARN + "30" }, { offset: 1, color: WARN + "05" }] },
+            color: {
+              type: "linear",
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: WARN + "30" },
+                { offset: 1, color: WARN + "05" },
+              ],
+            },
           },
         },
       ],
@@ -194,7 +283,7 @@ export default function Overview() {
           radius: ["52%", "76%"],
           center: ["50%", "50%"],
           padAngle: 3,
-          itemStyle: { borderColor: chartGapColor(), borderWidth: 2 },
+          itemStyle: { borderColor: chartGapColor(theme), borderWidth: 2 },
           label: { show: false },
           emphasis: {
             label: { show: true, fontSize: 13, fontWeight: "bold" },
@@ -211,41 +300,25 @@ export default function Overview() {
     [categories, theme]
   );
 
-  // 端口分布条形图
+  // 端口分布条形图（与 Servers / Projects / AiSessions 共用同一构造器）
   const portRanges = useMemo(() => portDistribution(ports), [ports]);
   const portBarOption = useMemo(
-    () => ({
-      grid: { left: 72, right: 24, top: 8, bottom: 8 },
-      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-      xAxis: { type: "value", show: false },
-      yAxis: {
-        type: "category",
-        data: portRanges.map((p) => p.range),
-        axisLabel: { fontSize: 11 },
-        axisLine: { show: false },
-        axisTick: { show: false },
-      },
-      series: [
-        {
-          type: "bar",
-          data: portRanges.map((p) => p.count),
-          barWidth: 18,
-          itemStyle: {
-            color: { type: "linear", x: 0, y: 0, x2: 1, y2: 0, colorStops: [{ offset: 0, color: "#22d3ee80" }, { offset: 1, color: "#22d3ee" }] },
-            borderRadius: [0, 6, 6, 0],
-          },
-          label: { show: true, position: "right", fontSize: 11, formatter: "{c}" },
-        },
-      ],
-    }),
-    [portRanges]
+    () =>
+      horizontalBarOption({
+        labels: portRanges.map((p) => p.range),
+        values: portRanges.map((p) => ({ value: p.count })),
+        theme,
+        fontSize: 11,
+      }),
+    [portRanges, theme]
   );
 
   // 磁盘环形图
   const diskSeries = useMemo(() => {
     const colors = ["#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#f87171", "#60a5fa"];
     return disks.map((d, i) => {
-      const pct = d.total_bytes > 0 ? Math.round((d.used_bytes / d.total_bytes) * 100) : 0;
+      const pct =
+        d.total_bytes > 0 ? Math.round((d.used_bytes / d.total_bytes) * 100) : 0;
       return {
         value: pct,
         name: d.label || d.mount_point,
@@ -261,7 +334,9 @@ export default function Overview() {
     () => ({
       tooltip: {
         trigger: "item",
-        formatter: (p: { data: { name: string; total: number; used: number; mount: string } }) => {
+        formatter: (p: {
+          data: { name: string; total: number; used: number; mount: string };
+        }) => {
           const d = p.data;
           return `<b>${d.name}</b><br/>已用: ${formatBytes(d.used)}<br/>总计: ${formatBytes(d.total)}<br/>挂载: ${d.mount}`;
         },
@@ -273,7 +348,7 @@ export default function Overview() {
               radius: ["58%", "78%"],
               center: ["50%", "50%"],
               padAngle: 3,
-              itemStyle: { borderColor: chartGapColor(), borderWidth: 2 },
+              itemStyle: { borderColor: chartGapColor(theme), borderWidth: 2 },
               label: {
                 show: true,
                 position: "outside",
@@ -291,7 +366,13 @@ export default function Overview() {
               radius: ["58%", "78%"],
               center: ["50%", "50%"],
               silent: true,
-              data: [{ value: 1, name: "无磁盘数据", itemStyle: { color: chartLineColor() } }],
+              data: [
+                {
+                  value: 1,
+                  name: "无磁盘数据",
+                  itemStyle: { color: chartLineColor(theme) },
+                },
+              ],
               label: { show: false },
             },
           ],
@@ -332,7 +413,11 @@ export default function Overview() {
               实时监控中
             </span>
             <span className="font-mono text-xs tabular-nums text-dim">
-              {new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })}
+              {new Date().toLocaleDateString("zh-CN", {
+                month: "long",
+                day: "numeric",
+                weekday: "long",
+              })}
             </span>
           </div>
         </div>
@@ -347,22 +432,30 @@ export default function Overview() {
               <span className="font-medium text-text">{sysinfo.hostname}</span>
             </span>
             <span className="flex items-center gap-1.5 text-dim">
-              <Cpu size={13} />{sysinfo.os_name}
+              <Cpu size={13} />
+              {sysinfo.os_name}
             </span>
             <span className="flex items-center gap-1.5 text-dim">
               <Cpu size={13} className="text-accent" />
-              CPU <span className="font-mono font-semibold text-text">{sysinfo.cpu_cores} 核</span>
+              CPU{" "}
+              <span className="font-mono font-semibold text-text">
+                {sysinfo.cpu_cores} 核
+              </span>
             </span>
             <span className="flex items-center gap-1.5 text-dim">
               <HardDrive size={13} className="text-warn" />
-              内存 <span className="font-mono font-semibold text-text">{formatBytes(sysinfo.total_memory)}</span>
-              {memUsedPct > 0 && (
-                <span className="text-dim">（已用 {memUsedPct}%）</span>
-              )}
+              内存{" "}
+              <span className="font-mono font-semibold text-text">
+                {formatBytes(sysinfo.total_memory)}
+              </span>
+              {memUsedPct > 0 && <span className="text-dim">（已用 {memUsedPct}%）</span>}
             </span>
             <span className="flex items-center gap-1.5 text-dim">
               <Clock size={13} className="text-ok" />
-              已运行 <span className="font-mono font-semibold text-text">{formatUptime(sysinfo.uptime_seconds)}</span>
+              已运行{" "}
+              <span className="font-mono font-semibold text-text">
+                {formatUptime(sysinfo.uptime_seconds)}
+              </span>
             </span>
           </div>
         </Card>
@@ -370,10 +463,38 @@ export default function Overview() {
 
       {/* ── 顶部统计 ── */}
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <StatCard icon={Cpu} label="运行中进程" value={procs.length} hint={`CPU 合计 ${formatCpu(cpuTotal)}`} tone="accent" bar="bg-accent" />
-        <StatCard icon={Server} label="开发服务器" value={devs.length} hint={devs.map((d) => `${d.framework}:${d.port}`).join(" / ") || "无"} tone="ok" bar="bg-ok" />
-        <StatCard icon={Sparkles} label="AI 代理进程" value={ais.length} hint={ais.map((a) => a.name).join(" / ") || "无"} tone="warn" bar="bg-warn" />
-        <StatCard icon={Activity} label="进行中任务" value={doingTasks.length} hint={`共 ${data.tasks.length} 个任务`} tone="text" bar="bg-accent" />
+        <StatCard
+          icon={Cpu}
+          label="运行中进程"
+          value={procs.length}
+          hint={`CPU 合计 ${formatCpu(cpuTotal)}`}
+          tone="accent"
+          bar="bg-accent"
+        />
+        <StatCard
+          icon={Server}
+          label="开发服务器"
+          value={devs.length}
+          hint={devs.map((d) => `${d.framework}:${d.port}`).join(" / ") || "无"}
+          tone="ok"
+          bar="bg-ok"
+        />
+        <StatCard
+          icon={Sparkles}
+          label="AI 代理进程"
+          value={ais.length}
+          hint={ais.map((a) => a.name).join(" / ") || "无"}
+          tone="warn"
+          bar="bg-warn"
+        />
+        <StatCard
+          icon={Activity}
+          label="进行中任务"
+          value={doingTasks.length}
+          hint={`共 ${data.tasks.length} 个任务`}
+          tone="text"
+          bar="bg-accent"
+        />
       </div>
 
       {/* ── 图表区域 ── */}
@@ -387,7 +508,9 @@ export default function Overview() {
             <Empty icon={Activity}>采样中，稍候出现曲线…</Empty>
           )}
           <p className="mt-1 text-[11px] text-dim">
-            CPU 为所有进程占用率求和（可超过 100%）；内存为进程工作集{memTotalGb > 0 && `（总计 ${memTotalGb.toFixed(1)} GB）`}，合计 {formatBytes(memTotal)}。
+            CPU 为所有进程占用率求和（可超过 100%）；内存为进程工作集
+            {memTotalGb > 0 && `（总计 ${memTotalGb.toFixed(1)} GB）`}，合计{" "}
+            {formatBytes(memTotal)}。
           </p>
         </Card>
 
@@ -401,8 +524,14 @@ export default function Overview() {
           )}
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
             {categories.map((c) => (
-              <span key={c.name} className="flex items-center gap-1.5 text-[11px] text-dim">
-                <span className="inline-block h-2 w-2 rounded-full" style={{ background: c.color }} />
+              <span
+                key={c.name}
+                className="flex items-center gap-1.5 text-[11px] text-dim"
+              >
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ background: c.color }}
+                />
                 {c.name} <span className="font-mono text-text">{c.count}</span>
                 <span className="text-dim/70">{formatBytes(c.mem)}</span>
               </span>
@@ -423,18 +552,29 @@ export default function Overview() {
           {disks.length > 0 && (
             <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               {disks.map((d, i) => {
-                const pct = d.total_bytes > 0 ? Math.round((d.used_bytes / d.total_bytes) * 100) : 0;
+                const pct =
+                  d.total_bytes > 0
+                    ? Math.round((d.used_bytes / d.total_bytes) * 100)
+                    : 0;
                 const danger = pct >= 90;
                 return (
-                  <div key={i} className="flex items-center gap-2 rounded border border-line/40 px-2.5 py-1.5 text-xs">
-                    <HardDrive size={12} className={danger ? "text-danger" : "text-accent"} />
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 rounded border border-line/40 px-2.5 py-1.5 text-xs"
+                  >
+                    <HardDrive
+                      size={12}
+                      className={danger ? "text-danger" : "text-accent"}
+                    />
                     <span className="font-medium truncate" title={d.mount_point}>
                       {d.label || d.mount_point}
                     </span>
                     <span className="ml-auto font-mono text-dim">
                       {formatBytes(d.used_bytes)} / {formatBytes(d.total_bytes)}
                     </span>
-                    <span className={`font-mono ${danger ? "text-danger" : "text-ok"}`}>{pct}%</span>
+                    <span className={`font-mono ${danger ? "text-danger" : "text-ok"}`}>
+                      {pct}%
+                    </span>
                   </div>
                 );
               })}
@@ -455,8 +595,12 @@ export default function Overview() {
             <Empty icon={Network}>未检测到监听端口</Empty>
           )}
           <div className="mt-2 flex gap-6 text-xs text-dim">
-            <span>总监听 <span className="font-mono text-text">{ports.length}</span></span>
-            <span>已知服务 <span className="font-mono text-text">{devs.length}</span></span>
+            <span>
+              总监听 <span className="font-mono text-text">{ports.length}</span>
+            </span>
+            <span>
+              已知服务 <span className="font-mono text-text">{devs.length}</span>
+            </span>
           </div>
         </Card>
       </div>
@@ -466,7 +610,10 @@ export default function Overview() {
         <Card className="p-4">
           <SectionTitle
             extra={
-              <button className="text-xs text-accent hover:underline" onClick={() => setView("processes")}>
+              <button
+                className="text-xs text-accent hover:underline"
+                onClick={() => setView("processes")}
+              >
                 查看全部 →
               </button>
             }
@@ -497,14 +644,19 @@ export default function Overview() {
         <Card className="p-4">
           <SectionTitle
             extra={
-              <button className="text-xs text-accent hover:underline" onClick={() => setView("ai")}>
+              <button
+                className="text-xs text-accent hover:underline"
+                onClick={() => setView("ai")}
+              >
                 查看会话 →
               </button>
             }
           >
             正在运行的服务与 AI 代理
           </SectionTitle>
-          {devs.length === 0 && ais.length === 0 && <Empty icon={Server}>没有检测到开发服务器或 AI 代理进程</Empty>}
+          {devs.length === 0 && ais.length === 0 && (
+            <Empty icon={Server}>没有检测到开发服务器或 AI 代理进程</Empty>
+          )}
           <ul className="flex flex-col gap-2">
             {devs.map((d) => (
               <li
@@ -514,7 +666,10 @@ export default function Overview() {
                 <Server size={14} className="text-ok" />
                 <span className="font-medium">{d.framework}</span>
                 <Badge tone="ok">:{d.port}</Badge>
-                <span className="ml-auto truncate text-xs text-dim" title={shortPath(d.project_dir ?? "", 80)}>
+                <span
+                  className="ml-auto truncate text-xs text-dim"
+                  title={shortPath(d.project_dir ?? "", 80)}
+                >
                   {d.project_dir ? shortPath(d.project_dir, 40) : `PID ${d.pid}`}
                 </span>
               </li>
@@ -541,7 +696,10 @@ export default function Overview() {
         <Card className="p-4">
           <SectionTitle
             extra={
-              <button className="text-xs text-accent hover:underline" onClick={() => setView("tasks")}>
+              <button
+                className="text-xs text-accent hover:underline"
+                onClick={() => setView("tasks")}
+              >
                 去处理 →
               </button>
             }
@@ -555,8 +713,13 @@ export default function Overview() {
               {upcoming.map((t) => {
                 const due = dueLabel(t.due);
                 return (
-                  <li key={t.id} className="flex items-center gap-3 rounded-lg border border-line/60 bg-panel2 px-3 py-2 text-sm">
-                    <Badge tone={due.tone === "muted" ? "dim" : due.tone}>{due.text}</Badge>
+                  <li
+                    key={t.id}
+                    className="flex items-center gap-3 rounded-lg border border-line/60 bg-panel2 px-3 py-2 text-sm"
+                  >
+                    <Badge tone={due.tone === "muted" ? "dim" : due.tone}>
+                      {due.text}
+                    </Badge>
                     <span className="truncate">{t.title}</span>
                   </li>
                 );
@@ -572,12 +735,19 @@ export default function Overview() {
           ) : (
             <ul className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto">
               {sessionFiles.slice(0, 8).map((s, i) => (
-                <li key={i} className="flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-panel2">
-                  <Badge tone={s.tool.includes("Claude") ? "accent" : "ok"}>{s.tool}</Badge>
+                <li
+                  key={i}
+                  className="flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-panel2"
+                >
+                  <Badge tone={s.tool.includes("Claude") ? "accent" : "ok"}>
+                    {s.tool}
+                  </Badge>
                   <span className="text-dim truncate" title={s.path}>
                     {s.project}
                   </span>
-                  <span className="ml-auto font-mono text-dim">{formatBytes(s.size)}</span>
+                  <span className="ml-auto font-mono text-dim">
+                    {formatBytes(s.size)}
+                  </span>
                 </li>
               ))}
             </ul>

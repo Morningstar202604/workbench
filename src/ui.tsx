@@ -1,4 +1,11 @@
-import { forwardRef, useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useRef,
+  useState,
+  type HTMLAttributes,
+  type ReactNode,
+} from "react";
 import { Inbox } from "lucide-react";
 
 export function Card({
@@ -17,9 +24,18 @@ export function Card({
   );
 }
 
-export function SectionTitle({ children, extra }: { children: ReactNode; extra?: ReactNode }) {  return (
+export function SectionTitle({
+  children,
+  extra,
+}: {
+  children: ReactNode;
+  extra?: ReactNode;
+}) {
+  return (
     <div className="flex items-center justify-between mb-3">
-      <h2 className="text-sm font-semibold tracking-wide text-dim uppercase">{children}</h2>
+      <h2 className="text-sm font-semibold tracking-wide text-dim uppercase">
+        {children}
+      </h2>
       {extra}
     </div>
   );
@@ -60,7 +76,14 @@ type BtnProps = {
   disabled?: boolean;
 };
 
-export function Btn({ children, onClick, variant = "ghost", className = "", title, disabled }: BtnProps) {
+export function Btn({
+  children,
+  onClick,
+  variant = "ghost",
+  className = "",
+  title,
+  disabled,
+}: BtnProps) {
   const base =
     "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40";
   const styles: Record<string, string> = {
@@ -106,9 +129,15 @@ export function Modal({
         className={`w-full rounded-xl border border-line bg-panel shadow-2xl ${wide ? "max-w-2xl" : "max-w-md"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-line px-5 py-3 text-base font-semibold">{title}</div>
+        <div className="border-b border-line px-5 py-3 text-base font-semibold">
+          {title}
+        </div>
         <div className="px-5 py-4">{children}</div>
-        {footer && <div className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</div>}
+        {footer && (
+          <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -189,7 +218,13 @@ export function StatCard({
   );
 }
 
-export function Empty({ children, icon: Icon }: { children: ReactNode; icon?: typeof Inbox }) {
+export function Empty({
+  children,
+  icon: Icon,
+}: {
+  children: ReactNode;
+  icon?: typeof Inbox;
+}) {
   return (
     <div className="flex h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line text-sm text-dim">
       {Icon && <Icon size={20} className="opacity-60" />}
@@ -204,13 +239,7 @@ export function Spinner() {
   );
 }
 
-export function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="mb-3 block">
       <span className="mb-1 block text-xs font-medium text-dim">{label}</span>
@@ -222,13 +251,7 @@ export function Field({
 export const inputCls =
   "w-full rounded-lg border border-line bg-panel2 px-3 py-1.5 text-sm text-text outline-none focus:border-accent/60";
 
-export function Table({
-  head,
-  children,
-}: {
-  head: ReactNode[];
-  children: ReactNode;
-}) {
+export function Table({ head, children }: { head: ReactNode[]; children: ReactNode }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -282,7 +305,11 @@ export function Td({
   colSpan?: number;
 }) {
   return (
-    <td className={`px-3 py-2 align-middle ${mono ? "font-mono text-xs" : ""} ${className}`} title={title} colSpan={colSpan}>
+    <td
+      className={`px-3 py-2 align-middle ${mono ? "font-mono text-xs" : ""} ${className}`}
+      title={title}
+      colSpan={colSpan}
+    >
       {children}
     </td>
   );

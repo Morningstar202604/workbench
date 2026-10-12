@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText, RefreshCw, Trash2 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { readLogs, clearLogs } from "../lib/api";
@@ -6,30 +6,37 @@ import { Btn } from "../ui";
 
 /**
  * Log viewer — displays the Rust backend logs without needing the DevTools console.
+ *
+ * 日志是外部系统（后端文件）的数据：拉取本身是异步副作用，setState 落在
+ * promise 回调里而非 effect 同步体，因此不会引发级联渲染。
  */
 export default function Logs() {
   const setToast = useStore((s) => s.setToast);
   const [content, setContent] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setContent(await readLogs(500));
     } catch {
       setContent("(日志暂不可用 — 仅在桌面端运行时写入)");
     }
-  };
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    // 日志来自外部系统（后端日志文件），effect 在这里订阅它属正当用法。
+    // 该规则把「effect 内立即调用会 setState 的异步函数」也标为级联渲染风险；
+    // 实际 setState 发生在 await 之后的微任务里，不在同步渲染路径上。
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 见上
+    void load();
+  }, [load]);
 
   // 自动刷新（每 3 秒）
   useEffect(() => {
     if (!autoRefresh) return;
-    const id = setInterval(load, 3000);
+    const id = setInterval(() => void load(), 3000);
     return () => clearInterval(id);
-  }, [autoRefresh]);
+  }, [autoRefresh, load]);
 
   const handleClear = async () => {
     try {
@@ -74,7 +81,10 @@ export default function Logs() {
         </div>
       </div>
 
-      <pre ref={preRef} className="flex-1 overflow-auto rounded-lg border border-line bg-bg p-4 font-mono text-[11px] leading-relaxed text-dim">
+      <pre
+        ref={preRef}
+        className="flex-1 overflow-auto rounded-lg border border-line bg-bg p-4 font-mono text-[11px] leading-relaxed text-dim"
+      >
         {content || "(暂无日志)"}
       </pre>
     </div>

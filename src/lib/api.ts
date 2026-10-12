@@ -50,7 +50,10 @@ export async function recentSessions(): Promise<SessionFilePreview[]> {
   return invoke<SessionFilePreview[]>("recent_sessions_preview");
 }
 
-export async function opencodeSessionDetail(port: number, sessionId: string): Promise<SessionDetail> {
+export async function opencodeSessionDetail(
+  port: number,
+  sessionId: string
+): Promise<SessionDetail> {
   return invoke<SessionDetail>("opencode_session_detail", { port, sessionId });
 }
 
@@ -103,7 +106,10 @@ export async function notify(title: string, body: string): Promise<void> {
   if (isTauri()) {
     const { sendNotification } = await import("@tauri-apps/plugin-notification");
     sendNotification({ title, body });
-  } else if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+  } else if (
+    typeof Notification !== "undefined" &&
+    Notification.permission === "granted"
+  ) {
     new Notification(title, { body });
   }
 }

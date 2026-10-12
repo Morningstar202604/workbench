@@ -2,9 +2,44 @@
 
 > Tauri 2 桌面端 · 系统运维仪表盘 · AI 会话成本计量
 
+[![CI](https://github.com/X33834/workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/X33834/workbench/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/X33834/workbench?color=22d3ee&label=release)](https://github.com/X33834/workbench/releases/latest)
+[![License](https://img.shields.io/github/license/X33834/workbench?color=34d399)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078d4)](#系统要求)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri&logoColor=white)](https://tauri.app/)
+[![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=white)](https://react.dev/)
+
 一个本地优先、隐私可控的桌面运维工作台。数据仅存本机，双主题。
 **当前只在 Windows 上开发与打包**（端口采集走 `netstat -ano`，安装目标为 NSIS）；
 macOS / Linux 尚未接入采集与打包，属未验证状态。
+
+**🌐 项目主页：[https://x33834.github.io/workbench/](https://x33834.github.io/workbench/)**
+
+---
+
+## 下载
+
+无需配置开发环境，下载即用（Windows 10 / 11 x64）：
+
+| 方式 | 文件 | 说明 |
+|------|------|------|
+| **推荐** | [`Workbench_0.1.0_x64-setup.exe`](https://github.com/X33834/workbench/releases/latest) | NSIS 安装包，约 3 MB，双击安装 |
+| 免安装 | [`workbench.exe`](https://github.com/X33834/workbench/releases/latest) | 单文件直接运行，不写注册表 |
+
+> 安装包未做代码签名，Windows SmartScreen 可能提示「未知发布者」——
+> 点「更多信息 → 仍要运行」即可。这是证书需要付费所致，不是文件有风险。
+
+镜像仓库（内容一致，任选其一；各站的下载入口见其 Release 页）：
+
+| 平台 | 仓库 | 落地页 |
+|------|------|--------|
+| GitHub | [X33834/workbench](https://github.com/X33834/workbench) | [x33834.github.io/workbench](https://x33834.github.io/workbench/) |
+| GitHub | [badhope/workbench](https://github.com/badhope/workbench) | [badhope.github.io/workbench](https://badhope.github.io/workbench/) |
+| GitHub | [Morningstar202604/workbench](https://github.com/Morningstar202604/workbench) | [morningstar202604.github.io/workbench](https://morningstar202604.github.io/workbench/) |
+| Gitee | [badhope/workbench](https://gitee.com/badhope/workbench) | — |
+| GitCode | [badhope/workbench](https://gitcode.com/badhope/workbench) | — |
+
+---
 
 ## 界面预览
 
@@ -31,7 +66,7 @@ macOS / Linux 尚未接入采集与打包，属未验证状态。
 | ![设置](docs/screenshots/07-settings.png) | ![运行日志](docs/screenshots/08-logs.png) |
 | 主题、刷新间隔、预算与数据导入导出 | 内置日志查看器，按需尾部读取 |
 
-截图可自行重生成（需先 `npm run build` 并启动 `npm run preview`，另开一个
+截图可自行重生（需先 `npm run build` 并启动 `npm run preview`，另开一个
 `chrome --headless=new --remote-debugging-port=9222`，然后
 `node scripts/shoot_docs.mjs`）。脚本内置演示模式断言，页面未出现演示标记时
 直接拒绝截图，避免把真实数据写进仓库。
@@ -71,13 +106,26 @@ macOS / Linux 尚未接入采集与打包，属未验证状态。
 
 ## 快速开始
 
-### 环境要求
+### 系统要求
 
-- [Node.js](https://nodejs.org/) ≥ 20
-- [Rust](https://www.rust-lang.org/tools/install) ≥ 1.77（`Cargo.toml` 的 `rust-version`）
-- Windows：WebView2 Runtime
+| 项 | 要求 |
+|----|------|
+| 操作系统 | Windows 10 / 11（x64）—— 仅此平台经过验证 |
+| 运行时 | WebView2 Runtime（Windows 11 预装；Windows 10 现代版本通常已含） |
+| 磁盘 | 约 30 MB（安装后），免安装版单文件约 13 MB |
+| 权限 | 无需管理员权限；进程终止需与目标进程同级权限 |
+| 网络 | 不需联网。仅在你主动使用 AI 会话页时会探测本地 opencode 服务 |
 
-### 安装依赖
+### 从 Release 安装（推荐）
+
+1. 到 [Releases](https://github.com/X33834/workbench/releases/latest) 下载 `Workbench_0.1.0_x64-setup.exe`
+2. 若 SmartScreen 拦截：点「更多信息」→「仍要运行」
+3. 安装后从开始菜单启动「工作台」
+
+### 从源码构建
+
+环境要求：[Node.js](https://nodejs.org/) ≥ 20、
+[Rust](https://www.rust-lang.org/tools/install) ≥ 1.77、WebView2。
 
 ```bash
 npm install
@@ -98,7 +146,8 @@ cargo test --test export_bindings   # 重新生成 src/generated/*.ts
 ### 开发模式
 
 ```bash
-npm run tauri dev
+npm run tauri dev      # 桌面开发模式（含热更新）
+npm run dev            # 仅前端，浏览器演示模式，无需 Rust
 ```
 
 ### 生产构建
@@ -114,16 +163,17 @@ npm run tauri build
 | 层 | 选型 |
 |------|------|
 | 运行时 | Tauri 2 (Rust + OS Webview) |
-| 前端框架 | React 18 + TypeScript + Vite 6 |
+| 前端框架 | React 18 + TypeScript（strict）+ Vite 6 |
 | 状态管理 | Zustand 5 (persist) |
 | 样式 | Tailwind CSS 4 + 双主题 CSS 变量 |
-| 图表 | ECharts 5（按需引入 + 暗/亮双主题注册） |
+| 图表 | ECharts 6（按需引入 + 暗/亮双主题注册） |
 | 虚拟滚动 | @tanstack/react-virtual 3（展开行高度可变，进入视口后实测回写行高） |
 | 状态订阅 | Zustand 5 `useShallow` 选择器 + 页面组件 `memo`（自身切片不变不重渲染） |
 | IPC 通道 | Tauri IPC + spawn_blocking |
 | IPC 契约 | ts-rs 10 由 Rust 结构体生成 `src/generated/*.ts`，CI 校验无漂移 |
 | 进程采集 | sysinfo |
 | 端口解析 | netstat 解析器（POSIX / Windows 双方言兼容） |
+| 质量门禁 | ESLint 9 + Prettier 3 + vitest 5 + clippy `-D warnings` |
 
 ## 项目结构
 
@@ -131,36 +181,40 @@ npm run tauri build
 workbench/
 ├── src/                    # 前端源码
 │   ├── pages/              # 8 个功能页面（按需 lazy 加载）
-│   ├── lib/                # store / api / echarts / util
+│   ├── lib/                # store / api / echarts / chartTheme / util
 │   ├── generated/          # ts-rs 生成的 IPC 契约类型（勿手改）
 │   ├── ui.tsx              # 共享组件库
-│   ├── types.ts            # 类型定义
+│   ├── types.ts            # 类型 re-export 与前端专有类型
 │   ├── App.tsx             # 主应用入口
-│   └── styles/global.css   # 全局样式
+│   └── styles/global.css   # 全局样式与主题变量
 ├── src-tauri/              # Rust 后端
-│   └── src/
-│       ├── commands.rs     # IPC 命令层
-│       ├── procs.rs        # 进程快照 + 终止
-│       ├── ports.rs        # netstat 解析
-│       ├── devserver.rs    # 开发框架识别
-│       ├── ai.rs           # AI 会话拉取
-│       ├── pricing.rs      # 模型价格匹配
-│       ├── session_meter.rs # JSONL token 成本解析
-│       ├── cost_store.rs   # 成本数据持久化
-│       └── lib.rs          # Tauri 启动入口
-├── LICENSE
-├── README.md
-└── package.json
+│   ├── capabilities/       # Tauri 权限集（最小面）
+│   ├── icons/              # 应用图标（由 scripts/make_icons.py 生成）
+│   ├── src/
+│   │   ├── commands.rs     # IPC 命令层
+│   │   ├── procs.rs        # 进程快照 + 终止
+│   │   ├── ports.rs        # netstat 解析
+│   │   ├── devserver.rs    # 开发框架识别
+│   │   ├── ai.rs           # AI 会话拉取
+│   │   ├── pricing.rs      # 模型价格匹配
+│   │   ├── session_meter.rs # JSONL token 成本解析
+│   │   ├── cost_store.rs   # 成本数据持久化
+│   │   ├── ipc_guard.rs    # IPC 入参白名单
+│   │   └── lib.rs          # Tauri 启动入口
+│   └── tests/              # IPC 契约导出测试
+├── docs/                   # GitHub Pages 落地页 + 截图
+├── scripts/                # 图标生成与截图辅助脚本
+└── .github/workflows/      # CI / Release / Pages
 ```
 
 ## 开发与质量
 
 ```bash
-npm install                # 前端依赖
-npm run test               # 前端单测（vitest，47 个用例）
+npm run format:check       # Prettier 格式检查
+npm run lint               # ESLint（零警告）
+npm run test               # 前端单测（vitest，48 个用例）
+npm run coverage           # 覆盖率
 npm run build              # tsc --noEmit + vite build
-npm run tauri dev          # 桌面开发模式
-npm run tauri build        # 产出 NSIS 安装包
 
 cd src-tauri
 cargo test                 # 后端单测 + IPC 契约导出
@@ -169,14 +223,76 @@ cargo clippy --all-targets -- -D warnings   # 零警告门禁
 
 Rust 侧纯逻辑（netstat 解析、框架识别、价格匹配、token 提取、JSON 存储、IPC 守卫）
 都有 `#[cfg(test)]` 单测；前端有 vitest 单测覆盖 util / store / 共享组件 / 错误边界。
-CI 跑类型检查、构建、两侧单测、clippy 零警告，并校验 `src/generated/` 与 Rust 结构体一致。
+CI 跑格式、静态检查、类型检查、构建、两侧单测、clippy 零警告，
+并校验 `src/generated/` 与 Rust 结构体一致。
+
+## 常见问题
+
+<details>
+<summary>成本计量是怎么算的？准不准？</summary>
+
+解析本机 Claude Code / Codex 会话 JSONL 中的 usage 字段，按内置的 40+ 模型价格计算。
+分三级可信度：
+
+- **measured** —— 文件里有真实 usage 上报，最准
+- **estimated** —— 无 usage，按字符数启发式估算（可在设置里关掉）
+- **zero_pricing** —— 型号无法识别，标为不计费而**不**编造单价
+
+Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×）。
+</details>
+
+<details>
+<summary>会不会把数据上传到云端？</summary>
+
+不会。项目、任务、成本账本、日志都写在本机 app data 目录。应用只在本地做两件事：
+读 `netstat` 看端口、读本机 session 文件算成本。唯一的可选外连是探测本机 opencode
+服务（默认 4096 端口），失败只显示「未检测到」，不影响其它功能。
+</details>
+
+<details>
+<summary>杀进程会误杀系统关键进程吗？</summary>
+
+不会。PID 0/4 与 csrss、lsass、services 等关键系统进程被后端直接拒绝，
+前端另有二次确认；终止前会刷新并校验进程身份，避免 PID 复用导致误杀。
+</details>
+
+<details>
+<summary>关闭窗口后程序去哪了？怎么真正退出？</summary>
+
+隐藏到系统托盘（有意设计，便于常驻监控）。右键托盘图标选「退出工作台」才结束进程；
+快捷键 <code>Ctrl+Shift+W</code> 可随时显示 / 隐藏窗口。
+</details>
+
+<details>
+<summary>Windows 提示「未知发布者」怎么办？</summary>
+
+安装包未做代码签名（证书需付费），SmartScreen 因此会拦截。
+点「更多信息 → 仍要运行」即可，也可直接下载免安装 exe。
+</details>
+
+## Roadmap
+
+已完成与计划中的方向。欢迎在 Issues 里投票或提新想法。
+
+- [x] 进程 / 端口 / 开发服务器实时监控
+- [x] AI 会话成本计量与预算告警
+- [x] 项目与任务管理
+- [x] 深浅双主题、日志查看器
+- [ ] 跨平台支持（macOS / Linux 采集与打包）
+- [ ] 安装包代码签名
+- [ ] `pricing_overrides.json` 的 UI 编辑入口
+- [ ] 成本账本分片存储（支撑十万级记录）
+- [ ] 页面级端到端测试
+- [ ] 多语言界面（英文 / 日文）
 
 ## 已知限制
 
 - 仅 Windows 验证：端口采集写死 `cmd /c netstat -ano`，`ports.rs` 的 POSIX 分支当前不会被执行
-- 前端渲染行为仍以人工验证为主：vitest 覆盖 util / store / 共享组件 / 错误边界，8 个页面的交互路径尚无端到端测试
+- 前端渲染行为仍以人工验证为主：vitest 覆盖 util / store / 共享组件 / 错误边界，
+  8 个页面的交互路径尚无端到端测试
 - 成本账本落在单个 `cost_data.json`（写操作已串行化），记录数很大时全量读写会开始吃力
 - `pricing_overrides.json` 只有读取路径，没有写入入口
+- 安装包未做代码签名，首次运行可能触发 SmartScreen 提示
 
 ## 数据存储
 
@@ -188,6 +304,15 @@ CI 跑类型检查、构建、两侧单测、clippy 零警告，并校验 `src/g
 | `workbench.log` | 运行日志 | `app data dir` |
 | `*.corrupt-<时间戳>` | 数据文件解析失败时的原样备份（不会被下次保存覆盖） | `app data dir` |
 
+Windows 下 `app data dir` 为 `%APPDATA%\com.workbench.desktop`。
+
+## 参与贡献
+
+- 贡献流程与代码约定见 [CONTRIBUTING.md](CONTRIBUTING.md)
+- 安全漏洞请走私密通道，见 [SECURITY.md](SECURITY.md)
+- 社区行为规范见 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- 版本变更记录见 [CHANGELOG.md](CHANGELOG.md)
+
 ## License
 
-MIT —— 见 [LICENSE](LICENSE)。
+[MIT](LICENSE) © 2026 x1882

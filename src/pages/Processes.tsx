@@ -37,7 +37,7 @@ function cpuHistogram(procs: ProcInfo[]) {
     { range: "<5%", min: 0.5, max: 5, count: 0 },
     { range: "5-20%", min: 5, max: 20, count: 0 },
     { range: "20-50%", min: 20, max: 50, count: 0 },
-    { range: "50%+", min: 50, max:Infinity, count: 0 },
+    { range: "50%+", min: 50, max: Infinity, count: 0 },
   ];
   for (const p of procs) {
     for (const b of bins) {
@@ -154,8 +154,16 @@ export default function Processes() {
     return {
       grid: { left: 36, right: 16, top: 12, bottom: 24 },
       tooltip: { trigger: "axis" },
-      xAxis: { type: "category", data: cpuBins.map((b) => b.range), axisLabel: { fontSize: 9 } },
-      yAxis: { type: "value", axisLabel: { fontSize: 9 }, splitLine: { lineStyle: { type: "dashed" } } },
+      xAxis: {
+        type: "category",
+        data: cpuBins.map((b) => b.range),
+        axisLabel: { fontSize: 9 },
+      },
+      yAxis: {
+        type: "value",
+        axisLabel: { fontSize: 9 },
+        splitLine: { lineStyle: { type: "dashed" } },
+      },
       series: [
         {
           type: "bar",
@@ -177,8 +185,16 @@ export default function Processes() {
     return {
       grid: { left: 36, right: 16, top: 12, bottom: 24 },
       tooltip: { trigger: "axis" },
-      xAxis: { type: "category", data: memBins.map((b) => b.range), axisLabel: { fontSize: 9 } },
-      yAxis: { type: "value", axisLabel: { fontSize: 9 }, splitLine: { lineStyle: { type: "dashed" } } },
+      xAxis: {
+        type: "category",
+        data: memBins.map((b) => b.range),
+        axisLabel: { fontSize: 9 },
+      },
+      yAxis: {
+        type: "value",
+        axisLabel: { fontSize: 9 },
+        splitLine: { lineStyle: { type: "dashed" } },
+      },
       series: [
         {
           type: "bar",
@@ -200,8 +216,20 @@ export default function Processes() {
     <div className="flex flex-col gap-4">
       {/* ── 摘要 + 分布图 ── */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard icon={Cpu} label="进程总数" value={procs.length} tone="accent" bar="bg-accent" />
-        <StatCard icon={Cpu} label="CPU 占用" value={`${procs.reduce((a, p) => a + (p.cpu ?? 0), 0).toFixed(0)}%`} tone="warn" bar="bg-warn" />
+        <StatCard
+          icon={Cpu}
+          label="进程总数"
+          value={procs.length}
+          tone="accent"
+          bar="bg-accent"
+        />
+        <StatCard
+          icon={Cpu}
+          label="CPU 占用"
+          value={`${procs.reduce((a, p) => a + (p.cpu ?? 0), 0).toFixed(0)}%`}
+          tone="warn"
+          bar="bg-warn"
+        />
         <StatCard
           icon={MemoryStick}
           label="内存合计"
@@ -236,7 +264,10 @@ export default function Processes() {
       {/* ── 搜索栏 ── */}
       <Card className="flex flex-wrap items-center gap-3 p-3">
         <div className="relative min-w-[220px] flex-1">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-dim" />
+          <Search
+            size={14}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-dim"
+          />
           <input
             className={`${inputCls} pl-8`}
             placeholder="搜索进程名 / PID / 命令行…"
@@ -298,13 +329,24 @@ export default function Processes() {
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-line text-left text-xs text-dim">
-                  {["", "PID", "名称", "CPU", "内存", "状态", "启动", "路径 / 命令行", "操作"].map(
-                    (h, i) => (
-                      <th key={i} className="whitespace-nowrap bg-panel px-3 py-2 font-medium">
-                        {h}
-                      </th>
-                    )
-                  )}
+                  {[
+                    "",
+                    "PID",
+                    "名称",
+                    "CPU",
+                    "内存",
+                    "状态",
+                    "启动",
+                    "路径 / 命令行",
+                    "操作",
+                  ].map((h, i) => (
+                    <th
+                      key={i}
+                      className="whitespace-nowrap bg-panel px-3 py-2 font-medium"
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -320,7 +362,11 @@ export default function Processes() {
 
                   if (unit.kind === "detail") {
                     return (
-                      <Tr key={`d-${p.pid}`} data-index={v.index} ref={virtualizer.measureElement}>
+                      <Tr
+                        key={`d-${p.pid}`}
+                        data-index={v.index}
+                        ref={virtualizer.measureElement}
+                      >
                         <Td colSpan={9} className="bg-panel/60 px-4 py-3">
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-xs">
                             <div>
@@ -362,76 +408,85 @@ export default function Processes() {
                       className={expanded ? "bg-accentsoft/10" : ""}
                       onClick={() => setExpandedPid(expanded ? null : p.pid)}
                     >
-                    <Td className="w-6">
-                      {expanded ? (
-                        <ChevronDown size={12} className="text-accent" />
-                      ) : (
-                        <ChevronRight size={12} className="text-dim" />
-                      )}
-                    </Td>
-                    <Td mono className="text-dim">{p.pid}</Td>
-                    <Td className="font-medium max-w-[160px] truncate">
-                      <span className="flex items-center gap-1.5">
-                        {p.name}
-                        {aiPids.has(p.pid) && <Badge tone="warn">AI</Badge>}
-                        {devPids.has(p.pid) && <Badge tone="ok">DEV</Badge>}
-                      </span>
-                    </Td>
-                    <Td>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-11 text-right tabular-nums ${
-                            p.cpu > 50 ? "text-danger" : p.cpu > 10 ? "text-warn" : ""
-                          }`}
-                        >
-                          {p.cpu.toFixed(1)}%
+                      <Td className="w-6">
+                        {expanded ? (
+                          <ChevronDown size={12} className="text-accent" />
+                        ) : (
+                          <ChevronRight size={12} className="text-dim" />
+                        )}
+                      </Td>
+                      <Td mono className="text-dim">
+                        {p.pid}
+                      </Td>
+                      <Td className="font-medium max-w-[160px] truncate">
+                        <span className="flex items-center gap-1.5">
+                          {p.name}
+                          {aiPids.has(p.pid) && <Badge tone="warn">AI</Badge>}
+                          {devPids.has(p.pid) && <Badge tone="ok">DEV</Badge>}
                         </span>
-                        <span className="h-1.5 w-14 overflow-hidden rounded-full bg-panel2">
+                      </Td>
+                      <Td>
+                        <div className="flex items-center gap-2">
                           <span
-                            className={`block h-full rounded-full ${
-                              p.cpu > 50 ? "bg-danger" : p.cpu > 10 ? "bg-warn" : "bg-accent"
+                            className={`w-11 text-right tabular-nums ${
+                              p.cpu > 50 ? "text-danger" : p.cpu > 10 ? "text-warn" : ""
                             }`}
-                            style={{ width: `${Math.min(100, p.cpu)}%` }}
-                          />
-                        </span>
-                      </div>
-                    </Td>
-                    <Td>{formatBytes(p.memory)}</Td>
-                    <Td className="text-dim">{p.status}</Td>
-                    <Td className="text-xs text-dim">{fromNow(p.start_time)}</Td>
-                    <Td className="max-w-[240px]">
-                      <div className="truncate font-mono text-[11px] text-dim" title={p.cmd_line || p.exe_path}>
-                        {p.cmd_line ? shortPath(p.cmd_line, 60) : shortPath(p.exe_path, 60)}
-                      </div>
-                    </Td>
-                    <Td>
-                      {aiPids.has(p.pid) ||
-                      devPids.has(p.pid) ||
-                      p.cpu > 50 ? (
-                        <Btn
-                          variant="danger"
-                          className="!px-2 !py-1 !text-xs"
-                          title="结束进程"
-                          onClick={() => {
-                            useStore.getState().setKillTarget(p);
-                          }}
+                          >
+                            {p.cpu.toFixed(1)}%
+                          </span>
+                          <span className="h-1.5 w-14 overflow-hidden rounded-full bg-panel2">
+                            <span
+                              className={`block h-full rounded-full ${
+                                p.cpu > 50
+                                  ? "bg-danger"
+                                  : p.cpu > 10
+                                    ? "bg-warn"
+                                    : "bg-accent"
+                              }`}
+                              style={{ width: `${Math.min(100, p.cpu)}%` }}
+                            />
+                          </span>
+                        </div>
+                      </Td>
+                      <Td>{formatBytes(p.memory)}</Td>
+                      <Td className="text-dim">{p.status}</Td>
+                      <Td className="text-xs text-dim">{fromNow(p.start_time)}</Td>
+                      <Td className="max-w-[240px]">
+                        <div
+                          className="truncate font-mono text-[11px] text-dim"
+                          title={p.cmd_line || p.exe_path}
                         >
-                          <XCircle size={12} />
-                        </Btn>
-                      ) : (
-                        <Btn
-                          variant="ghost"
-                          className="!px-2 !py-1 !text-xs"
-                          title="结束进程"
-                          onClick={() => {
-                            useStore.getState().setKillTarget(p);
-                          }}
-                        >
-                          <XCircle size={12} />
-                        </Btn>
-                      )}
-                    </Td>
-                  </Tr>
+                          {p.cmd_line
+                            ? shortPath(p.cmd_line, 60)
+                            : shortPath(p.exe_path, 60)}
+                        </div>
+                      </Td>
+                      <Td>
+                        {aiPids.has(p.pid) || devPids.has(p.pid) || p.cpu > 50 ? (
+                          <Btn
+                            variant="danger"
+                            className="!px-2 !py-1 !text-xs"
+                            title="结束进程"
+                            onClick={() => {
+                              useStore.getState().setKillTarget(p);
+                            }}
+                          >
+                            <XCircle size={12} />
+                          </Btn>
+                        ) : (
+                          <Btn
+                            variant="ghost"
+                            className="!px-2 !py-1 !text-xs"
+                            title="结束进程"
+                            onClick={() => {
+                              useStore.getState().setKillTarget(p);
+                            }}
+                          >
+                            <XCircle size={12} />
+                          </Btn>
+                        )}
+                      </Td>
+                    </Tr>
                   );
                 })}
                 {padBottom > 0 && (

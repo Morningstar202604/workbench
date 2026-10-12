@@ -16,11 +16,31 @@ import {
   TrendingUp,
   Wrench,
 } from "lucide-react";
-import { EChart, chartGapColor } from "../lib/echarts";
+import { EChart } from "../lib/echarts";
+import { chartGapColor } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { Badge, Btn, Card, Empty, Modal, SectionTitle, Spinner, StatCard, Table, Td, Tr } from "../ui";
-import { formatBytes, formatDuration, formatTime, formatTokens, formatUsd, fromNow } from "../lib/util";
+import {
+  Badge,
+  Btn,
+  Card,
+  Empty,
+  Modal,
+  SectionTitle,
+  Spinner,
+  StatCard,
+  Table,
+  Td,
+  Tr,
+} from "../ui";
+import {
+  formatBytes,
+  formatDuration,
+  formatTime,
+  formatTokens,
+  formatUsd,
+  fromNow,
+} from "../lib/util";
 import type { SessionFilePreview } from "../types";
 
 const COLORS = ["#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#f87171", "#60a5fa"];
@@ -85,7 +105,9 @@ export default function AiSessions() {
   // ── 成本总 token 数 ──────────────────────────────────────
   const totalTokensDisplay = useMemo(() => {
     if (!costOverview) return "—";
-    return formatTokens(costOverview.total_input_tokens + costOverview.total_output_tokens);
+    return formatTokens(
+      costOverview.total_input_tokens + costOverview.total_output_tokens
+    );
   }, [costOverview]);
 
   // ── 图表：成本趋势 ──────────────────────────────────────
@@ -96,21 +118,38 @@ export default function AiSessions() {
       grid: { left: 50, right: 16, top: 20, bottom: 24 },
       tooltip: {
         trigger: "axis",
-        formatter: (params: { name: string; value: number; seriesName: string; marker: string }[]) => {
+        formatter: (
+          params: { name: string; value: number; seriesName: string; marker: string }[]
+        ) => {
           const p = params[0];
           return `${p.name}<br/>成本: $${p.value.toFixed(3)}`;
         },
       },
       legend: { data: ["成本 (USD)"], top: 0, right: 8, textStyle: { fontSize: 10 } },
       xAxis: { type: "category", data: days, boundaryGap: false },
-      yAxis: { type: "value", axisLabel: { fontSize: 10, formatter: (v: number) => `$${v.toFixed(2)}` } },
+      yAxis: {
+        type: "value",
+        axisLabel: { fontSize: 10, formatter: (v: number) => `$${v.toFixed(2)}` },
+      },
       series: [
         {
           name: "成本 (USD)",
           type: "line",
           smooth: true,
           data: costTrend.map((r) => Math.round(r.cost * 1000) / 1000),
-          areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "#22d3ee30" }, { offset: 1, color: "#22d3ee05" }] } },
+          areaStyle: {
+            color: {
+              type: "linear",
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: "#22d3ee30" },
+                { offset: 1, color: "#22d3ee05" },
+              ],
+            },
+          },
           lineStyle: { width: 2 },
           itemStyle: { color: "#22d3ee" },
           symbol: "circle",
@@ -131,7 +170,12 @@ export default function AiSessions() {
     }));
     return {
       tooltip: { trigger: "item", formatter: "{b}: ${c} ({d}%)" },
-      legend: { orient: "vertical", right: 8, top: "middle", textStyle: { fontSize: 10 } },
+      legend: {
+        orient: "vertical",
+        right: 8,
+        top: "middle",
+        textStyle: { fontSize: 10 },
+      },
       series: [
         {
           type: "pie",
@@ -139,12 +183,12 @@ export default function AiSessions() {
           center: ["35%", "50%"],
           label: { show: false },
           labelLine: { show: false },
-          itemStyle: { borderColor: chartGapColor(), borderWidth: 2 },
+          itemStyle: { borderColor: chartGapColor(theme), borderWidth: 2 },
           data,
         },
       ],
     };
-  }, [costModelBreakdown]);
+  }, [costModelBreakdown, theme]);
 
   // ── 预算状态 ──────────────────────────────────────────────
   const budgetStatus = useMemo(() => {
@@ -153,7 +197,9 @@ export default function AiSessions() {
       dailyPct: costOverview.daily_pct,
       monthlyPct: costOverview.monthly_pct,
       exceeded: costOverview.budget_exceeded,
-      nearLimit: costOverview.daily_pct >= costOverview.alert_threshold_pct || costOverview.monthly_pct >= costOverview.alert_threshold_pct,
+      nearLimit:
+        costOverview.daily_pct >= costOverview.alert_threshold_pct ||
+        costOverview.monthly_pct >= costOverview.alert_threshold_pct,
     };
   }, [costOverview]);
 
@@ -169,10 +215,16 @@ export default function AiSessions() {
     return {
       grid: { left: 90, right: 40, top: 8, bottom: 8 },
       tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-      xAxis: { type: "value", axisLabel: { fontSize: 10 }, splitLine: { lineStyle: { type: "dashed" } } },
+      xAxis: {
+        type: "value",
+        axisLabel: { fontSize: 10 },
+        splitLine: { lineStyle: { type: "dashed" } },
+      },
       yAxis: {
         type: "category",
-        data: sorted.map((a) => a.name.length > 16 ? a.name.slice(0, 16) + "…" : a.name),
+        data: sorted.map((a) =>
+          a.name.length > 16 ? a.name.slice(0, 16) + "…" : a.name
+        ),
         inverse: true,
         axisLabel: { fontSize: 10 },
         axisLine: { show: false },
@@ -184,7 +236,17 @@ export default function AiSessions() {
           data: sorted.map((a) => ({
             value: Math.round(a.memory / 1024 / 1024),
             itemStyle: {
-              color: { type: "linear", x: 0, y: 0, x2: 1, y2: 0, colorStops: [{ offset: 0, color: "#22d3ee40" }, { offset: 1, color: "#22d3ee" }] },
+              color: {
+                type: "linear",
+                x: 0,
+                y: 0,
+                x2: 1,
+                y2: 0,
+                colorStops: [
+                  { offset: 0, color: "#22d3ee40" },
+                  { offset: 1, color: "#22d3ee" },
+                ],
+              },
               borderRadius: [0, 4, 4, 0],
             },
           })),
@@ -210,7 +272,11 @@ export default function AiSessions() {
           labelLine: { show: false },
           data: data.map((d, i) => ({
             ...d,
-            itemStyle: { color: COLORS[i % COLORS.length], borderColor: chartGapColor(), borderWidth: 2 },
+            itemStyle: {
+              color: COLORS[i % COLORS.length],
+              borderColor: chartGapColor(theme),
+              borderWidth: 2,
+            },
           })),
         },
       ],
@@ -240,7 +306,8 @@ export default function AiSessions() {
         <div className="flex items-center gap-3 rounded-xl border border-danger/50 bg-danger/10 px-4 py-3 text-sm">
           <AlertTriangle size={16} className="text-danger shrink-0" />
           <span className="text-danger font-medium">
-            预算告警：今日 {budgetStatus.dailyPct.toFixed(0)}% / 本月 {budgetStatus.monthlyPct.toFixed(0)}% 已超限额
+            预算告警：今日 {budgetStatus.dailyPct.toFixed(0)}% / 本月{" "}
+            {budgetStatus.monthlyPct.toFixed(0)}% 已超限额
           </span>
         </div>
       )}
@@ -248,7 +315,9 @@ export default function AiSessions() {
         <div className="flex items-center gap-3 rounded-xl border border-warn/50 bg-warn/10 px-4 py-3 text-sm">
           <AlertTriangle size={16} className="text-warn shrink-0" />
           <span className="text-warn font-medium">
-            预算提醒：今日 {budgetStatus.dailyPct.toFixed(0)}% / 本月 {budgetStatus.monthlyPct.toFixed(0)}% 接近 {costOverview?.alert_threshold_pct}% 阈值
+            预算提醒：今日 {budgetStatus.dailyPct.toFixed(0)}% / 本月{" "}
+            {budgetStatus.monthlyPct.toFixed(0)}% 接近 {costOverview?.alert_threshold_pct}
+            % 阈值
           </span>
         </div>
       )}
@@ -256,36 +325,97 @@ export default function AiSessions() {
       {/* 概览卡片 + 操作按钮 */}
       <div className="flex items-center justify-between">
         <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard icon={DollarSign} label="今日成本" value={costOverview ? formatUsd(costOverview.today_cost) : "—"} tone="warn" bar="bg-warn" hint={costOverview ? `${formatTokens(costOverview.today_input_tokens + costOverview.today_output_tokens)} tokens` : undefined} />
-          <StatCard icon={TrendingUp} label="本月成本" value={costOverview ? formatUsd(costOverview.month_cost) : "—"} tone="accent" bar="bg-accent" hint={costOverview ? `${formatTokens(costOverview.month_input_tokens + costOverview.month_output_tokens)} tokens` : undefined} />
-          <StatCard icon={Coins} label="累计成本" value={costOverview ? formatUsd(costOverview.total_cost) : "—"} tone="ok" bar="bg-ok" hint={costOverview ? `${costOverview.record_count} 条记录` : undefined} />
-          <StatCard icon={Hash} label="累计 Token" value={totalTokensDisplay} tone="text" bar="bg-accent" hint={costOverview ? `实测 ${costOverview.measured_count} / 估算 ${costOverview.estimated_count}` : undefined} />
+          <StatCard
+            icon={DollarSign}
+            label="今日成本"
+            value={costOverview ? formatUsd(costOverview.today_cost) : "—"}
+            tone="warn"
+            bar="bg-warn"
+            hint={
+              costOverview
+                ? `${formatTokens(costOverview.today_input_tokens + costOverview.today_output_tokens)} tokens`
+                : undefined
+            }
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="本月成本"
+            value={costOverview ? formatUsd(costOverview.month_cost) : "—"}
+            tone="accent"
+            bar="bg-accent"
+            hint={
+              costOverview
+                ? `${formatTokens(costOverview.month_input_tokens + costOverview.month_output_tokens)} tokens`
+                : undefined
+            }
+          />
+          <StatCard
+            icon={Coins}
+            label="累计成本"
+            value={costOverview ? formatUsd(costOverview.total_cost) : "—"}
+            tone="ok"
+            bar="bg-ok"
+            hint={costOverview ? `${costOverview.record_count} 条记录` : undefined}
+          />
+          <StatCard
+            icon={Hash}
+            label="累计 Token"
+            value={totalTokensDisplay}
+            tone="text"
+            bar="bg-accent"
+            hint={
+              costOverview
+                ? `实测 ${costOverview.measured_count} / 估算 ${costOverview.estimated_count}`
+                : undefined
+            }
+          />
         </div>
         <div className="ml-3 flex shrink-0 flex-col gap-2">
-          <Btn onClick={scanCosts} disabled={costLoading} title="扫描 session 文件提取 token 用量并计算成本">
+          <Btn
+            onClick={scanCosts}
+            disabled={costLoading}
+            title="扫描 session 文件提取 token 用量并计算成本"
+          >
             {costLoading ? <Spinner /> : <RefreshCw size={14} />}
             {costLoading ? "扫描中…" : "扫描成本"}
           </Btn>
-          <Btn onClick={() => { if (confirm("确定清空所有成本记录？")) clearCosts(); }} className="!py-1 !text-xs" title="清空成本数据">
+          <Btn
+            onClick={() => {
+              if (confirm("确定清空所有成本记录？")) clearCosts();
+            }}
+            className="!py-1 !text-xs"
+            title="清空成本数据"
+          >
             <Trash2 size={12} /> 清空
           </Btn>
         </div>
       </div>
 
       {/* 预算进度条 */}
-      {costOverview && (costOverview.daily_budget > 0 || costOverview.monthly_budget > 0) && (
-        <Card className="p-4">
-          <SectionTitle>预算进度</SectionTitle>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {costOverview.daily_budget > 0 && (
-              <BudgetBar label="今日" pct={costOverview.daily_pct} spent={costOverview.today_cost} total={costOverview.daily_budget} />
-            )}
-            {costOverview.monthly_budget > 0 && (
-              <BudgetBar label="本月" pct={costOverview.monthly_pct} spent={costOverview.month_cost} total={costOverview.monthly_budget} />
-            )}
-          </div>
-        </Card>
-      )}
+      {costOverview &&
+        (costOverview.daily_budget > 0 || costOverview.monthly_budget > 0) && (
+          <Card className="p-4">
+            <SectionTitle>预算进度</SectionTitle>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {costOverview.daily_budget > 0 && (
+                <BudgetBar
+                  label="今日"
+                  pct={costOverview.daily_pct}
+                  spent={costOverview.today_cost}
+                  total={costOverview.daily_budget}
+                />
+              )}
+              {costOverview.monthly_budget > 0 && (
+                <BudgetBar
+                  label="本月"
+                  pct={costOverview.monthly_pct}
+                  spent={costOverview.month_cost}
+                  total={costOverview.monthly_budget}
+                />
+              )}
+            </div>
+          </Card>
+        )}
 
       {/* 图表行 */}
       {(costTrendChart || modelBreakdownChart) && (
@@ -293,20 +423,37 @@ export default function AiSessions() {
           {costTrendChart && (
             <Card className="p-4 lg:col-span-3">
               <SectionTitle>成本趋势（近 14 天）</SectionTitle>
-              <EChart option={costTrendChart} style={{ height: 200 }} notMerge lazyUpdate />
+              <EChart
+                option={costTrendChart}
+                style={{ height: 200 }}
+                notMerge
+                lazyUpdate
+              />
             </Card>
           )}
           {modelBreakdownChart && (
             <Card className="p-4 lg:col-span-2">
               <SectionTitle>模型成本构成</SectionTitle>
-              <EChart option={modelBreakdownChart} style={{ height: 200 }} notMerge lazyUpdate />
+              <EChart
+                option={modelBreakdownChart}
+                style={{ height: 200 }}
+                notMerge
+                lazyUpdate
+              />
               <div className="mt-2 space-y-1">
                 {costModelBreakdown.slice(0, 5).map((r, i) => (
                   <div key={r.model} className="flex items-center gap-2 text-xs">
-                    <span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                    <span className="flex-1 truncate text-dim" title={r.model}>{r.model}</span>
+                    <span
+                      className="inline-block h-2 w-2 rounded-full"
+                      style={{ background: COLORS[i % COLORS.length] }}
+                    />
+                    <span className="flex-1 truncate text-dim" title={r.model}>
+                      {r.model}
+                    </span>
                     <span className="font-mono text-text">{formatUsd(r.cost)}</span>
-                    <span className="text-dim">{formatTokens(r.input_tokens + r.output_tokens)}</span>
+                    <span className="text-dim">
+                      {formatTokens(r.input_tokens + r.output_tokens)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -321,17 +468,46 @@ export default function AiSessions() {
 
       {/* ── 摘要条 ── */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard icon={Sparkles} label="AI 进程" value={ais.length} tone="warn" bar="bg-warn" />
-        <StatCard icon={MessageSquare} label="在线会话" value={sessions.length} tone="accent" bar="bg-accent" />
-        <StatCard icon={Terminal} label="本地会话文件" value={sessionFiles.length} tone="ok" bar="bg-ok" />
-        <StatCard icon={Hash} label="总消息数" value={totalMessages || "—"} tone="text" bar="bg-accent" />
+        <StatCard
+          icon={Sparkles}
+          label="AI 进程"
+          value={ais.length}
+          tone="warn"
+          bar="bg-warn"
+        />
+        <StatCard
+          icon={MessageSquare}
+          label="在线会话"
+          value={sessions.length}
+          tone="accent"
+          bar="bg-accent"
+        />
+        <StatCard
+          icon={Terminal}
+          label="本地会话文件"
+          value={sessionFiles.length}
+          tone="ok"
+          bar="bg-ok"
+        />
+        <StatCard
+          icon={Hash}
+          label="总消息数"
+          value={totalMessages || "—"}
+          tone="text"
+          bar="bg-accent"
+        />
       </div>
 
       {/* ── AI 进程内存图 ── */}
       <Card className="p-4">
         <SectionTitle>AI 进程内存占用</SectionTitle>
         {ais.length > 0 ? (
-          <EChart option={aiMemChart} style={{ height: Math.max(120, ais.length * 36) }} notMerge lazyUpdate />
+          <EChart
+            option={aiMemChart}
+            style={{ height: Math.max(120, ais.length * 36) }}
+            notMerge
+            lazyUpdate
+          />
         ) : (
           <Empty icon={Sparkles}>当前没有 AI 进程在运行</Empty>
         )}
@@ -341,7 +517,9 @@ export default function AiSessions() {
       <Card className="p-4">
         <SectionTitle>AI 代理进程（{ais.length}）</SectionTitle>
         {ais.length === 0 ? (
-          <Empty>当前没有检测到 AI 编码代理进程（opencode / claude / codex / cursor 等）</Empty>
+          <Empty>
+            当前没有检测到 AI 编码代理进程（opencode / claude / codex / cursor 等）
+          </Empty>
         ) : (
           <Table head={["进程", "命中关键词", "PID", "内存", "启动时间", "命令行"]}>
             {ais.map((a) => (
@@ -355,10 +533,15 @@ export default function AiSessions() {
                 <Td>
                   <Badge tone="warn">{a.matched}</Badge>
                 </Td>
-                <Td mono className="text-dim">{a.pid}</Td>
+                <Td mono className="text-dim">
+                  {a.pid}
+                </Td>
                 <Td>{formatBytes(a.memory)}</Td>
                 <Td className="text-xs text-dim">{fromNow(a.start_time)}</Td>
-                <Td className="max-w-[280px] truncate font-mono text-[11px] text-dim" title={a.cmd_line}>
+                <Td
+                  className="max-w-[280px] truncate font-mono text-[11px] text-dim"
+                  title={a.cmd_line}
+                >
                   {a.cmd_line}
                 </Td>
               </Tr>
@@ -409,8 +592,12 @@ export default function AiSessions() {
                     )}
                     <MessageSquare size={14} className="text-accent shrink-0" />
                     <span className="font-medium flex-1 truncate">{s.title}</span>
-                    <span className="font-mono text-xs text-dim hidden sm:block">{s.id.slice(0, 8)}</span>
-                    <span className="text-xs text-dim">{s.created ? formatTime(s.created) : ""}</span>
+                    <span className="font-mono text-xs text-dim hidden sm:block">
+                      {s.id.slice(0, 8)}
+                    </span>
+                    <span className="text-xs text-dim">
+                      {s.created ? formatTime(s.created) : ""}
+                    </span>
                     {sessionDetailLoading && expanded && <Spinner />}
                   </button>
 
@@ -423,32 +610,51 @@ export default function AiSessions() {
                       )}
 
                       <div className="flex flex-wrap gap-4 text-xs">
-                        <InfoChip icon={Hash} label="消息数" value={String(sessionDetail.message_count)} />
-                        <InfoChip icon={Clock} label="持续时间" value={formatDuration(sessionDetail.duration_seconds)} />
-                        <InfoChip icon={Wrench} label="使用工具" value={String(toolsFromDetail.length)} />
+                        <InfoChip
+                          icon={Hash}
+                          label="消息数"
+                          value={String(sessionDetail.message_count)}
+                        />
+                        <InfoChip
+                          icon={Clock}
+                          label="持续时间"
+                          value={formatDuration(sessionDetail.duration_seconds)}
+                        />
+                        <InfoChip
+                          icon={Wrench}
+                          label="使用工具"
+                          value={String(toolsFromDetail.length)}
+                        />
                       </div>
 
                       {sessionDetail.first_message && (
                         <div>
-                          <div className="mb-1 text-xs font-medium text-dim">首条消息</div>
+                          <div className="mb-1 text-xs font-medium text-dim">
+                            首条消息
+                          </div>
                           <div className="rounded-lg border border-line bg-bg px-3 py-2 text-xs whitespace-pre-wrap max-h-[100px] overflow-y-auto">
                             {sessionDetail.first_message}
                           </div>
                         </div>
                       )}
 
-                      {sessionDetail.last_message && sessionDetail.last_message !== sessionDetail.first_message && (
-                        <div>
-                          <div className="mb-1 text-xs font-medium text-dim">最近消息</div>
-                          <div className="rounded-lg border border-line bg-bg px-3 py-2 text-xs whitespace-pre-wrap max-h-[100px] overflow-y-auto">
-                            {sessionDetail.last_message}
+                      {sessionDetail.last_message &&
+                        sessionDetail.last_message !== sessionDetail.first_message && (
+                          <div>
+                            <div className="mb-1 text-xs font-medium text-dim">
+                              最近消息
+                            </div>
+                            <div className="rounded-lg border border-line bg-bg px-3 py-2 text-xs whitespace-pre-wrap max-h-[100px] overflow-y-auto">
+                              {sessionDetail.last_message}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
                       {toolsFromDetail.length > 0 && (
                         <div>
-                          <div className="mb-1 text-xs font-medium text-dim">工具使用分布</div>
+                          <div className="mb-1 text-xs font-medium text-dim">
+                            工具使用分布
+                          </div>
                           <div className="flex flex-wrap gap-1.5">
                             {toolsFromDetail.map(([tool, count]) => (
                               <Badge key={tool} tone="accent">
@@ -476,9 +682,15 @@ export default function AiSessions() {
           ) : (
             <Table head={["工具", "项目", "消息数", "修改时间", "大小", "文件"]}>
               {sessionFiles.map((f, i) => (
-                <Tr key={i} className="cursor-pointer hover:bg-accentsoft/20" onClick={() => setPreviewFile(f)}>
+                <Tr
+                  key={i}
+                  className="cursor-pointer hover:bg-accentsoft/20"
+                  onClick={() => setPreviewFile(f)}
+                >
                   <Td>
-                    <Badge tone={f.tool.includes("Claude") ? "accent" : "ok"}>{f.tool}</Badge>
+                    <Badge tone={f.tool.includes("Claude") ? "accent" : "ok"}>
+                      {f.tool}
+                    </Badge>
                   </Td>
                   <Td className="max-w-[160px] truncate font-medium" title={f.project}>
                     {f.project || "—"}
@@ -490,7 +702,10 @@ export default function AiSessions() {
                   </Td>
                   <Td className="text-xs text-dim">{fromNow(f.modified)}</Td>
                   <Td className="text-xs text-dim">{formatBytes(f.size)}</Td>
-                  <Td className="max-w-[180px] truncate font-mono text-[11px] text-dim" title={f.path}>
+                  <Td
+                    className="max-w-[180px] truncate font-mono text-[11px] text-dim"
+                    title={f.path}
+                  >
                     {f.path.split(/[\\/]/).pop()}
                   </Td>
                 </Tr>
@@ -503,15 +718,24 @@ export default function AiSessions() {
           <SectionTitle>工具分布</SectionTitle>
           {sessionFiles.length > 0 ? (
             <>
-              <EChart option={sessionToolChart} style={{ height: 160 }} notMerge lazyUpdate />
+              <EChart
+                option={sessionToolChart}
+                style={{ height: 160 }}
+                notMerge
+                lazyUpdate
+              />
               <div className="mt-2 space-y-1.5">
                 {sessionFiles.length > 0 &&
                   (() => {
                     const counts: Record<string, number> = {};
-                    for (const f of sessionFiles) counts[f.tool] = (counts[f.tool] ?? 0) + 1;
+                    for (const f of sessionFiles)
+                      counts[f.tool] = (counts[f.tool] ?? 0) + 1;
                     return Object.entries(counts).map(([tool, count], i) => (
                       <div key={tool} className="flex items-center gap-2 text-xs">
-                        <span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                        <span
+                          className="inline-block h-2 w-2 rounded-full"
+                          style={{ background: COLORS[i % COLORS.length] }}
+                        />
                         <span className="text-dim">{tool}</span>
                         <span className="ml-auto font-mono text-text">{count}</span>
                       </div>
@@ -535,9 +759,21 @@ export default function AiSessions() {
         >
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-3 text-xs">
-              <InfoChip icon={Hash} label="消息数" value={String(previewFile.message_count)} />
-              <InfoChip icon={Clock} label="修改时间" value={fromNow(previewFile.modified)} />
-              <InfoChip icon={Terminal} label="大小" value={formatBytes(previewFile.size)} />
+              <InfoChip
+                icon={Hash}
+                label="消息数"
+                value={String(previewFile.message_count)}
+              />
+              <InfoChip
+                icon={Clock}
+                label="修改时间"
+                value={fromNow(previewFile.modified)}
+              />
+              <InfoChip
+                icon={Terminal}
+                label="大小"
+                value={formatBytes(previewFile.size)}
+              />
             </div>
             {previewFile.first_line && (
               <div>
@@ -558,28 +794,27 @@ export default function AiSessions() {
                 </pre>
               </div>
             )}
-            {previewFile.last_line && previewFile.last_line !== previewFile.first_line && (
-              <div>
-                <div className="mb-1 flex items-center justify-between text-xs text-dim">
-                  <span>最近内容</span>
-                  <Btn
-                    className="!px-2 !py-0.5 !text-[10px]"
-                    onClick={() => {
-                      navigator.clipboard.writeText(previewFile.last_line);
-                      setToast("已复制");
-                    }}
-                  >
-                    <Copy size={10} />
-                  </Btn>
+            {previewFile.last_line &&
+              previewFile.last_line !== previewFile.first_line && (
+                <div>
+                  <div className="mb-1 flex items-center justify-between text-xs text-dim">
+                    <span>最近内容</span>
+                    <Btn
+                      className="!px-2 !py-0.5 !text-[10px]"
+                      onClick={() => {
+                        navigator.clipboard.writeText(previewFile.last_line);
+                        setToast("已复制");
+                      }}
+                    >
+                      <Copy size={10} />
+                    </Btn>
+                  </div>
+                  <pre className="max-h-[200px] overflow-auto rounded-lg border border-line bg-bg p-3 text-[11px] whitespace-pre-wrap">
+                    {previewFile.last_line}
+                  </pre>
                 </div>
-                <pre className="max-h-[200px] overflow-auto rounded-lg border border-line bg-bg p-3 text-[11px] whitespace-pre-wrap">
-                  {previewFile.last_line}
-                </pre>
-              </div>
-            )}
-            <div className="text-[11px] text-dim break-all">
-              文件: {previewFile.path}
-            </div>
+              )}
+            <div className="text-[11px] text-dim break-all">文件: {previewFile.path}</div>
           </div>
         </Modal>
       )}
@@ -609,7 +844,17 @@ function InfoChip({
   );
 }
 
-function BudgetBar({ label, pct, spent, total }: { label: string; pct: number; spent: number; total: number }) {
+function BudgetBar({
+  label,
+  pct,
+  spent,
+  total,
+}: {
+  label: string;
+  pct: number;
+  spent: number;
+  total: number;
+}) {
   const clamped = Math.min(pct, 100);
   const exceeded = pct >= 100;
   const nearLimit = pct >= 80 && pct < 100;
@@ -623,7 +868,10 @@ function BudgetBar({ label, pct, spent, total }: { label: string; pct: number; s
         </span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-panel2">
-        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${clamped}%` }} />
+        <div
+          className={`h-full rounded-full transition-all ${barColor}`}
+          style={{ width: `${clamped}%` }}
+        />
       </div>
     </div>
   );

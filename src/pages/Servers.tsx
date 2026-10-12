@@ -10,7 +10,8 @@ import {
   Server,
   Terminal,
 } from "lucide-react";
-import { EChart, chartGapColor } from "../lib/echarts";
+import { EChart } from "../lib/echarts";
+import { chartGapColor, horizontalBarOption } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { openExternal } from "../lib/api";
@@ -42,22 +43,38 @@ function portHeatmap(ports: PortEntry[]) {
   return ranges;
 }
 
-const COLORS = ["#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#f87171", "#60a5fa", "#e879f9"];
+const COLORS = [
+  "#22d3ee",
+  "#a78bfa",
+  "#34d399",
+  "#fbbf24",
+  "#f87171",
+  "#60a5fa",
+  "#e879f9",
+];
 
 export default function Servers() {
-  const { devs, ports, procs, refreshRuntime, setKillTarget, gitBranches, fetchGitBranch, theme } =
-    useStore(
-      useShallow((s) => ({
-        devs: s.devs,
-        ports: s.ports,
-        procs: s.procs,
-        refreshRuntime: s.refreshRuntime,
-        setKillTarget: s.setKillTarget,
-        gitBranches: s.gitBranches,
-        fetchGitBranch: s.fetchGitBranch,
-        theme: s.theme,
-      }))
-    );
+  const {
+    devs,
+    ports,
+    procs,
+    refreshRuntime,
+    setKillTarget,
+    gitBranches,
+    fetchGitBranch,
+    theme,
+  } = useStore(
+    useShallow((s) => ({
+      devs: s.devs,
+      ports: s.ports,
+      procs: s.procs,
+      refreshRuntime: s.refreshRuntime,
+      setKillTarget: s.setKillTarget,
+      gitBranches: s.gitBranches,
+      fetchGitBranch: s.fetchGitBranch,
+      theme: s.theme,
+    }))
+  );
   const [expandedServer, setExpandedServer] = useState<number | null>(null);
 
   const listening = useMemo<PortEntry[]>(
@@ -94,7 +111,7 @@ export default function Servers() {
             label: { show: true, fontSize: 13, fontWeight: "bold" },
           },
           labelLine: { show: false },
-          itemStyle: { borderColor: chartGapColor(), borderWidth: 2 },
+          itemStyle: { borderColor: chartGapColor(theme), borderWidth: 2 },
           data: frameworkData.map(([name, count], i) => ({
             name,
             value: count,
@@ -105,55 +122,48 @@ export default function Servers() {
     };
   }, [frameworkData, theme]);
 
-  // 端口分布条形图
-  const portBarOption = useMemo(() => {
-    return {
-      grid: { left: 100, right: 24, top: 8, bottom: 8 },
-      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-      xAxis: { type: "value", show: false },
-      yAxis: {
-        type: "category",
-        data: heatmapData.map((h) => h.label),
-        axisLabel: { fontSize: 10 },
-        axisLine: { show: false },
-        axisTick: { show: false },
-      },
-      series: [
-        {
-          type: "bar",
-          data: heatmapData.map((h, i) => ({
-            value: h.count,
-            itemStyle: {
-              color: {
-                type: "linear",
-                x: 0, y: 0, x2: 1, y2: 0,
-                colorStops: [
-                  { offset: 0, color: COLORS[i] + "60" },
-                  { offset: 1, color: COLORS[i] },
-                ],
-              },
-              borderRadius: [0, 6, 6, 0],
-            },
-          })),
-          barWidth: 16,
-          label: {
-            show: true,
-            position: "right",
-            fontSize: 11,
-            formatter: "{c}",
-          },
-        },
-      ],
-    };
-  }, [heatmapData]);
+  // 端口分布条形图（与 Overview / Projects / AiSessions 共用同一构造器）
+  const portBarOption = useMemo(
+    () =>
+      horizontalBarOption({
+        labels: heatmapData.map((h) => h.label),
+        values: heatmapData.map((h, i) => ({
+          value: h.count,
+          color: COLORS[i % COLORS.length],
+        })),
+        theme,
+        left: 100,
+        barWidth: 16,
+        valueLabel: "{c}",
+      }),
+    [heatmapData, theme]
+  );
 
   return (
     <div className="flex flex-col gap-4">
       {/* ── 摘要条 ── */}
       <div className="grid grid-cols-3 gap-3">
-        <StatCard icon={Server} label="开发服务" value={devs.length} tone="ok" bar="bg-ok" />
-        <StatCard icon={Network} label="TCP 监听" value={listening.length} tone="accent" bar="bg-accent" />
-        <StatCard icon={BarChart3} label="框架种类" value={frameworkData.length} tone="warn" bar="bg-warn" />
+        <StatCard
+          icon={Server}
+          label="开发服务"
+          value={devs.length}
+          tone="ok"
+          bar="bg-ok"
+        />
+        <StatCard
+          icon={Network}
+          label="TCP 监听"
+          value={listening.length}
+          tone="accent"
+          bar="bg-accent"
+        />
+        <StatCard
+          icon={BarChart3}
+          label="框架种类"
+          value={frameworkData.length}
+          tone="warn"
+          bar="bg-warn"
+        />
       </div>
 
       {/* ── 图表区 ── */}
@@ -162,10 +172,18 @@ export default function Servers() {
           <SectionTitle>框架分布</SectionTitle>
           {frameworkData.length > 0 ? (
             <>
-              <EChart option={frameworkPieOption} style={{ height: 180 }} notMerge lazyUpdate />
+              <EChart
+                option={frameworkPieOption}
+                style={{ height: 180 }}
+                notMerge
+                lazyUpdate
+              />
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
                 {frameworkData.map(([name, count], i) => (
-                  <span key={name} className="flex items-center gap-1.5 text-[11px] text-dim">
+                  <span
+                    key={name}
+                    className="flex items-center gap-1.5 text-[11px] text-dim"
+                  >
                     <span
                       className="inline-block h-2 w-2 rounded-full"
                       style={{ background: COLORS[i % COLORS.length] }}
@@ -202,7 +220,10 @@ export default function Servers() {
           开发服务器（{devs.length}）
         </SectionTitle>
         {devs.length === 0 ? (
-          <Empty>当前没有检测到运行中的开发服务器。启动 npm run dev / uvicorn 等后会出现在这里。</Empty>
+          <Empty>
+            当前没有检测到运行中的开发服务器。启动 npm run dev / uvicorn
+            等后会出现在这里。
+          </Empty>
         ) : (
           <div className="flex flex-col gap-2">
             {devs.map((d) => {
@@ -226,14 +247,32 @@ export default function Servers() {
                     <Server size={16} className="text-ok shrink-0" />
                     <span className="font-semibold">{d.framework}</span>
                     <Badge tone="ok">:{d.port}</Badge>
-                    <Badge tone={d.confidence === "high" ? "ok" : d.confidence === "medium" ? "warn" : "dim"}>
-                      {d.confidence === "high" ? "高置信" : d.confidence === "medium" ? "中置信" : "低置信"}
+                    <Badge
+                      tone={
+                        d.confidence === "high"
+                          ? "ok"
+                          : d.confidence === "medium"
+                            ? "warn"
+                            : "dim"
+                      }
+                    >
+                      {d.confidence === "high"
+                        ? "高置信"
+                        : d.confidence === "medium"
+                          ? "中置信"
+                          : "低置信"}
                     </Badge>
-                    <span className="ml-auto truncate font-mono text-xs text-dim hidden md:block" title={d.project_dir ?? ""}>
+                    <span
+                      className="ml-auto truncate font-mono text-xs text-dim hidden md:block"
+                      title={d.project_dir ?? ""}
+                    >
                       {d.project_dir ? d.project_dir : `PID ${d.pid}`}
                     </span>
                     {/* 操作 */}
-                    <div className="flex gap-1 ml-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div
+                      className="flex gap-1 ml-2 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Btn
                         className="!px-2 !py-1 !text-xs"
                         title="在浏览器打开"
@@ -268,7 +307,9 @@ export default function Servers() {
                   {expanded && (
                     <div className="border-t border-line bg-panel/50 px-4 py-3 space-y-2 text-sm">
                       <DetailRow label="进程">
-                        <span className="font-mono">{d.process_name} · PID {d.pid}</span>
+                        <span className="font-mono">
+                          {d.process_name} · PID {d.pid}
+                        </span>
                       </DetailRow>
                       <DetailRow label="协议">
                         <Badge>{d.protocol}</Badge>
@@ -326,8 +367,12 @@ export default function Servers() {
                 className="flex items-center gap-2 rounded-lg border border-line/50 bg-panel2 px-3 py-2 text-xs hover:border-accent/40 transition-colors"
               >
                 <Network size={12} className="text-accent shrink-0" />
-                <span className="font-mono font-semibold text-accent">:{p.local_port}</span>
-                <span className="text-dim truncate">{procByPid.get(p.pid) ?? `PID ${p.pid}`}</span>
+                <span className="font-mono font-semibold text-accent">
+                  :{p.local_port}
+                </span>
+                <span className="text-dim truncate">
+                  {procByPid.get(p.pid) ?? `PID ${p.pid}`}
+                </span>
                 <button
                   className="ml-auto text-dim hover:text-accent"
                   onClick={() => openExternal(`http://localhost:${p.local_port}`)}

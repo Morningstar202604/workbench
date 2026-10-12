@@ -166,7 +166,12 @@ export const useStore = create<Store>()(
       costOverview: null,
       costTrend: [],
       costModelBreakdown: [],
-      costSettings: { daily_budget: 5, monthly_budget: 50, alert_threshold_pct: 80, include_estimated: true },
+      costSettings: {
+        daily_budget: 5,
+        monthly_budget: 50,
+        alert_threshold_pct: 80,
+        include_estimated: true,
+      },
       costLoading: false,
       costNotified: false,
       data: emptyData,
@@ -353,7 +358,10 @@ export const useStore = create<Store>()(
       },
 
       deleteTask: (id) => {
-        get().persistData({ ...get().data, tasks: get().data.tasks.filter((t) => t.id !== id) });
+        get().persistData({
+          ...get().data,
+          tasks: get().data.tasks.filter((t) => t.id !== id),
+        });
       },
 
       addProject: (p) => {
@@ -371,7 +379,9 @@ export const useStore = create<Store>()(
       },
 
       updateProject: (id, patch) => {
-        const projects = get().data.projects.map((p) => (p.id === id ? { ...p, ...patch } : p));
+        const projects = get().data.projects.map((p) =>
+          p.id === id ? { ...p, ...patch } : p
+        );
         get().persistData({ ...get().data, projects });
       },
 
@@ -402,7 +412,7 @@ export const useStore = create<Store>()(
         // 后端现在会把「数据文件损坏」等真实错误抛出来，不能再用 catch(()=>null) 吞掉，
         // 否则用户看到的是空白页而不是「账本读不了」。
         const errors: string[] = [];
-        const track = <T,>(label: string, p: Promise<T>, fallback: T): Promise<T> =>
+        const track = <T>(label: string, p: Promise<T>, fallback: T): Promise<T> =>
           p.catch((e) => {
             errors.push(`${label}: ${String(e)}`);
             return fallback;
@@ -471,7 +481,13 @@ export const useStore = create<Store>()(
       clearCosts: async () => {
         try {
           await clearCostRecords();
-          set({ costOverview: null, costTrend: [], costModelBreakdown: [], costNotified: false, toast: "已清空成本数据" });
+          set({
+            costOverview: null,
+            costTrend: [],
+            costModelBreakdown: [],
+            costNotified: false,
+            toast: "已清空成本数据",
+          });
         } catch (e) {
           set({ toast: `清空成本数据失败: ${String(e)}` });
         }
@@ -499,7 +515,11 @@ export const useStore = create<Store>()(
       name: "workbench-ui-v1",
       // 显式版本 + migrate：以后改持久化结构时老用户数据才不会直接被反序列化成半截状态
       version: 1,
-      partialize: (s) => ({ theme: s.theme, refreshMs: s.refreshMs, alwaysOnTop: s.alwaysOnTop }),
+      partialize: (s) => ({
+        theme: s.theme,
+        refreshMs: s.refreshMs,
+        alwaysOnTop: s.alwaysOnTop,
+      }),
     }
   )
 );
