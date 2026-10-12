@@ -38,7 +38,7 @@ jobs:
           test -f docs/screenshots/01-overview.png || { echo "::error::缺少截图"; exit 1; }
           echo "落地页与截图就绪"
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs
