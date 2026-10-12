@@ -58,6 +58,11 @@ export async function gitBranch(dir: string): Promise<string> {
   return invoke<string>("git_branch", { dir });
 }
 
+/** 切换主窗口置顶。 */
+export async function setAlwaysOnTop(on: boolean): Promise<void> {
+  return invoke("set_always_on_top", { on });
+}
+
 export async function systemInfo(): Promise<SystemInfo> {
   return invoke<SystemInfo>("system_info");
 }

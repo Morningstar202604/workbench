@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import { EChart, chartGapColor } from "../lib/echarts";
 import { useStore } from "../lib/store";
-import { Badge, Btn, Card, Empty, Modal, SectionTitle, Spinner, Table, Td, Tr } from "../ui";
+import { useShallow } from "zustand/react/shallow";
+import { Badge, Btn, Card, Empty, Modal, SectionTitle, Spinner, StatCard, Table, Td, Tr } from "../ui";
 import { formatBytes, formatDuration, formatTime, formatTokens, formatUsd, fromNow } from "../lib/util";
 import type { SessionFilePreview } from "../types";
 
@@ -49,7 +50,28 @@ export default function AiSessions() {
     loadCostOverview,
     scanCosts,
     clearCosts,
-  } = useStore();
+  } = useStore(
+    useShallow((s) => ({
+      theme: s.theme,
+      ais: s.ais,
+      sessions: s.sessions,
+      opencodePort: s.opencodePort,
+      sessionsErr: s.sessionsErr,
+      sessionFiles: s.sessionFiles,
+      sessionDetail: s.sessionDetail,
+      sessionDetailLoading: s.sessionDetailLoading,
+      loadSessionDetail: s.loadSessionDetail,
+      refreshAi: s.refreshAi,
+      setToast: s.setToast,
+      costOverview: s.costOverview,
+      costTrend: s.costTrend,
+      costModelBreakdown: s.costModelBreakdown,
+      costLoading: s.costLoading,
+      loadCostOverview: s.loadCostOverview,
+      scanCosts: s.scanCosts,
+      clearCosts: s.clearCosts,
+    }))
+  );
 
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<SessionFilePreview | null>(null);
@@ -138,7 +160,7 @@ export default function AiSessions() {
   // ── 总消息数 ──────────────────────────────────────────────
   const totalMessages = useMemo(
     () => sessionFiles.reduce((acc, f) => acc + (f.message_count ?? 0), 0),
-    [sessionFiles, theme]
+    [sessionFiles]
   );
 
   // ── 图表：AI 进程内存分布 ──────────────────────────────
@@ -234,10 +256,10 @@ export default function AiSessions() {
       {/* 概览卡片 + 操作按钮 */}
       <div className="flex items-center justify-between">
         <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
-          <SummaryCard icon={DollarSign} label="今日成本" value={costOverview ? formatUsd(costOverview.today_cost) : "—"} tone="warn" sub={costOverview ? `${formatTokens(costOverview.today_input_tokens + costOverview.today_output_tokens)} tokens` : undefined} />
-          <SummaryCard icon={TrendingUp} label="本月成本" value={costOverview ? formatUsd(costOverview.month_cost) : "—"} tone="accent" sub={costOverview ? `${formatTokens(costOverview.month_input_tokens + costOverview.month_output_tokens)} tokens` : undefined} />
-          <SummaryCard icon={Coins} label="累计成本" value={costOverview ? formatUsd(costOverview.total_cost) : "—"} tone="ok" sub={costOverview ? `${costOverview.record_count} 条记录` : undefined} />
-          <SummaryCard icon={Hash} label="累计 Token" value={totalTokensDisplay} tone="text" sub={costOverview ? `实测 ${costOverview.measured_count} / 估算 ${costOverview.estimated_count}` : undefined} />
+          <StatCard icon={DollarSign} label="今日成本" value={costOverview ? formatUsd(costOverview.today_cost) : "—"} tone="warn" bar="bg-warn" hint={costOverview ? `${formatTokens(costOverview.today_input_tokens + costOverview.today_output_tokens)} tokens` : undefined} />
+          <StatCard icon={TrendingUp} label="本月成本" value={costOverview ? formatUsd(costOverview.month_cost) : "—"} tone="accent" bar="bg-accent" hint={costOverview ? `${formatTokens(costOverview.month_input_tokens + costOverview.month_output_tokens)} tokens` : undefined} />
+          <StatCard icon={Coins} label="累计成本" value={costOverview ? formatUsd(costOverview.total_cost) : "—"} tone="ok" bar="bg-ok" hint={costOverview ? `${costOverview.record_count} 条记录` : undefined} />
+          <StatCard icon={Hash} label="累计 Token" value={totalTokensDisplay} tone="text" bar="bg-accent" hint={costOverview ? `实测 ${costOverview.measured_count} / 估算 ${costOverview.estimated_count}` : undefined} />
         </div>
         <div className="ml-3 flex shrink-0 flex-col gap-2">
           <Btn onClick={scanCosts} disabled={costLoading} title="扫描 session 文件提取 token 用量并计算成本">
@@ -299,10 +321,10 @@ export default function AiSessions() {
 
       {/* ── 摘要条 ── */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard icon={Sparkles} label="AI 进程" value={ais.length} tone="warn" />
-        <SummaryCard icon={MessageSquare} label="在线会话" value={sessions.length} tone="accent" />
-        <SummaryCard icon={Terminal} label="本地会话文件" value={sessionFiles.length} tone="ok" />
-        <SummaryCard icon={Hash} label="总消息数" value={totalMessages || "—"} tone="text" />
+        <StatCard icon={Sparkles} label="AI 进程" value={ais.length} tone="warn" bar="bg-warn" />
+        <StatCard icon={MessageSquare} label="在线会话" value={sessions.length} tone="accent" bar="bg-accent" />
+        <StatCard icon={Terminal} label="本地会话文件" value={sessionFiles.length} tone="ok" bar="bg-ok" />
+        <StatCard icon={Hash} label="总消息数" value={totalMessages || "—"} tone="text" bar="bg-accent" />
       </div>
 
       {/* ── AI 进程内存图 ── */}
@@ -568,33 +590,6 @@ export default function AiSessions() {
 // ════════════════════════════════════════════════════════════
 // 辅助组件
 // ════════════════════════════════════════════════════════════
-
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-  tone = "text",
-  sub,
-}: {
-  icon: typeof Sparkles;
-  label: string;
-  value: number | string;
-  tone?: string;
-  sub?: string;
-}) {
-  const color =
-    tone === "ok" ? "text-ok" : tone === "warn" ? "text-warn" : tone === "accent" ? "text-accent" : "text-text";
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-line bg-panel2 px-4 py-3">
-      <Icon size={16} className={color} />
-      <div className="min-w-0 flex-1">
-        <div className={`text-lg font-bold tabular-nums ${color}`}>{value}</div>
-        <div className="text-[11px] text-dim truncate">{label}</div>
-        {sub && <div className="text-[10px] text-dim/70 truncate">{sub}</div>}
-      </div>
-    </div>
-  );
-}
 
 function InfoChip({
   icon: Icon,

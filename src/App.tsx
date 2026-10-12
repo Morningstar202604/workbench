@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, memo, Suspense, useEffect } from "react";
 import {
   Cpu,
   FileText,
@@ -6,6 +6,8 @@ import {
   LayoutDashboard,
   ListChecks,
   Moon,
+  Pin,
+  PinOff,
   RefreshCw,
   Server,
   Settings as SettingsIcon,
@@ -13,19 +15,25 @@ import {
   Sun,
 } from "lucide-react";
 import { useStore } from "./lib/store";
+import { useShallow } from "zustand/react/shallow";
+import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./lib/api";
+import logoUrl from "./assets/logo.png";
 import { Btn, Modal, Spinner } from "./ui";
 import type { ViewKey } from "./types";
 
 // ── 按需加载所有页面 ──────────────────────────────────────
-const Overview = lazy(() => import("./pages/Overview"));
-const Processes = lazy(() => import("./pages/Processes"));
-const Servers = lazy(() => import("./pages/Servers"));
-const AiSessions = lazy(() => import("./pages/AiSessions"));
-const Projects = lazy(() => import("./pages/Projects"));
-const Tasks = lazy(() => import("./pages/Tasks"));
-const Settings = lazy(() => import("./pages/Settings"));
-const Logs = lazy(() => import("./pages/Logs"));
+// memo：App 自己订阅的字段（loading / toast / lastRefreshAt…）变化时，
+// 页面组件自身订阅的切片若没变就不该跟着重渲染 —— 否则任何一次 store 更新
+// 都会把整棵页面树重建一次（进程页 400 行时实测单次约 225ms）。
+const Overview = memo(lazy(() => import("./pages/Overview")));
+const Processes = memo(lazy(() => import("./pages/Processes")));
+const Servers = memo(lazy(() => import("./pages/Servers")));
+const AiSessions = memo(lazy(() => import("./pages/AiSessions")));
+const Projects = memo(lazy(() => import("./pages/Projects")));
+const Tasks = memo(lazy(() => import("./pages/Tasks")));
+const Settings = memo(lazy(() => import("./pages/Settings")));
+const Logs = memo(lazy(() => import("./pages/Logs")));
 
 const NAV: { key: ViewKey; label: string; icon: typeof Cpu }[] = [
   { key: "overview", label: "概览", icon: LayoutDashboard },
@@ -64,7 +72,29 @@ export default function App() {
     setKillTarget,
     killProcess,
     toast,
-  } = useStore();
+    clearToast,
+    alwaysOnTop,
+    setAlwaysOnTop,
+  } = useStore(
+    useShallow((s) => ({
+      view: s.view,
+      setView: s.setView,
+      theme: s.theme,
+      setTheme: s.setTheme,
+      refreshMs: s.refreshMs,
+      loadAll: s.loadAll,
+      refreshRuntime: s.refreshRuntime,
+      loading: s.loading,
+      lastRefreshAt: s.lastRefreshAt,
+      killTarget: s.killTarget,
+      setKillTarget: s.setKillTarget,
+      killProcess: s.killProcess,
+      toast: s.toast,
+      clearToast: s.clearToast,
+      alwaysOnTop: s.alwaysOnTop,
+      setAlwaysOnTop: s.setAlwaysOnTop,
+    }))
+  );
 
   useEffect(() => {
     loadAll();
@@ -80,7 +110,6 @@ export default function App() {
   const tauri = isTauri();
 
   // ESC 键关闭 Toast
-  const clearToast = useStore((s) => s.clearToast);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && toast) clearToast();
@@ -93,9 +122,7 @@ export default function App() {
     <div className="flex h-full overflow-hidden bg-bg text-text">
       <aside className="flex w-48 shrink-0 flex-col border-r border-line bg-panel">
         <div className="flex items-center gap-2 px-4 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent font-bold text-black">
-            W
-          </div>
+          <img src={logoUrl} alt="工作台 Logo" className="h-8 w-8 rounded-lg" draggable={false} />
           <div>
             <div className="text-sm font-bold leading-tight">工作台</div>
             <div className="text-[10px] leading-tight text-dim">Workbench</div>
@@ -145,6 +172,23 @@ export default function App() {
             </span>
             <Btn title="立即刷新" onClick={refreshRuntime} className="!px-2 !py-1">
               <RefreshCw size={14} />
+            </Btn>
+            <Btn
+              title={alwaysOnTop ? "取消窗口置顶" : "窗口置顶"}
+              onClick={async () => {
+                const next = !alwaysOnTop;
+                setAlwaysOnTop(next);
+                if (isTauri()) {
+                  try {
+                    await invoke("set_always_on_top", { on: next });
+                  } catch {
+                    setAlwaysOnTop(!next);
+                  }
+                }
+              }}
+              className={`!px-2 !py-1 ${alwaysOnTop ? "!text-accent" : ""}`}
+            >
+              {alwaysOnTop ? <Pin size={14} /> : <PinOff size={14} />}
             </Btn>
             <Btn
               title="切换主题"

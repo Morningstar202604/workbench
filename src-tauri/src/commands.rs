@@ -17,11 +17,26 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Command;
 
+/// Windows GUI 程序派生控制台进程时必须带 CREATE_NO_WINDOW，
+/// 否则周期性轮询（netstat 等）会在屏幕上反复闪控制台窗口。
+#[cfg(windows)]
+fn silent(mut cmd: Command) -> Command {
+    use std::os::windows::process::CommandExt;
+    // 0x08000000 = CREATE_NO_WINDOW
+    cmd.creation_flags(0x0800_0000);
+    cmd
+}
+
+#[cfg(not(windows))]
+fn silent(cmd: Command) -> Command {
+    cmd
+}
+
 /// 在 Windows 上取 netstat 输出。chcp 65001 确保中文 Windows 的表头按 UTF-8 输出。
 /// TODO(P1): 非 Windows 平台改走 POSIX netstat/ss —— 当前 ports.rs 的 POSIX 分支在
 /// 本 crate 里实际不会被执行，README 的跨平台说法也据此收敛为 Windows。
 fn run_netstat() -> Result<String, String> {
-    let output = Command::new("cmd")
+    let output = silent(Command::new("cmd"))
         .args(["/c", "chcp", "65001", ">", "nul", "&&", "netstat", "-ano"])
         .output()
         .map_err(|e| format!("netstat 执行失败: {e}"))?;
@@ -258,7 +273,7 @@ pub async fn git_branch(dirs: tauri::State<'_, KnownDirs>, dir: String) -> Resul
         return Err("该目录不在允许列表内".to_string());
     }
     let output = tauri::async_runtime::spawn_blocking(move || {
-        Command::new("git")
+        silent(Command::new("git"))
             .args(["-C", &dir, "branch", "--show-current"])
             .output()
     })
@@ -269,6 +284,14 @@ pub async fn git_branch(dirs: tauri::State<'_, KnownDirs>, dir: String) -> Resul
         return Ok(String::new());
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// 切换主窗口置顶。前端在标题栏提供开关；失败时前端回滚状态。
+#[tauri::command]
+pub fn set_always_on_top(window: tauri::Window, on: bool) -> Result<(), String> {
+    window
+        .set_always_on_top(on)
+        .map_err(|e| format!("设置置顶失败: {e}"))
 }
 
 /// 用系统默认程序打开目录。同样只允许后端展示过的目录，等价于把

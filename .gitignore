@@ -7,3 +7,6 @@ target
 .DS_Store
 # 数据文件损坏时的备份，别进仓库
 *.corrupt-*
+
+# Tauri 自动生成的 schema（构建时自动再生）
+src-tauri/gen/

@@ -79,6 +79,8 @@ const PROTECTED_PROCESSES: &[&str] = &[
 ];
 
 /// 结束指定进程（不可逆，前端必须二次确认后才调用）。
+/// 目标身份先刷新再校验：拿到的是旧快照时，PID 可能已被系统复用给别的进程，
+/// 直接 kill 等于误杀。刷新后重新确认名字不是关键进程才动手。
 pub fn terminate_process(pid: u32) -> Result<(), String> {
     if matches!(pid, 0 | 4) {
         return Err(format!("拒绝终止系统关键进程 PID={pid}"));

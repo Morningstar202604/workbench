@@ -112,6 +112,7 @@ pub fn run() {
             commands::disk_info,
             commands::git_branch,
             commands::open_known_path,
+            commands::set_always_on_top,
             commands::load_data,
             commands::save_data,
             commands::read_logs,

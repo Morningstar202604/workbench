@@ -12,8 +12,10 @@ import {
   Network,
 } from "lucide-react";
 import { useStore } from "../lib/store";
-import { Badge, Card, Empty, SectionTitle, Table, Td, Tr } from "../ui";
+import { useShallow } from "zustand/react/shallow";
+import { Badge, Card, Empty, SectionTitle, StatCard, Table, Td, Tr } from "../ui";
 import { formatBytes, formatCpu, formatUptime, dueLabel, shortPath } from "../lib/util";
+import logoUrl from "../assets/logo.png";
 
 // ─── 进程分类 ─────────────────────────────────────────────
 
@@ -102,7 +104,21 @@ export default function Overview() {
     sysinfo,
     sessionFiles,
     setView,
-  } = useStore();
+  } = useStore(
+    useShallow((s) => ({
+      procs: s.procs,
+      ports: s.ports,
+      devs: s.devs,
+      ais: s.ais,
+      history: s.history,
+      data: s.data,
+      theme: s.theme,
+      disks: s.disks,
+      sysinfo: s.sysinfo,
+      sessionFiles: s.sessionFiles,
+      setView: s.setView,
+    }))
+  );
 
   const ACCENT = "#22d3ee";
   const WARN = "#fbbf24";
@@ -285,6 +301,43 @@ export default function Overview() {
 
   return (
     <div className="flex flex-col gap-5">
+      {/* ── Hero 横幅：大标题 + 实时状态 ── */}
+      <div className="hero-glow relative overflow-hidden rounded-2xl border border-line bg-panel p-6">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-accent/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-28 -left-16 h-56 w-56 rounded-full bg-accentsoft/60 blur-3xl" />
+        <div className="relative flex flex-wrap items-center gap-5">
+          <img
+            src={logoUrl}
+            alt=""
+            className="hero-float h-16 w-16 rounded-2xl shadow-[0_8px_32px_rgba(34,211,238,0.25)]"
+            draggable={false}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-wide">工作台</h1>
+              <span className="rounded-md border border-accent/40 bg-accentsoft px-2 py-0.5 text-xs font-medium text-accent">
+                Workbench
+              </span>
+            </div>
+            <p className="mt-1.5 text-sm text-dim">
+              {greeting()} · 本机运维仪表盘与 AI 会话成本计量，数据仅存本机
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1.5 text-right">
+            <span className="flex items-center gap-2 text-sm font-medium text-ok">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-ok" />
+              </span>
+              实时监控中
+            </span>
+            <span className="font-mono text-xs tabular-nums text-dim">
+              {new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* ── 系统信息栏 ── */}
       {sysinfo && (
         <Card className="p-4">
@@ -317,10 +370,10 @@ export default function Overview() {
 
       {/* ── 顶部统计 ── */}
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <StatCard icon={Cpu} label="运行中进程" value={String(procs.length)} hint={`CPU 合计 ${formatCpu(cpuTotal)}`} tone="text" bar="bg-accent" />
-        <StatCard icon={Server} label="开发服务器" value={String(devs.length)} hint={devs.map((d) => `${d.framework}:${d.port}`).join(" / ") || "无"} tone="ok" bar="bg-ok" />
-        <StatCard icon={Sparkles} label="AI 代理进程" value={String(ais.length)} hint={ais.map((a) => a.name).join(" / ") || "无"} tone="warn" bar="bg-warn" />
-        <StatCard icon={Activity} label="进行中任务" value={String(doingTasks.length)} hint={`共 ${data.tasks.length} 个任务`} tone="accent" bar="bg-accent" />
+        <StatCard icon={Cpu} label="运行中进程" value={procs.length} hint={`CPU 合计 ${formatCpu(cpuTotal)}`} tone="accent" bar="bg-accent" />
+        <StatCard icon={Server} label="开发服务器" value={devs.length} hint={devs.map((d) => `${d.framework}:${d.port}`).join(" / ") || "无"} tone="ok" bar="bg-ok" />
+        <StatCard icon={Sparkles} label="AI 代理进程" value={ais.length} hint={ais.map((a) => a.name).join(" / ") || "无"} tone="warn" bar="bg-warn" />
+        <StatCard icon={Activity} label="进行中任务" value={doingTasks.length} hint={`共 ${data.tasks.length} 个任务`} tone="text" bar="bg-accent" />
       </div>
 
       {/* ── 图表区域 ── */}
@@ -535,36 +588,12 @@ export default function Overview() {
   );
 }
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-  tone = "text",
-  bar = "bg-accent",
-}: {
-  icon: typeof Cpu;
-  label: string;
-  value: string;
-  hint: string;
-  tone?: string;
-  bar?: string;
-}) {
-  const color =
-    tone === "ok" ? "text-ok" : tone === "warn" ? "text-warn" : tone === "accent" ? "text-accent" : "text-text";
-  return (
-    <Card className="card-hover relative overflow-hidden p-4">
-      <span className={`absolute inset-x-0 top-0 h-0.5 ${bar}`} />
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accentsoft">
-          <Icon size={15} className={color} />
-        </span>
-        <span className="text-xs text-dim">{label}</span>
-      </div>
-      <div className={`mt-2 text-3xl font-bold tabular-nums ${color}`}>{value}</div>
-      <div className="mt-1 truncate text-[11px] text-dim" title={hint}>
-        {hint}
-      </div>
-    </Card>
-  );
+/** 按当前小时返回问候语。 */
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 5) return "夜深了";
+  if (h < 11) return "早上好";
+  if (h < 14) return "中午好";
+  if (h < 18) return "下午好";
+  return "晚上好";
 }

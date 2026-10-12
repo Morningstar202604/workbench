@@ -62,6 +62,8 @@ interface UiState {
   theme: "dark" | "light";
   refreshMs: number;
   view: ViewKey;
+  alwaysOnTop: boolean;
+  setAlwaysOnTop: (v: boolean) => void;
 }
 
 interface RuntimeState {
@@ -140,6 +142,8 @@ export const useStore = create<Store>()(
       theme: "dark",
       refreshMs: 3000,
       view: "overview",
+      alwaysOnTop: false,
+      setAlwaysOnTop: (v) => set({ alwaysOnTop: v }),
       procs: [],
       ports: [],
       devs: [],
@@ -408,6 +412,9 @@ export const useStore = create<Store>()(
           costSettings: settings,
         });
         if (errors.length) set({ toast: `成本数据读取失败（${errors[0]}）` });
+        // 页面加载也要走一次预算检查：原来只有手动扫描后才会触发告警，
+        // 用户打开应用看到超支横幅但收不到系统通知，是告警漏发的时序洞。
+        get().checkBudgetAlert();
       },
 
       scanCosts: async () => {
@@ -481,7 +488,7 @@ export const useStore = create<Store>()(
       name: "workbench-ui-v1",
       // 显式版本 + migrate：以后改持久化结构时老用户数据才不会直接被反序列化成半截状态
       version: 1,
-      partialize: (s) => ({ theme: s.theme, refreshMs: s.refreshMs }),
+      partialize: (s) => ({ theme: s.theme, refreshMs: s.refreshMs, alwaysOnTop: s.alwaysOnTop }),
     }
   )
 );

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { FolderOpen, Pencil, Pin, Plus, Trash2 } from "lucide-react";
 import { EChart, chartGapColor } from "../lib/echarts";
 import { useStore } from "../lib/store";
+import { useShallow } from "zustand/react/shallow";
 import { openExternal } from "../lib/api";
 import { Badge, Btn, Card, Empty, Field, Modal, Table, Td, Tr, inputCls } from "../ui";
 import { shortPath } from "../lib/util";
@@ -26,7 +27,17 @@ interface Draft {
 const emptyDraft: Draft = { name: "", path: "", status: "active", tags: "", pinned: false, note: "" };
 
 export default function Projects() {
-  const { data, devs, addProject, updateProject, deleteProject, setView, theme } = useStore();
+  const { data, devs, addProject, updateProject, deleteProject, setView, theme } = useStore(
+    useShallow((s) => ({
+      data: s.data,
+      devs: s.devs,
+      addProject: s.addProject,
+      updateProject: s.updateProject,
+      deleteProject: s.deleteProject,
+      setView: s.setView,
+      theme: s.theme,
+    }))
+  );
   const [draft, setDraft] = useState<Draft | null>(null);
 
   const runningDirs = useMemo(

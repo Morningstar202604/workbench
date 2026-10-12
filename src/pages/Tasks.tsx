@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useStore } from "../lib/store";
+import { useShallow } from "zustand/react/shallow";
 import { Badge, Btn, Empty, Field, Modal, SectionTitle, inputCls } from "../ui";
 import { dueLabel } from "../lib/util";
 import type { Task } from "../types";
@@ -34,7 +35,16 @@ const PRIORITIES: Record<string, { label: string; tone: string }> = {
 };
 
 export default function Tasks() {
-  const { data, addTask, moveTask, updateTask, deleteTask, theme } = useStore();
+  const { data, addTask, moveTask, updateTask, deleteTask, theme } = useStore(
+    useShallow((s) => ({
+      data: s.data,
+      addTask: s.addTask,
+      moveTask: s.moveTask,
+      updateTask: s.updateTask,
+      deleteTask: s.deleteTask,
+      theme: s.theme,
+    }))
+  );
   const [projectFilter, setProjectFilter] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [taskDraft, setTaskDraft] = useState<Task | null>(null);

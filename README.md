@@ -11,7 +11,7 @@ macOS / Linux 尚未接入采集与打包，属未验证状态。
 | 模块 | 能力 |
 |------|------|
 | 🖥 **概览** | CPU / 内存趋势图、磁盘占用环形图、进程分类统计 |
-| ⚙ **进程** | 全进程快照、CPU / 内存排序、杀进程二次确认、AI 代理识别 |
+| ⚙ **进程** | 全进程快照、CPU / 内存排序、虚拟滚动（只渲染视口内的行）、杀进程二次确认、AI 代理识别 |
 | 🌐 **服务与端口** | netstat 端口监听识别、开发框架标注（Vite/Next/Django…） |
 | 🤖 **AI 会话** | opencode 在线会话、本地 Claude/Codex 会话预览 |
 | 💰 **成本计量** | token 消耗统计、按日/月趋势、预算告警、Anthropic 缓存折扣计价 |
@@ -76,6 +76,8 @@ npm run tauri build
 | 状态管理 | Zustand 5 (persist) |
 | 样式 | Tailwind CSS 4 + 双主题 CSS 变量 |
 | 图表 | ECharts 5（按需引入 + 暗/亮双主题注册） |
+| 虚拟滚动 | @tanstack/react-virtual 3（展开行高度可变，进入视口后实测回写行高） |
+| 状态订阅 | Zustand 5 `useShallow` 选择器 + 页面组件 `memo`（自身切片不变不重渲染） |
 | IPC 通道 | Tauri IPC + spawn_blocking |
 | 进程采集 | sysinfo |
 | 端口解析 | netstat 解析器（POSIX / Windows 双方言兼容） |
@@ -121,16 +123,15 @@ cargo clippy --all-targets # 保持零警告
 ```
 
 Rust 侧纯逻辑（netstat 解析、框架识别、价格匹配、token 提取、JSON 存储、IPC 守卫）
-都有 `#[cfg(test)]` 单测；前端暂无自动化测试，也未接入 CI —— 见下方已知限制。
+都有 `#[cfg(test)]` 单测，由 CI 强制跑；前端只有类型检查与构建门禁，尚无自动化测试 —— 见下方已知限制。
 
 ## 已知限制
 
 - 仅 Windows 验证：端口采集写死 `cmd /c netstat -ano`，`ports.rs` 的 POSIX 分支当前不会被执行
-- 前端零自动化测试、零 CI、零 lint 配置；发布质量目前依赖手工验证
+- 前端零自动化测试、零 lint 配置；CI 只做类型检查 / 构建、Rust 单测与 clippy 零警告门禁，渲染行为仍依赖人工验证
 - Rust 类型与 `src/types.ts` 手工双维护，IPC 契约没有 codegen 或契约测试兜底
 - 成本账本落在单个 `cost_data.json`（写操作已串行化），记录数很大时全量读写会开始吃力
 - `pricing_overrides.json` 只有读取路径，没有写入入口
-- 概览/进程等页面订阅整个 store，400 行进程表未做虚拟化，刷新时是整树重渲染
 
 ## 数据存储
 

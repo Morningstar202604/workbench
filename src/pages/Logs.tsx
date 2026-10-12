@@ -8,7 +8,7 @@ import { Btn } from "../ui";
  * Log viewer — displays the Rust backend logs without needing the DevTools console.
  */
 export default function Logs() {
-  const { setToast } = useStore();
+  const setToast = useStore((s) => s.setToast);
   const [content, setContent] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
 

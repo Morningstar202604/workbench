@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DollarSign, Download, Eraser, RefreshCw, Upload } from "lucide-react";
 import { useStore } from "../lib/store";
+import { useShallow } from "zustand/react/shallow";
 import { isTauri } from "../lib/api";
 import { Badge, Btn, Card, Field, SectionTitle } from "../ui";
 import type { CostSettings, WorkbenchData } from "../types";
@@ -53,7 +54,22 @@ export default function Settings() {
     data, persistData, setToast, refreshRuntime,
     // 成本
     costSettings, loadCostSettings, updateCostSettings, costOverview,
-  } = useStore();
+  } = useStore(
+    useShallow((s) => ({
+      theme: s.theme,
+      setTheme: s.setTheme,
+      refreshMs: s.refreshMs,
+      setRefreshMs: s.setRefreshMs,
+      data: s.data,
+      persistData: s.persistData,
+      setToast: s.setToast,
+      refreshRuntime: s.refreshRuntime,
+      costSettings: s.costSettings,
+      loadCostSettings: s.loadCostSettings,
+      updateCostSettings: s.updateCostSettings,
+      costOverview: s.costOverview,
+    }))
+  );
 
   const fileRef = useRef<HTMLInputElement>(null);
   const { draft: costDraft, dirty: costDirty, update: updateCost, setDirty: setCostDirty } = useCostSettingsEditor(costSettings);
@@ -107,7 +123,14 @@ export default function Settings() {
   };
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4">
+    <div className="flex flex-col gap-4">
+      {/* ── 页面标题（与其他页头部呼应） ── */}
+      <div className="flex items-center gap-3">
+        <h2 className="text-xl font-bold">设置</h2>
+        <span className="text-xs text-dim">主题、刷新、成本与数据管理</span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       {/* ── 外观 ── */}
       <Card className="p-4">
         <SectionTitle>外观</SectionTitle>
@@ -119,7 +142,9 @@ export default function Settings() {
             浅色
           </Btn>
         </div>
-        <p className="mt-2 text-[11px] text-dim">切换后图表主题将自动跟随。</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-dim">
+          切换后图表主题将自动跟随；标题栏的置顶按钮随时可用。
+        </p>
       </Card>
 
       {/* ── 刷新 ── */}
@@ -252,8 +277,8 @@ export default function Settings() {
         </p>
       </Card>
 
-      {/* ── 数据备份 ── */}
-      <Card className="p-4">
+      {/* ── 数据备份（右列，与刷新/外观同排） ── */}
+      <Card className="p-4 xl:row-span-2">
         <SectionTitle>数据</SectionTitle>
         <div className="flex flex-wrap gap-2">
           <Btn onClick={exportJson}>
@@ -286,6 +311,7 @@ export default function Settings() {
           )}
         </p>
       </Card>
+      </div>
 
       {/* ── 关于 ── */}
       <Card className="p-4">

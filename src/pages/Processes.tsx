@@ -1,4 +1,5 @@
-import { Fragment, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
   ChevronRight,
@@ -10,7 +11,8 @@ import {
 } from "lucide-react";
 import { EChart } from "../lib/echarts";
 import { useStore } from "../lib/store";
-import { Badge, Btn, Card, Empty, Spinner, Table, Td, Tr, inputCls } from "../ui";
+import { useShallow } from "zustand/react/shallow";
+import { Badge, Btn, Card, Empty, Spinner, StatCard, Td, Tr, inputCls } from "../ui";
 import { formatBytes, fromNow, shortPath } from "../lib/util";
 import type { ProcInfo } from "../types";
 
@@ -22,6 +24,11 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: "pid", label: "PID" },
   { key: "name", label: "名称" },
 ];
+
+/** 虚拟滚动估算尺寸：普通行固定，展开详情行内容高度不定，交由实测修正 */
+const ROW_H = 37;
+const DETAIL_H = 170;
+const OVERSCAN = 12;
 
 // ── CPU 分布直方图数据 ────────────────────────────────────
 function cpuHistogram(procs: ProcInfo[]) {
@@ -65,7 +72,15 @@ function memHistogram(procs: ProcInfo[]) {
 }
 
 export default function Processes() {
-  const { procs, devs, ais, loading, refreshRuntime } = useStore();
+  const { procs, devs, ais, loading, refreshRuntime } = useStore(
+    useShallow((s) => ({
+      procs: s.procs,
+      devs: s.devs,
+      ais: s.ais,
+      loading: s.loading,
+      refreshRuntime: s.refreshRuntime,
+    }))
+  );
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("cpu");
   const [chip, setChip] = useState<"all" | "ai" | "dev">("all");
@@ -95,6 +110,42 @@ export default function Processes() {
       return b[sort] - a[sort];
     });
   }, [procs, q, sort, chip, aiPids, devPids]);
+
+  // ── 虚拟滚动 ────────────────────────────────────────────
+  // 把「进程行 + 其展开的详情行」摊平成一条可测量的单元序列：详情行高度随
+  // 命令行长度变化，react-virtual 先按估算值排版，再对进入视口的单元实测修正。
+  const units = useMemo(() => {
+    const out: { kind: "row" | "detail"; p: ProcInfo }[] = [];
+    for (const p of filteredProcs) {
+      out.push({ kind: "row", p });
+      if (expandedPid === p.pid) out.push({ kind: "detail", p });
+    }
+    return out;
+  }, [filteredProcs, expandedPid]);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: units.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (i) => (units[i]?.kind === "detail" ? DETAIL_H : ROW_H),
+    overscan: OVERSCAN,
+  });
+
+  // 展开/收起会改变「索引 ↔ 单元」的对应关系，实测高度缓存按索引存放，必须清掉
+  useEffect(() => {
+    virtualizer.measure();
+  }, [expandedPid, virtualizer]);
+
+  // 筛选条件变化后列表整体换血，回到顶部，避免停留在旧滚动位置看到空白区
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [q, sort, chip]);
+
+  const virtualRows = virtualizer.getVirtualItems();
+  const padTop = virtualRows.length ? virtualRows[0].start : 0;
+  const padBottom = virtualRows.length
+    ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
+    : 0;
 
   const cpuBins = useMemo(() => cpuHistogram(procs), [procs]);
   const memBins = useMemo(() => memHistogram(procs), [procs]);
@@ -149,19 +200,21 @@ export default function Processes() {
     <div className="flex flex-col gap-4">
       {/* ── 摘要 + 分布图 ── */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatPill icon={Cpu} label="进程总数" value={procs.length} tone="accent" />
-        <StatPill icon={Cpu} label="CPU 占用" value={`${procs.reduce((a, p) => a + (p.cpu ?? 0), 0).toFixed(0)}%`} tone="warn" />
-        <StatPill
+        <StatCard icon={Cpu} label="进程总数" value={procs.length} tone="accent" bar="bg-accent" />
+        <StatCard icon={Cpu} label="CPU 占用" value={`${procs.reduce((a, p) => a + (p.cpu ?? 0), 0).toFixed(0)}%`} tone="warn" bar="bg-warn" />
+        <StatCard
           icon={MemoryStick}
           label="内存合计"
           value={formatBytes(procs.reduce((a, p) => a + (p.memory ?? 0), 0))}
           tone="ok"
+          bar="bg-ok"
         />
-        <StatPill
+        <StatCard
           icon={Search}
           label="高CPU进程"
           value={procs.filter((p) => p.cpu > 10).length}
           tone="danger"
+          bar="bg-danger"
         />
       </div>
 
@@ -235,20 +288,80 @@ export default function Processes() {
         </Btn>
       </Card>
 
-      {/* ── 进程表格 ── */}
+      {/* ── 进程表格（虚拟滚动：只渲染视口内的行） ── */}
+      {/* max-h 而非固定高：筛出少量行时表格随内容收缩，滚动条不会留一片空白 */}
       <Card>
         {filteredProcs.length === 0 ? (
           <Empty icon={SearchX}>没有匹配的进程</Empty>
         ) : (
-          <Table head={["", "PID", "名称", "CPU", "内存", "状态", "启动", "路径 / 命令行", "操作"]}>
-            {filteredProcs.slice(0, 400).map((p) => {
-              const expanded = expandedPid === p.pid;
-              return (
-                <Fragment key={p.pid}>
-                  <Tr
-                    className={`cursor-pointer ${expanded ? "bg-accentsoft/10" : ""}`}
-                    onClick={() => setExpandedPid(expanded ? null : p.pid)}
-                  >
+          <div ref={scrollRef} className="max-h-[60vh] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b border-line text-left text-xs text-dim">
+                  {["", "PID", "名称", "CPU", "内存", "状态", "启动", "路径 / 命令行", "操作"].map(
+                    (h, i) => (
+                      <th key={i} className="whitespace-nowrap bg-panel px-3 py-2 font-medium">
+                        {h}
+                      </th>
+                    )
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {padTop > 0 && (
+                  <tr aria-hidden="true" style={{ height: padTop }}>
+                    <td colSpan={9} className="p-0" />
+                  </tr>
+                )}
+                {virtualRows.map((v) => {
+                  const unit = units[v.index];
+                  if (!unit) return null;
+                  const { p } = unit;
+
+                  if (unit.kind === "detail") {
+                    return (
+                      <Tr key={`d-${p.pid}`} data-index={v.index} ref={virtualizer.measureElement}>
+                        <Td colSpan={9} className="bg-panel/60 px-4 py-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-xs">
+                            <div>
+                              <span className="text-dim">可执行路径</span>
+                              <div className="mt-0.5 break-all font-mono text-[11px] text-text">
+                                {p.exe_path || "—"}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-dim">父进程 PID</span>
+                              <div className="mt-0.5 font-mono text-text">
+                                {p.parent_pid ?? "无（根进程）"}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-dim">启动时间</span>
+                              <div className="mt-0.5 text-text">
+                                {new Date(p.start_time * 1000).toLocaleString("zh-CN")}
+                              </div>
+                            </div>
+                            <div className="sm:col-span-3">
+                              <span className="text-dim">完整命令行</span>
+                              <code className="mt-0.5 block break-all rounded bg-bg px-2 py-1.5 font-mono text-[11px] text-dim">
+                                {p.cmd_line || "—"}
+                              </code>
+                            </div>
+                          </div>
+                        </Td>
+                      </Tr>
+                    );
+                  }
+
+                  const expanded = expandedPid === p.pid;
+                  return (
+                    <Tr
+                      key={p.pid}
+                      data-index={v.index}
+                      ref={virtualizer.measureElement}
+                      className={expanded ? "bg-accentsoft/10" : ""}
+                      onClick={() => setExpandedPid(expanded ? null : p.pid)}
+                    >
                     <Td className="w-6">
                       {expanded ? (
                         <ChevronDown size={12} className="text-accent" />
@@ -319,70 +432,21 @@ export default function Processes() {
                       )}
                     </Td>
                   </Tr>
-
-                  {expanded && (
-                    <Tr key={`${p.pid}-detail`}>
-                      <Td colSpan={9} className="bg-panel/60 px-4 py-3">
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-xs">
-                          <div>
-                            <span className="text-dim">可执行路径</span>
-                            <div className="mt-0.5 break-all font-mono text-[11px] text-text">
-                              {p.exe_path || "—"}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-dim">父进程 PID</span>
-                            <div className="mt-0.5 font-mono text-text">
-                              {p.parent_pid ?? "无（根进程）"}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-dim">启动时间</span>
-                            <div className="mt-0.5 text-text">
-                              {new Date(p.start_time * 1000).toLocaleString("zh-CN")}
-                            </div>
-                          </div>
-                          <div className="sm:col-span-3">
-                            <span className="text-dim">完整命令行</span>
-                            <code className="mt-0.5 block break-all rounded bg-bg px-2 py-1.5 font-mono text-[11px] text-dim">
-                              {p.cmd_line || "—"}
-                            </code>
-                          </div>
-                        </div>
-                      </Td>
-                    </Tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </Table>
+                  );
+                })}
+                {padBottom > 0 && (
+                  <tr aria-hidden="true" style={{ height: padBottom }}>
+                    <td colSpan={9} className="p-0" />
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
-      <p className="px-1 text-[11px] text-dim">点击进程行展开详情。最多展示 400 条，可用搜索或筛选收窄范围。</p>
-    </div>
-  );
-}
-
-function StatPill({
-  icon: Icon,
-  label,
-  value,
-  tone = "text",
-}: {
-  icon: typeof Cpu;
-  label: string;
-  value: number | string;
-  tone?: string;
-}) {
-  const color =
-    tone === "ok" ? "text-ok" : tone === "warn" ? "text-warn" : tone === "danger" ? "text-danger" : tone === "accent" ? "text-accent" : "text-text";
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-line bg-panel2 px-4 py-3">
-      <Icon size={16} className={color} />
-      <div>
-        <div className={`text-xl font-bold tabular-nums ${color}`}>{value}</div>
-        <div className="text-[11px] text-dim">{label}</div>
-      </div>
+      <p className="px-1 text-[11px] text-dim">
+        点击进程行展开详情。表格虚拟滚动，只渲染视口内的行。
+      </p>
     </div>
   );
 }

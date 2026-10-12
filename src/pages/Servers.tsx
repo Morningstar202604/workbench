@@ -12,8 +12,9 @@ import {
 } from "lucide-react";
 import { EChart, chartGapColor } from "../lib/echarts";
 import { useStore } from "../lib/store";
+import { useShallow } from "zustand/react/shallow";
 import { openExternal } from "../lib/api";
-import { Badge, Btn, Card, Empty, SectionTitle } from "../ui";
+import { Badge, Btn, Card, Empty, SectionTitle, StatCard } from "../ui";
 import type { DevServer, PortEntry } from "../types";
 
 // ── 框架分布统计 ──────────────────────────────────────────
@@ -45,7 +46,18 @@ const COLORS = ["#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#f87171", "#60a5fa"
 
 export default function Servers() {
   const { devs, ports, procs, refreshRuntime, setKillTarget, gitBranches, fetchGitBranch, theme } =
-    useStore();
+    useStore(
+      useShallow((s) => ({
+        devs: s.devs,
+        ports: s.ports,
+        procs: s.procs,
+        refreshRuntime: s.refreshRuntime,
+        setKillTarget: s.setKillTarget,
+        gitBranches: s.gitBranches,
+        fetchGitBranch: s.fetchGitBranch,
+        theme: s.theme,
+      }))
+    );
   const [expandedServer, setExpandedServer] = useState<number | null>(null);
 
   const listening = useMemo<PortEntry[]>(
@@ -139,9 +151,9 @@ export default function Servers() {
     <div className="flex flex-col gap-4">
       {/* ── 摘要条 ── */}
       <div className="grid grid-cols-3 gap-3">
-        <SummaryPill icon={Server} label="开发服务" value={devs.length} tone="ok" />
-        <SummaryPill icon={Network} label="TCP 监听" value={listening.length} tone="accent" />
-        <SummaryPill icon={BarChart3} label="框架种类" value={frameworkData.length} tone="warn" />
+        <StatCard icon={Server} label="开发服务" value={devs.length} tone="ok" bar="bg-ok" />
+        <StatCard icon={Network} label="TCP 监听" value={listening.length} tone="accent" bar="bg-accent" />
+        <StatCard icon={BarChart3} label="框架种类" value={frameworkData.length} tone="warn" bar="bg-warn" />
       </div>
 
       {/* ── 图表区 ── */}
@@ -337,29 +349,6 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
     <div className="flex items-start gap-3">
       <span className="w-20 shrink-0 text-xs text-dim">{label}</span>
       <div className="min-w-0 flex-1">{children}</div>
-    </div>
-  );
-}
-
-function SummaryPill({
-  icon: Icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: typeof Server;
-  label: string;
-  value: number;
-  tone: string;
-}) {
-  const color = tone === "ok" ? "text-ok" : tone === "warn" ? "text-warn" : "text-accent";
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-line bg-panel2 px-4 py-3">
-      <Icon size={16} className={color} />
-      <div>
-        <div className={`text-xl font-bold tabular-nums ${color}`}>{value}</div>
-        <div className="text-[11px] text-dim">{label}</div>
-      </div>
     </div>
   );
 }

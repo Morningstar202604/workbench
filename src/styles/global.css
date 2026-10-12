@@ -116,3 +116,47 @@ input[type="checkbox"] {
 .animate-in {
   animation: fade-in-up 0.18s ease both;
 }
+
+/* ── Hero 横幅动效 ───────────────────────────────── */
+
+/* 背景光晕缓慢漂移 */
+@keyframes hero-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate(-24px, 16px) scale(1.08);
+    opacity: 1;
+  }
+}
+.hero-glow > .pointer-events-none {
+  animation: hero-drift 14s ease-in-out infinite;
+}
+.hero-glow > .pointer-events-none:nth-child(2) {
+  animation-duration: 18s;
+  animation-delay: -6s;
+}
+
+/* Logo 轻微悬浮 */
+@keyframes hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+.hero-float {
+  animation: hero-float 5s ease-in-out infinite;
+}
+
+/* 减少动态偏好：全部动画降级为静态 */
+@media (prefers-reduced-motion: reduce) {
+  .hero-glow > .pointer-events-none,
+  .hero-float {
+    animation: none;
+  }
+}
