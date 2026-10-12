@@ -6,6 +6,36 @@
 **当前只在 Windows 上开发与打包**（端口采集走 `netstat -ano`，安装目标为 NSIS）；
 macOS / Linux 尚未接入采集与打包，属未验证状态。
 
+## 界面预览
+
+> 以下截图截自**浏览器演示模式**（`npm run preview`）：非 Tauri 环境会注入
+> `src/lib/demo.ts` 的静态演示数据，所有路径均为占位串，不含任何真实机器信息。
+
+| 概览 | 进程监控 |
+|------|----------|
+| ![概览](docs/screenshots/01-overview.png) | ![进程监控](docs/screenshots/02-processes.png) |
+| CPU / 内存趋势、磁盘与进程分类 | 全进程快照、虚拟滚动、杀进程二次确认 |
+
+| 服务与端口 | AI 会话与成本计量 |
+|------------|-------------------|
+| ![服务与端口](docs/screenshots/03-servers.png) | ![AI 会话](docs/screenshots/04-ai-sessions.png) |
+| netstat 端口识别与开发框架标注 | 会话预览、token 计量、预算与模型分解 |
+
+| 项目管理 | 任务看板 |
+|----------|----------|
+| ![项目管理](docs/screenshots/05-projects.png) | ![任务看板](docs/screenshots/06-tasks.png) |
+| 本地项目、Git 分支检测、卡片/表格双视图 | 拖拽看板，待办 / 进行中 / 已完成 |
+
+| 设置 | 运行日志 |
+|------|----------|
+| ![设置](docs/screenshots/07-settings.png) | ![运行日志](docs/screenshots/08-logs.png) |
+| 主题、刷新间隔、预算与数据导入导出 | 内置日志查看器，按需尾部读取 |
+
+截图可自行重生成（需先 `npm run build` 并启动 `npm run preview`，另开一个
+`chrome --headless=new --remote-debugging-port=9222`，然后
+`node scripts/shoot_docs.mjs`）。脚本内置演示模式断言，页面未出现演示标记时
+直接拒绝截图，避免把真实数据写进仓库。
+
 ## 功能概览
 
 | 模块 | 能力 |

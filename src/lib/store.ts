@@ -26,6 +26,9 @@ import {
 } from "../lib/api";
 import {
   demoAis,
+  demoCostModelBreakdown,
+  demoCostOverview,
+  demoCostTrend,
   demoData,
   demoDevs,
   demoDisks,
@@ -203,6 +206,9 @@ export const useStore = create<Store>()(
             sessionFiles: demoSessionFiles,
             sysinfo: demoSysinfo,
             disks: demoDisks,
+            costOverview: demoCostOverview,
+            costTrend: demoCostTrend,
+            costModelBreakdown: demoCostModelBreakdown,
             history: seed,
             loading: false,
             lastRefreshAt: Date.now(),
@@ -390,6 +396,9 @@ export const useStore = create<Store>()(
       // ── 成本计量 ──
 
       loadCostOverview: async () => {
+        // 浏览器演示模式没有后端，直接保持初始状态，避免抛 "reading 'invoke'" 之类
+        // 的 TypeError 顶到 toast 上（其余数据接口都做了同样的守卫）。
+        if (!isTauri()) return;
         // 后端现在会把「数据文件损坏」等真实错误抛出来，不能再用 catch(()=>null) 吞掉，
         // 否则用户看到的是空白页而不是「账本读不了」。
         const errors: string[] = [];
@@ -418,6 +427,7 @@ export const useStore = create<Store>()(
       },
 
       scanCosts: async () => {
+        if (!isTauri()) return;
         set({ costLoading: true });
         try {
           const result = await scanSessionCosts();
@@ -435,6 +445,7 @@ export const useStore = create<Store>()(
       },
 
       loadCostSettings: async () => {
+        if (!isTauri()) return;
         try {
           const s = await getCostSettings();
           set({ costSettings: s });

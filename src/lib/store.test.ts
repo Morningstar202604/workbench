@@ -133,4 +133,16 @@ describe("store UI 状态", () => {
   it("checkBudgetAlert 无数据时安全返回", () => {
     expect(() => useStore.getState().checkBudgetAlert()).not.toThrow();
   });
+
+  // 回归：浏览器演示模式（非 Tauri）下这三个成本接口原先缺守卫，
+  // 直接调用会抛 "Cannot read properties of undefined (reading 'invoke')"，
+  // 并被 loadCostOverview 的 track() 抓成 toast 顶到界面上（见 06-tasks 截图）。
+  it("浏览器演示模式下成本三接口不抛错、不提示错误", async () => {
+    useStore.setState({ toast: "", costOverview: null });
+    await expect(useStore.getState().loadCostOverview()).resolves.toBeUndefined();
+    await expect(useStore.getState().scanCosts()).resolves.toBeUndefined();
+    await expect(useStore.getState().loadCostSettings()).resolves.toBeUndefined();
+    expect(useStore.getState().toast).toBe("");
+    expect(useStore.getState().costOverview).toBeNull();
+  });
 });

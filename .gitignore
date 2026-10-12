@@ -3,6 +3,8 @@ dist
 target
 coverage
 .aqg/
+# 工具运行时的后台日志（含本机绝对路径，不入库）
+.zwork/
 .meituan-catpaw/
 *.local
 .DS_Store
