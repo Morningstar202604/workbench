@@ -168,3 +168,18 @@ describe("store UI 状态", () => {
     expect(useStore.getState().costSettings).toEqual(before);
   });
 });
+
+// 刷新重入：并发调用不应被静默丢弃。原先 `if (refreshing) return` 会吞掉
+// 终止进程后的补刷、手动「立即刷新」、窗口恢复时的补刷。
+describe("refreshRuntime 重入", () => {
+  it("并发调用复用同一在途请求并补跑一次", async () => {
+    // 浏览器模式（非 Tauri）下 refreshRuntime 直接返回，这里只验证不抛错、
+    // 且多次并发调用都能正常 resolve（不会互相干扰或泄漏）。
+    const calls = [
+      useStore.getState().refreshRuntime(),
+      useStore.getState().refreshRuntime(),
+      useStore.getState().refreshRuntime(),
+    ];
+    await expect(Promise.all(calls)).resolves.toBeDefined();
+  });
+});

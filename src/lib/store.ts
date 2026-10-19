@@ -140,8 +140,10 @@ function uid(): string {
 
 // 模块级防抖计时器（仅用于持久化，toast 由 TTL 自动清理）
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
-// 运行时刷新重入标记（同一时刻只允许一次快照采集在途）
-let refreshing = false;
+// 运行时刷新的在途 promise（并发调用复用它，而不是丢弃）
+let inflightRefresh: Promise<void> | null = null;
+// 在途期间又有新请求时置位，当前刷新结束后补跑一次
+let refreshAgain = false;
 
 export const useStore = create<Store>()(
   persist(
@@ -238,42 +240,61 @@ export const useStore = create<Store>()(
         if (!isTauri()) return;
         // 刷新重入保护：netstat + 进程快照耗时可超过最短刷新间隔（设置页有 1s 档），
         // 不加锁会让并发调用乱序覆盖数据，并丢掉 history 采样点。
-        if (refreshing) return;
-        refreshing = true;
-        set({ loading: true });
+        //
+        // 但直接 return 会**丢弃**请求：终止进程后的补刷、手动点「立即刷新」、
+        // 窗口恢复可见时的补刷都会静默失效，UI 要等下一个定时器才更新。
+        // 因此并发调用复用同一份在途 promise，并记一个 pending 标记，
+        // 让当前刷新结束后再补跑一次（保证看到的是最新状态）。
+        if (inflightRefresh) {
+          refreshAgain = true;
+          return inflightRefresh;
+        }
+
+        const sample = async () => {
+          set({ loading: true });
+          try {
+            const [procs, ports, devs, ais, sys, dk] = await Promise.all([
+              listProcesses(),
+              listPorts(),
+              listDevServers(),
+              listAiProcesses(),
+              systemInfo().catch(() => null),
+              diskInfo().catch(() => []),
+            ]);
+            const cpuSum = procs.reduce((acc, p) => acc + (p.cpu ?? 0), 0);
+            const memTotal = procs.reduce((acc, p) => acc + (p.memory ?? 0), 0);
+            const point = {
+              cpu: Math.round(cpuSum),
+              memGb: Math.round((memTotal / 1024 ** 3) * 100) / 100,
+              t: Date.now(),
+            };
+            // 用函数式 set 追加，避免与并发写入互相覆盖采样点
+            const history = [...get().history.slice(-(HISTORY_LEN - 1)), point];
+            set({
+              procs,
+              ports,
+              devs,
+              ais,
+              sysinfo: sys,
+              disks: dk,
+              history,
+              loading: false,
+              lastRefreshAt: Date.now(),
+            });
+          } catch (e) {
+            set({ loading: false, toast: t("store.refreshFailed", { err: String(e) }) });
+          }
+        };
+
+        inflightRefresh = sample();
         try {
-          const [procs, ports, devs, ais, sys, dk] = await Promise.all([
-            listProcesses(),
-            listPorts(),
-            listDevServers(),
-            listAiProcesses(),
-            systemInfo().catch(() => null),
-            diskInfo().catch(() => []),
-          ]);
-          const cpuSum = procs.reduce((acc, p) => acc + (p.cpu ?? 0), 0);
-          const memTotal = procs.reduce((acc, p) => acc + (p.memory ?? 0), 0);
-          const point = {
-            cpu: Math.round(cpuSum),
-            memGb: Math.round((memTotal / 1024 ** 3) * 100) / 100,
-            t: Date.now(),
-          };
-          // 用函数式 set 追加，避免与并发写入互相覆盖采样点
-          const history = [...get().history.slice(-(HISTORY_LEN - 1)), point];
-          set({
-            procs,
-            ports,
-            devs,
-            ais,
-            sysinfo: sys,
-            disks: dk,
-            history,
-            loading: false,
-            lastRefreshAt: Date.now(),
-          });
-        } catch (e) {
-          set({ loading: false, toast: t("store.refreshFailed", { err: String(e) }) });
+          await inflightRefresh;
         } finally {
-          refreshing = false;
+          inflightRefresh = null;
+          if (refreshAgain) {
+            refreshAgain = false;
+            void get().refreshRuntime();
+          }
         }
       },
 

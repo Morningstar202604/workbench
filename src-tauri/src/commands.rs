@@ -75,13 +75,9 @@ fn build_pid_index(procs: Vec<ProcInfo>) -> HashMap<u32, ProcInfo> {
 
 #[tauri::command(async)]
 pub async fn list_processes() -> Result<Vec<ProcInfo>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let result = procs::snapshot_processes();
-        log::debug!("list_processes 返回 {} 条", result.len());
-        result
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))
+    tauri::async_runtime::spawn_blocking(procs::snapshot_processes)
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))
 }
 
 #[tauri::command(async)]
@@ -153,7 +149,6 @@ pub async fn list_dev_servers(
         }
         servers.sort_by_key(|s| s.port);
         servers.dedup_by_key(|s| s.port);
-        log::debug!("list_dev_servers 返回 {} 条", servers.len());
         Ok(servers)
     })
     .await
