@@ -149,4 +149,22 @@ describe("store UI 状态", () => {
     expect(useStore.getState().toast).toBe("");
     expect(useStore.getState().costOverview).toBeNull();
   });
+
+  // 回归：clearCosts 原先漏了同款守卫，演示模式点「清空」必现原始 TypeError toast
+  it("浏览器演示模式下 clearCosts 不抛错、不提示错误", async () => {
+    useStore.setState({ toast: "" });
+    await expect(useStore.getState().clearCosts()).resolves.toBeUndefined();
+    expect(useStore.getState().toast).toBe("");
+  });
+
+  // 回归：updateCostSettings 原先先写内存再保存，失败后内存态与磁盘脱节。
+  // 演示模式下没有后端，应当返回 false 且不覆盖已加载的设置。
+  it("updateCostSettings 保存失败时返回 false 且不改内存态", async () => {
+    const before = useStore.getState().costSettings;
+    const ok = await useStore
+      .getState()
+      .updateCostSettings({ ...before, daily_budget: 99 });
+    expect(ok).toBe(false);
+    expect(useStore.getState().costSettings).toEqual(before);
+  });
 });

@@ -5,6 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 import { isTauri } from "../lib/api";
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
 import { Badge, Btn, Card, Field, SectionTitle } from "../ui";
+import { formatUsd } from "../lib/util";
 import type { CostSettings, WorkbenchData } from "../types";
 
 // ════════════════════════════════════════════════════════════
@@ -101,7 +102,7 @@ export default function Settings() {
   } = useCostSettingsEditor(costSettings);
 
   useEffect(() => {
-    loadCostSettings();
+    void loadCostSettings();
   }, [loadCostSettings]);
 
   // ── 导入 / 导出 ──
@@ -149,8 +150,10 @@ export default function Settings() {
   };
 
   const saveCostConfig = async () => {
-    await updateCostSettings(costDraft);
-    setCostDirty(false);
+    // 只有真正落盘成功才清掉「未保存」标记：保存失败的草稿必须继续显示为待保存，
+    // 否则用户关掉页面就以为已经生效了。
+    const ok = await updateCostSettings(costDraft);
+    if (ok) setCostDirty(false);
   };
 
   return (
@@ -339,7 +342,7 @@ export default function Settings() {
                   <div>
                     <div className="text-dim">{t("settings.totalCost")}</div>
                     <div className="font-mono font-medium">
-                      ${costOverview.total_cost.toFixed(2)}
+                      {formatUsd(costOverview.total_cost)}
                     </div>
                   </div>
                 </div>

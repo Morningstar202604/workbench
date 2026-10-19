@@ -7,6 +7,7 @@ import {
   getCostSettings,
   getCostTrend,
   getModelBreakdown,
+  ensureNotificationPermission,
   isTauri,
   listAiProcesses,
   listDevServers,
@@ -124,7 +125,7 @@ interface Store extends UiState, RuntimeState {
   loadCostOverview: () => Promise<void>;
   scanCosts: () => Promise<void>;
   loadCostSettings: () => Promise<void>;
-  updateCostSettings: (s: CostSettings) => Promise<void>;
+  updateCostSettings: (s: CostSettings) => Promise<boolean>;
   clearCosts: () => Promise<void>;
   checkBudgetAlert: () => void;
 }
@@ -437,9 +438,15 @@ export const useStore = create<Store>()(
           costModelBreakdown: breakdown,
           costSettings: settings,
         });
-        if (errors.length) set({ toast: t("store.costReadFailed", { err: errors[0] }) });
-        // 页面加载也要走一次预算检查：原来只有手动扫描后才会触发告警，
-        // 用户打开应用看到超支横幅但收不到系统通知，是告警漏发的时序洞。
+        if (errors.length) {
+          // 多个接口同时失败时只显示第一条，但把总数带出来，避免「只坏了一个」的错觉
+          const first = errors[0];
+          set({
+            toast: t("store.costReadFailed", {
+              err: errors.length > 1 ? `${first} (+${errors.length - 1})` : first,
+            }),
+          });
+        }
         get().checkBudgetAlert();
       },
 
@@ -466,26 +473,32 @@ export const useStore = create<Store>()(
         try {
           const s = await getCostSettings();
           set({ costSettings: s });
-        } catch {
-          /* 浏览器演示模式：保持默认设置 */
+        } catch (e) {
+          set({ toast: t("store.settingsLoadFailed", { err: String(e) }) });
         }
       },
 
+      /**
+       * 保存成本设置。返回是否成功 —— 调用方据此决定是否清掉「未保存」标记。
+       * 原先失败也返回 void，设置页无条件 setDirty(false)，用户会以为已持久化。
+       */
       updateCostSettings: async (s) => {
-        set({ costSettings: s });
         try {
           await saveCostSettings(s);
-          set({ toast: t("store.settingsSaved") });
         } catch (e) {
           set({ toast: t("store.settingsSaveFailed", { err: String(e) }) });
-          return;
+          return false;
         }
-        // 重新计算概览以反映设置变更
+        // 保存成功后才落内存态：避免失败时界面显示未持久化的值
+        set({ costSettings: s, toast: t("store.settingsSaved") });
         await get().loadCostOverview();
         get().checkBudgetAlert();
+        return true;
       },
 
       clearCosts: async () => {
+        // 与其余成本接口一致：演示模式下没有后端
+        if (!isTauri()) return;
         try {
           await clearCostRecords();
           set({
@@ -508,14 +521,22 @@ export const useStore = create<Store>()(
           (o.monthly_budget > 0 && o.monthly_pct >= o.alert_threshold_pct);
         if (exceeded && !get().costNotified) {
           set({ costNotified: true });
-          notify(
-            t("store.alertTitle"),
-            t("store.alertBody", {
-              daily: o.daily_pct.toFixed(0),
-              monthly: o.monthly_pct.toFixed(0),
-              threshold: o.alert_threshold_pct,
-            })
-          ).catch(() => {});
+          // 先确保拿到通知权限：未授权时 sendNotification 会静默失败，
+          // 用户只看到界面横幅、收不到系统通知。
+          void ensureNotificationPermission()
+            .then((granted) =>
+              granted
+                ? notify(
+                    t("store.alertTitle"),
+                    t("store.alertBody", {
+                      daily: o.daily_pct.toFixed(0),
+                      monthly: o.monthly_pct.toFixed(0),
+                      threshold: o.alert_threshold_pct,
+                    })
+                  )
+                : undefined
+            )
+            .catch(() => {});
         }
         if (!exceeded) {
           set({ costNotified: false });
@@ -524,7 +545,8 @@ export const useStore = create<Store>()(
     }),
     {
       name: "workbench-ui-v1",
-      // 显式版本 + migrate：以后改持久化结构时老用户数据才不会直接被反序列化成半截状态
+      // 版本号一旦改动就必须同时补 migrate：zustand 在没有 migrate 时不会
+      // 按版本号做任何转换，旧结构会被直接当成新结构反序列化。
       version: 1,
       partialize: (s) => ({
         theme: s.theme,
