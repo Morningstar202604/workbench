@@ -11,50 +11,19 @@ import {
   Terminal,
 } from "lucide-react";
 import { EChart } from "../lib/echarts";
-import { chartGapColor, horizontalBarOption } from "../lib/chartTheme";
+import { chartGapColor, horizontalBarOption, seriesColors } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { openExternal } from "../lib/api";
 import { useT } from "../lib/i18n";
-import { Badge, Btn, Card, Empty, SectionTitle, StatCard } from "../ui";
-import type { DevServer, PortEntry } from "../types";
+import { Badge, Btn, Card, Empty, SectionTitle, StatCard, type Tone } from "../ui";
+import { frameworkDistribution, portDistribution } from "../lib/aggregate";
+import type { PortEntry } from "../types";
 
-// ── 框架分布统计 ──────────────────────────────────────────
-function frameworkDist(servers: DevServer[]) {
-  const m = new Map<string, number>();
-  for (const s of servers) m.set(s.framework, (m.get(s.framework) ?? 0) + 1);
-  return [...m.entries()].sort((a, b) => b[1] - a[1]);
-}
-
-// ── 端口区间分布 ──────────────────────────────────────────
-// 端口区间的展示标签由调用方传入的 t 翻译（t 随语言稳定），保证切换语言后刷新。
-type TFunc = (key: string, vars?: Record<string, string | number>) => string;
-function portHeatmap(ports: PortEntry[], label: TFunc) {
-  const ranges = [
-    { label: label("servers.portRange.wellKnown"), min: 1, max: 1023, count: 0 },
-    { label: label("servers.portRange.registered"), min: 1024, max: 49151, count: 0 },
-    { label: label("servers.portRange.dynamic"), min: 49152, max: 65535, count: 0 },
-  ];
-  for (const p of ports) {
-    for (const r of ranges) {
-      if (p.local_port >= r.min && p.local_port <= r.max) {
-        r.count++;
-        break;
-      }
-    }
-  }
-  return ranges;
-}
-
-const COLORS = [
-  "#22d3ee",
-  "#a78bfa",
-  "#34d399",
-  "#fbbf24",
-  "#f87171",
-  "#60a5fa",
-  "#e879f9",
-];
+const CONFIDENCE_TONE: Record<string, Tone> = {
+  high: "ok",
+  medium: "warn",
+};
 
 export default function Servers() {
   const t = useT();
@@ -95,8 +64,17 @@ export default function Servers() {
     return m;
   }, [procs]);
 
-  const frameworkData = useMemo(() => frameworkDist(devs), [devs]);
-  const heatmapData = useMemo(() => portHeatmap(listening, t), [listening, t]);
+  const frameworkData = useMemo(() => frameworkDistribution(devs), [devs]);
+  const heatmapData = useMemo(
+    () =>
+      portDistribution(listening, [
+        t("servers.portRange.wellKnown"),
+        t("servers.portRange.registered"),
+        t("servers.portRange.dynamic"),
+      ]),
+    [listening, t]
+  );
+  const colors = useMemo(() => seriesColors(theme), [theme]);
 
   // 框架分布饼图
   const frameworkPieOption = useMemo(() => {
@@ -119,12 +97,12 @@ export default function Servers() {
           data: frameworkData.map(([name, count], i) => ({
             name,
             value: count,
-            itemStyle: { color: COLORS[i % COLORS.length] },
+            itemStyle: { color: colors[i % colors.length] },
           })),
         },
       ],
     };
-  }, [frameworkData, theme]);
+  }, [frameworkData, theme, colors]);
 
   // 端口分布条形图（与 Overview / Projects / AiSessions 共用同一构造器）
   const portBarOption = useMemo(
@@ -133,14 +111,14 @@ export default function Servers() {
         labels: heatmapData.map((h) => h.label),
         values: heatmapData.map((h, i) => ({
           value: h.count,
-          color: COLORS[i % COLORS.length],
+          color: colors[i % colors.length],
         })),
         theme,
         left: 100,
         barWidth: 16,
         valueLabel: "{c}",
       }),
-    [heatmapData, theme]
+    [heatmapData, theme, colors]
   );
 
   return (
@@ -190,7 +168,7 @@ export default function Servers() {
                   >
                     <span
                       className="inline-block h-2 w-2 rounded-full"
-                      style={{ background: COLORS[i % COLORS.length] }}
+                      style={{ background: colors[i % colors.length] }}
                     />
                     {name} <span className="font-mono text-text">{count}</span>
                   </span>
@@ -248,20 +226,8 @@ export default function Servers() {
                     <Server size={16} className="text-ok shrink-0" />
                     <span className="font-semibold">{d.framework}</span>
                     <Badge tone="ok">:{d.port}</Badge>
-                    <Badge
-                      tone={
-                        d.confidence === "high"
-                          ? "ok"
-                          : d.confidence === "medium"
-                            ? "warn"
-                            : "dim"
-                      }
-                    >
-                      {d.confidence === "high"
-                        ? t("servers.confidence.high")
-                        : d.confidence === "medium"
-                          ? t("servers.confidence.medium")
-                          : t("servers.confidence.low")}
+                    <Badge tone={CONFIDENCE_TONE[d.confidence] ?? "dim"}>
+                      {t(`servers.confidence.${d.confidence}` as const)}
                     </Badge>
                     <span
                       className="ml-auto truncate font-mono text-xs text-dim hidden md:block"

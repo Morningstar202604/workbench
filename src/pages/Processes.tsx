@@ -10,10 +10,12 @@ import {
   XCircle,
 } from "lucide-react";
 import { EChart } from "../lib/echarts";
+import { seriesColors } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { Badge, Btn, Card, Empty, Spinner, StatCard, Td, Tr, inputCls } from "../ui";
 import { formatBytes, fromNow, shortPath } from "../lib/util";
+import { cpuHistogram, memoryHistogram } from "../lib/aggregate";
 import { useT, useLang, localeFor } from "../lib/i18n";
 import type { ProcInfo } from "../types";
 
@@ -31,57 +33,17 @@ const ROW_H = 37;
 const DETAIL_H = 170;
 const OVERSCAN = 12;
 
-// ── CPU 分布直方图数据 ────────────────────────────────────
-function cpuHistogram(procs: ProcInfo[]) {
-  const bins = [
-    { range: "0%", min: 0, max: 0.5, count: 0 },
-    { range: "<5%", min: 0.5, max: 5, count: 0 },
-    { range: "5-20%", min: 5, max: 20, count: 0 },
-    { range: "20-50%", min: 20, max: 50, count: 0 },
-    { range: "50%+", min: 50, max: Infinity, count: 0 },
-  ];
-  for (const p of procs) {
-    for (const b of bins) {
-      if (p.cpu >= b.min && p.cpu < b.max) {
-        b.count++;
-        break;
-      }
-    }
-  }
-  return bins;
-}
-
-// ── 内存分布直方图数据 ────────────────────────────────────
-function memHistogram(procs: ProcInfo[]) {
-  const bins = [
-    { range: "<10MB", min: 0, max: 10, count: 0 },
-    { range: "10-50MB", min: 10, max: 50, count: 0 },
-    { range: "50-200MB", min: 50, max: 200, count: 0 },
-    { range: "200MB-1G", min: 200, max: 1024, count: 0 },
-    { range: "1GB+", min: 1024, max: Infinity, count: 0 },
-  ];
-  for (const p of procs) {
-    const mb = p.memory / 1024 / 1024;
-    for (const b of bins) {
-      if (mb >= b.min && mb < b.max) {
-        b.count++;
-        break;
-      }
-    }
-  }
-  return bins;
-}
-
 export default function Processes() {
   const t = useT();
   const lang = useLang();
-  const { procs, devs, ais, loading, refreshRuntime } = useStore(
+  const { procs, devs, ais, loading, refreshRuntime, theme } = useStore(
     useShallow((s) => ({
       procs: s.procs,
       devs: s.devs,
       ais: s.ais,
       loading: s.loading,
       refreshRuntime: s.refreshRuntime,
+      theme: s.theme,
     }))
   );
   const [q, setQ] = useState("");
@@ -151,15 +113,16 @@ export default function Processes() {
     : 0;
 
   const cpuBins = useMemo(() => cpuHistogram(procs), [procs]);
-  const memBins = useMemo(() => memHistogram(procs), [procs]);
+  const memBins = useMemo(() => memoryHistogram(procs), [procs]);
+  const colors = useMemo(() => seriesColors(theme), [theme]);
 
-  const cpuChart = useMemo(() => {
-    return {
+  const histogramOption = useMemo(
+    () => (bins: { label: string; count: number }[], palette: string[]) => ({
       grid: { left: 36, right: 16, top: 12, bottom: 24 },
       tooltip: { trigger: "axis" },
       xAxis: {
         type: "category",
-        data: cpuBins.map((b) => b.range),
+        data: bins.map((b) => b.label),
         axisLabel: { fontSize: 9 },
       },
       yAxis: {
@@ -170,10 +133,10 @@ export default function Processes() {
       series: [
         {
           type: "bar",
-          data: cpuBins.map((b, i) => ({
+          data: bins.map((b, i) => ({
             value: b.count,
             itemStyle: {
-              color: ["#34d399", "#22d3ee", "#fbbf24", "#f97316", "#ef4444"][i],
+              color: palette[i % palette.length],
               borderRadius: [4, 4, 0, 0],
             },
           })),
@@ -181,39 +144,18 @@ export default function Processes() {
           label: { show: true, position: "top", fontSize: 10 },
         },
       ],
-    };
-  }, [cpuBins]);
+    }),
+    []
+  );
 
-  const memChart = useMemo(() => {
-    return {
-      grid: { left: 36, right: 16, top: 12, bottom: 24 },
-      tooltip: { trigger: "axis" },
-      xAxis: {
-        type: "category",
-        data: memBins.map((b) => b.range),
-        axisLabel: { fontSize: 9 },
-      },
-      yAxis: {
-        type: "value",
-        axisLabel: { fontSize: 9 },
-        splitLine: { lineStyle: { type: "dashed" } },
-      },
-      series: [
-        {
-          type: "bar",
-          data: memBins.map((b, i) => ({
-            value: b.count,
-            itemStyle: {
-              color: ["#34d399", "#22d3ee", "#a78bfa", "#f97316", "#ef4444"][i],
-              borderRadius: [4, 4, 0, 0],
-            },
-          })),
-          barWidth: "60%",
-          label: { show: true, position: "top", fontSize: 10 },
-        },
-      ],
-    };
-  }, [memBins]);
+  const cpuChart = useMemo(
+    () => histogramOption(cpuBins, colors),
+    [cpuBins, colors, histogramOption]
+  );
+  const memChart = useMemo(
+    () => histogramOption(memBins, colors),
+    [memBins, colors, histogramOption]
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -475,29 +417,20 @@ export default function Processes() {
                         </div>
                       </Td>
                       <Td>
-                        {aiPids.has(p.pid) || devPids.has(p.pid) || p.cpu > 50 ? (
-                          <Btn
-                            variant="danger"
-                            className="!px-2 !py-1 !text-xs"
-                            title={t("procs.killTitle")}
-                            onClick={() => {
-                              useStore.getState().setKillTarget(p);
-                            }}
-                          >
-                            <XCircle size={12} />
-                          </Btn>
-                        ) : (
-                          <Btn
-                            variant="ghost"
-                            className="!px-2 !py-1 !text-xs"
-                            title={t("procs.killTitle")}
-                            onClick={() => {
-                              useStore.getState().setKillTarget(p);
-                            }}
-                          >
-                            <XCircle size={12} />
-                          </Btn>
-                        )}
+                        <Btn
+                          variant={
+                            aiPids.has(p.pid) || devPids.has(p.pid) || p.cpu > 50
+                              ? "danger"
+                              : "ghost"
+                          }
+                          className="!px-2 !py-1 !text-xs"
+                          title={t("procs.killTitle")}
+                          onClick={() => {
+                            useStore.getState().setKillTarget(p);
+                          }}
+                        >
+                          <XCircle size={12} />
+                        </Btn>
                       </Td>
                     </Tr>
                   );

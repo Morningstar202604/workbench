@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { EChart } from "../lib/echarts";
-import { chartGapColor, chartLineColor, horizontalBarOption } from "../lib/chartTheme";
+import {
+  chartGapColor,
+  chartLineColor,
+  horizontalBarOption,
+  seriesColors,
+} from "../lib/chartTheme";
 import {
   Activity,
   Cpu,
@@ -17,137 +22,8 @@ import { useShallow } from "zustand/react/shallow";
 import { Badge, Card, Empty, SectionTitle, StatCard, Table, Td, Tr } from "../ui";
 import { formatBytes, formatCpu, formatUptime, dueLabel, shortPath } from "../lib/util";
 import { useT, useLang, localeFor } from "../lib/i18n";
+import { categorizeProcesses, portDistribution } from "../lib/aggregate";
 import logoUrl from "../assets/logo.png";
-
-// ─── 进程分类 ─────────────────────────────────────────────
-
-interface Category {
-  name: string;
-  count: number;
-  mem: number;
-  color: string;
-}
-
-const BROWSER_TOKENS = [
-  "chrome",
-  "firefox",
-  "edge",
-  "msedge",
-  "brave",
-  "opera",
-  "safari",
-];
-const DEV_TOKENS = [
-  "node",
-  "deno",
-  "bun",
-  "npm",
-  "pnpm",
-  "yarn",
-  "webpack",
-  "vite",
-  "rustc",
-  "cargo",
-  "go",
-  "java",
-  "python",
-  "vscode",
-  "code",
-  "jetbrains",
-  "idea",
-  "pycharm",
-  "webstorm",
-  "goland",
-];
-const AI_TOKENS = [
-  "claude",
-  "opencode",
-  "copilot",
-  "codex",
-  "ollama",
-  "continue",
-  "tabnine",
-  "cursor",
-  "aider",
-  "gemini",
-  "windsurf",
-  "qwen",
-  "iflow",
-  "cline",
-  "roo",
-];
-const SYSTEM_TOKENS = [
-  "system",
-  "svchost",
-  "lsass",
-  "csrss",
-  "services",
-  "winlogon",
-  "dwm",
-  "registry",
-  "smss",
-  "taskhost",
-  "spoolsv",
-];
-
-/** 按非字母数字切 token，避免 "go" 命中 "google"、"amp" 命中 "sample" 这类子串误判。 */
-function tokenize(s: string): Set<string> {
-  return new Set(s.split(/[^a-z0-9]+/).filter(Boolean));
-}
-
-function hasAny(tokens: Set<string>, list: string[]): boolean {
-  for (const t of tokens) if (list.includes(t)) return true;
-  return false;
-}
-
-function categorizeProcs(
-  procs: { name: string; exe_path: string; memory: number }[],
-  t: (key: string) => string
-): Category[] {
-  const cats: Record<string, Category> = {
-    browser: { name: t("overview.cat.browser"), count: 0, mem: 0, color: "#22d3ee" },
-    dev: { name: t("overview.cat.dev"), count: 0, mem: 0, color: "#a78bfa" },
-    ai: { name: t("overview.cat.ai"), count: 0, mem: 0, color: "#fbbf24" },
-    system: { name: t("overview.cat.system"), count: 0, mem: 0, color: "#34d399" },
-    other: { name: t("overview.cat.other"), count: 0, mem: 0, color: "#64748b" },
-  };
-  for (const p of procs) {
-    const nameTokens = tokenize(p.name.toLowerCase());
-    const allTokens = tokenize(`${p.name} ${p.exe_path}`.toLowerCase());
-    const cat = hasAny(nameTokens, BROWSER_TOKENS)
-      ? "browser"
-      : hasAny(allTokens, AI_TOKENS)
-        ? "ai"
-        : hasAny(allTokens, DEV_TOKENS)
-          ? "dev"
-          : hasAny(nameTokens, SYSTEM_TOKENS)
-            ? "system"
-            : "other";
-    cats[cat].count++;
-    cats[cat].mem += p.memory;
-  }
-  return Object.values(cats).filter((c) => c.count > 0);
-}
-
-// ─── 端口分布 ─────────────────────────────────────────────
-
-interface PortRange {
-  range: string;
-  count: number;
-}
-
-function portDistribution(ports: { local_port: number }[]): PortRange[] {
-  const bins = [
-    { range: "0-1023", min: 0, max: 1023, count: 0 },
-    { range: "1024-49151", min: 1024, max: 49151, count: 0 },
-    { range: "49152+", min: 49152, max: 65535, count: 0 },
-  ];
-  for (const p of ports) {
-    const b = bins.find((x) => p.local_port >= x.min && p.local_port <= x.max);
-    if (b) b.count++;
-  }
-  return bins.map(({ range, count }) => ({ range: `${range}`, count }));
-}
 
 // ─── 主组件 ──────────────────────────────────────────────
 
@@ -276,8 +152,18 @@ export default function Overview() {
     };
   }, [history, t, lang]);
 
-  // 进程分类饼图
-  const categories = useMemo(() => categorizeProcs(procs, t), [procs, t]);
+  // 进程分类饼图（分类规则与色板在 lib/aggregate 与 chartTheme，页面不再自持一份）
+  const categories = useMemo(
+    () =>
+      categorizeProcesses(procs, {
+        browser: t("overview.cat.browser"),
+        dev: t("overview.cat.dev"),
+        ai: t("overview.cat.ai"),
+        system: t("overview.cat.system"),
+        other: t("overview.cat.other"),
+      }),
+    [procs, t]
+  );
   const pieOption = useMemo(
     () => ({
       tooltip: { trigger: "item", formatter: t("overview.pieTooltip") },
@@ -305,11 +191,19 @@ export default function Overview() {
   );
 
   // 端口分布条形图（与 Servers / Projects / AiSessions 共用同一构造器）
-  const portRanges = useMemo(() => portDistribution(ports), [ports]);
+  const portRanges = useMemo(
+    () =>
+      portDistribution(ports, [
+        t("servers.portRange.wellKnown"),
+        t("servers.portRange.registered"),
+        t("servers.portRange.dynamic"),
+      ]),
+    [ports, t]
+  );
   const portBarOption = useMemo(
     () =>
       horizontalBarOption({
-        labels: portRanges.map((p) => p.range),
+        labels: portRanges.map((p) => p.label),
         values: portRanges.map((p) => ({ value: p.count })),
         theme,
         fontSize: 11,
@@ -318,8 +212,8 @@ export default function Overview() {
   );
 
   // 磁盘环形图
+  const colors = useMemo(() => seriesColors(theme), [theme]);
   const diskSeries = useMemo(() => {
-    const colors = ["#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#f87171", "#60a5fa"];
     return disks.map((d, i) => {
       const pct =
         d.total_bytes > 0 ? Math.round((d.used_bytes / d.total_bytes) * 100) : 0;
@@ -332,7 +226,7 @@ export default function Overview() {
         itemStyle: { color: colors[i % colors.length] },
       };
     });
-  }, [disks]);
+  }, [disks, colors]);
 
   const diskOption = useMemo(
     () => ({
@@ -740,9 +634,7 @@ export default function Overview() {
                     key={task.id}
                     className="flex items-center gap-3 rounded-lg border border-line/60 bg-panel2 px-3 py-2 text-sm"
                   >
-                    <Badge tone={due.tone === "muted" ? "dim" : due.tone}>
-                      {due.text}
-                    </Badge>
+                    <Badge tone={due.tone}>{due.text}</Badge>
                     <span className="truncate">{task.title}</span>
                   </li>
                 );
@@ -757,9 +649,9 @@ export default function Overview() {
             <Empty icon={Inbox}>{t("overview.noSessionFiles")}</Empty>
           ) : (
             <ul className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto">
-              {sessionFiles.slice(0, 8).map((s, i) => (
+              {sessionFiles.slice(0, 8).map((s) => (
                 <li
-                  key={i}
+                  key={s.path}
                   className="flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-panel2"
                 >
                   <Badge tone={s.tool.includes("Claude") ? "accent" : "ok"}>

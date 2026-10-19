@@ -1,19 +1,33 @@
 import { useCallback, useMemo, useState } from "react";
 import { FolderOpen, Pencil, Pin, Plus, Trash2 } from "lucide-react";
 import { EChart } from "../lib/echarts";
-import { chartGapColor, horizontalBarOption } from "../lib/chartTheme";
+import { chartGapColor, FIXED_COLORS, horizontalBarOption } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { openExternal } from "../lib/api";
-import { Badge, Btn, Card, Empty, Field, Modal, Table, Td, Tr, inputCls } from "../ui";
+import {
+  Badge,
+  Btn,
+  Card,
+  ConfirmDialog,
+  Empty,
+  Field,
+  Modal,
+  Table,
+  Td,
+  Tr,
+  inputCls,
+  type Tone,
+} from "../ui";
 import { shortPath } from "../lib/util";
+import { isProjectRunning } from "../lib/aggregate";
 import { useT } from "../lib/i18n";
 import type { Project } from "../types";
 
-const STATUS_MAP: Record<string, { tone: string; color: string }> = {
-  active: { tone: "ok", color: "#34d399" },
-  paused: { tone: "warn", color: "#fbbf24" },
-  archived: { tone: "dim", color: "#64748b" },
+const STATUS_MAP: Record<string, { tone: Tone; color: string }> = {
+  active: { tone: "ok", color: FIXED_COLORS.system },
+  paused: { tone: "warn", color: FIXED_COLORS.ai },
+  archived: { tone: "dim", color: FIXED_COLORS.other },
 };
 
 interface Draft {
@@ -51,6 +65,7 @@ export default function Projects() {
       }))
     );
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
 
   const statusLabel = useCallback(
     (s: string) =>
@@ -64,16 +79,9 @@ export default function Projects() {
     [t]
   );
 
-  const runningDirs = useMemo(
-    () => devs.map((d) => d.project_dir?.toLowerCase() ?? "").filter(Boolean),
-    [devs]
-  );
+  const runningDirs = useMemo(() => devs.map((d) => d.project_dir), [devs]);
 
-  const isRunning = (p: Project) =>
-    !!p.path &&
-    runningDirs.some(
-      (dir) => dir === p.path.toLowerCase() || dir.startsWith(p.path.toLowerCase())
-    );
+  const isRunning = (p: Project) => isProjectRunning(p.path, runningDirs);
 
   const sorted = useMemo(
     () => [...data.projects].sort((a, b) => Number(b.pinned) - Number(a.pinned)),
@@ -298,10 +306,7 @@ export default function Projects() {
                     variant="danger"
                     className="!px-2 !py-1 !text-xs"
                     title={t("projects.deleteTitle")}
-                    onClick={() => {
-                      if (confirm(t("projects.deleteConfirm", { name: p.name })))
-                        deleteProject(p.id);
-                    }}
+                    onClick={() => setPendingDelete(p)}
                   >
                     <Trash2 size={12} />
                   </Btn>
@@ -351,6 +356,19 @@ export default function Projects() {
           ))}
         </Table>
       </Card>
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title={t("projects.deleteTitle")}
+        body={t("projects.deleteConfirm", { name: pendingDelete?.name ?? "" })}
+        confirmLabel={t("projects.deleteTitle")}
+        cancelLabel={t("projects.cancel")}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) deleteProject(pendingDelete.id);
+          setPendingDelete(null);
+        }}
+      />
 
       <Modal
         open={!!draft}

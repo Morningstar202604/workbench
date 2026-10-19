@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { BarChart3, Plus, Trash2 } from "lucide-react";
 import { EChart } from "../lib/echarts";
-import { chartGapColor } from "../lib/chartTheme";
+import { chartGapColor, FIXED_COLORS } from "../lib/chartTheme";
 import {
   DndContext,
   PointerSensor,
@@ -15,7 +15,16 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { Badge, Btn, Empty, Field, Modal, SectionTitle, inputCls } from "../ui";
+import {
+  Badge,
+  Btn,
+  Empty,
+  Field,
+  Modal,
+  SectionTitle,
+  inputCls,
+  type Tone,
+} from "../ui";
 import { dueLabel } from "../lib/util";
 import { useT } from "../lib/i18n";
 import type { Task } from "../types";
@@ -23,15 +32,15 @@ import type { Task } from "../types";
 type TFunc = (key: string, vars?: Record<string, string | number>) => string;
 
 const COLUMNS: { key: string; color: string }[] = [
-  { key: "todo", color: "#64748b" },
-  { key: "doing", color: "#22d3ee" },
-  { key: "done", color: "#34d399" },
+  { key: "todo", color: FIXED_COLORS.other },
+  { key: "doing", color: FIXED_COLORS.normal },
+  { key: "done", color: FIXED_COLORS.system },
 ];
 
-const PRIORITIES: Record<string, { tone: string }> = {
-  low: { tone: "dim" },
-  normal: { tone: "accent" },
-  high: { tone: "danger" },
+const PRIORITIES: Record<string, { tone: Tone; color: string }> = {
+  low: { tone: "dim", color: FIXED_COLORS.low },
+  normal: { tone: "accent", color: FIXED_COLORS.normal },
+  high: { tone: "danger", color: FIXED_COLORS.high },
 };
 
 function columnLabel(key: string, t: TFunc): string {
@@ -102,15 +111,13 @@ export default function Tasks() {
   const priorityDist = useMemo(() => {
     const m: Record<string, number> = { low: 0, normal: 0, high: 0 };
     for (const task of data.tasks) m[task.priority] = (m[task.priority] ?? 0) + 1;
-    return [
-      { name: t("tasks.priorityLow"), value: m.low, itemStyle: { color: "#64748b" } },
-      {
-        name: t("tasks.priorityNormal"),
-        value: m.normal,
-        itemStyle: { color: "#22d3ee" },
-      },
-      { name: t("tasks.priorityHigh"), value: m.high, itemStyle: { color: "#ef4444" } },
-    ].filter((d) => d.value > 0);
+    return (["low", "normal", "high"] as const)
+      .map((key) => ({
+        name: priorityLabel(key, t),
+        value: m[key],
+        color: PRIORITIES[key].color,
+      }))
+      .filter((d) => d.value > 0);
   }, [data.tasks, t]);
 
   const priorityPieOption = useMemo(
@@ -123,7 +130,11 @@ export default function Tasks() {
           label: { show: false },
           labelLine: { show: false },
           itemStyle: { borderColor: chartGapColor(theme), borderWidth: 2 },
-          data: priorityDist,
+          data: priorityDist.map((d) => ({
+            name: d.name,
+            value: d.value,
+            itemStyle: { color: d.color },
+          })),
         },
       ],
     }),
@@ -173,7 +184,7 @@ export default function Tasks() {
                   >
                     <span
                       className="inline-block h-1.5 w-1.5 rounded-full"
-                      style={{ background: (d.itemStyle as { color: string }).color }}
+                      style={{ background: d.color }}
                     />
                     {d.name} <span className="font-mono text-text">{d.value}</span>
                   </span>
@@ -470,7 +481,7 @@ function TaskCard({
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         <Badge tone={pri.tone}>{priorityLabel(task.priority, t)}</Badge>
-        {due.tone !== "muted" && <Badge tone={due.tone}>{due.text}</Badge>}
+        <Badge tone={due.tone}>{due.text}</Badge>
         {projectName && <Badge tone="dim">{projectName}</Badge>}
       </div>
     </div>
