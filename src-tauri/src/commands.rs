@@ -62,9 +62,14 @@ pub async fn list_processes() -> Result<Vec<ProcInfo>, String> {
 #[tauri::command(async)]
 pub async fn terminate_process(pid: u32) -> Result<(), String> {
     log::info!("请求终止进程 PID={pid}");
-    tauri::async_runtime::spawn_blocking(move || procs::terminate_process(pid))
+    let result = tauri::async_runtime::spawn_blocking(move || procs::terminate_process(pid))
         .await
-        .map_err(|e| format!("任务执行失败: {e}"))?
+        .map_err(|e| format!("任务执行失败: {e}"))?;
+    // 终止后强制刷新快照，否则前端立刻刷新时可能读到 400ms 内的旧快照
+    if result.is_ok() {
+        let _ = tauri::async_runtime::spawn_blocking(procs::snapshot_processes_fresh).await;
+    }
+    result
 }
 
 #[tauri::command(async)]
@@ -410,8 +415,13 @@ pub async fn disk_info() -> Result<Vec<DiskInfo>, String> {
 #[tauri::command]
 pub fn load_data(app: AppHandle, dirs: tauri::State<'_, KnownDirs>) -> Result<WorkbenchData, String> {
     let data = data::load_from_disk(&app)?;
-    // 项目路径是前端后续 git 探测 / 打开目录的唯一合法来源，先登记
-    dirs.record(data.projects.iter().map(|p| p.path.as_str()));
+    // data.json 可能被外部编辑过，回灌白名单时同样要过存在性校验
+    let accepted = dirs.record_validated(data.projects.iter().map(|p| p.path.as_str()));
+    log::debug!(
+        "从 data.json 登记 {} 个有效项目目录（共 {} 个）",
+        accepted,
+        data.projects.len()
+    );
     Ok(data)
 }
 
@@ -426,7 +436,10 @@ pub fn save_data(
         data.projects.len(),
         data.tasks.len()
     );
-    dirs.record(data.projects.iter().map(|p| p.path.as_str()));
+    // 入参来自 WebView：只登记真实存在的绝对目录，避免注入脚本借 save_data
+    // 把任意目录灌进白名单后，再用 git_branch / open_known_path 触达它。
+    let accepted = dirs.record_validated(data.projects.iter().map(|p| p.path.as_str()));
+    log::debug!("save_data 登记 {accepted} 个项目目录");
     data::save_to_disk(&app, &data)
 }
 
@@ -468,23 +481,20 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
         // 已有记录快照仅用于跳过未变化的文件（纯加速，不影响正确性：
         // 入库按 file_path 整组替换，重复扫描同一文件不会叠加）。
         let existing_keys = cost_store::existing_keys(&app)?;
-        let pricing_table = build_pricing_table(&app)?;
+        let pricing_table = build_pricing_table(&app);
         let records =
             session_meter::scan_sessions_to_records(&entries, &pricing_table, &existing_keys);
         let total_scanned = records.len();
-        let added = cost_store::import_records(&app, &records)?;
 
-        // 构建聚合视图
-        let overview = cost_store::build_overview(&app)?;
-        let trend = cost_store::build_trend(&app, 14)?;
-        let model_breakdown = cost_store::build_model_breakdown(&app)?;
+        // 落库 + 三个聚合视图在同一次加锁/读写下完成
+        let outcome = cost_store::import_and_aggregate(&app, &records, 14)?;
 
         Ok(ScanCostResult {
-            new_records: added,
+            new_records: outcome.net_new,
             total_scanned,
-            overview,
-            trend,
-            model_breakdown,
+            overview: outcome.overview,
+            trend: outcome.trend,
+            model_breakdown: outcome.breakdown,
         })
     })
     .await
@@ -537,13 +547,21 @@ pub struct ScanCostResult {
 }
 
 /// 构造当前定价表 = 内置快照 + 用户覆盖文件 pricing_overrides.json。
-/// 覆盖文件目前只读（无写入 IPC）：用户需手工放置文件，UI 未提供编辑入口。
-fn build_pricing_table(app: &AppHandle) -> Result<PricingTable, String> {
+/// 覆盖文件是可选增强：损坏时降级为内置表并告警，不能让整个成本扫描失败
+/// （data.json 才是用户核心数据，那里才该「保全后上抛」）。
+fn build_pricing_table(app: &AppHandle) -> PricingTable {
     let mut table = PricingTable::default();
-    let path = cost_store::cost_data_path_overrides(app)?;
-    match crate::json_store::read_json::<HashMap<String, (f64, f64)>>(&path)? {
-        Some(overrides) => table.overrides = overrides,
-        None => log::debug!("无 pricing_overrides.json，使用内置价格表"),
+    let path = match cost_store::cost_data_path_overrides(app) {
+        Ok(p) => p,
+        Err(e) => {
+            log::warn!("定位定价覆盖文件失败，使用内置价格表: {e}");
+            return table;
+        }
+    };
+    match crate::json_store::read_json::<HashMap<String, (f64, f64)>>(&path) {
+        Ok(Some(overrides)) => table.overrides = overrides,
+        Ok(None) => log::debug!("无 pricing_overrides.json，使用内置价格表"),
+        Err(e) => log::warn!("pricing_overrides.json 不可用，忽略覆盖价: {e}"),
     }
-    Ok(table)
+    table
 }
