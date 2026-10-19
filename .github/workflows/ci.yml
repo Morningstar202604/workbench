@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    name: Frontend (typecheck / lint / format / test / build)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+      - name: Format check
+        run: npm run format:check
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  backend:
+    name: Backend (test / clippy / IPC contract)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Tests
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      # ts-rs 导出是契约快照：Rust 结构体改了但忘记重新导出时，
+      # 前端类型会静默漂移。这里重新生成并检查工作区是否干净。
+      - name: IPC contract drift
+        working-directory: src-tauri
+        run: |
+          cargo test --test export_bindings
+          git diff --exit-code ../src/generated
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Typecheck generated contract
+        run: npx tsc --noEmit
