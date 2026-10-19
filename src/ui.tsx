@@ -1,12 +1,15 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
+  type ButtonHTMLAttributes,
   type HTMLAttributes,
   type ReactNode,
 } from "react";
-import { Inbox } from "lucide-react";
+import { AlertTriangle, Inbox } from "lucide-react";
 
 export function Card({
   children,
@@ -32,7 +35,7 @@ export function SectionTitle({
   extra?: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between mb-3">
+    <div className="mb-3 flex items-center justify-between">
       <h2 className="text-sm font-semibold tracking-wide text-dim uppercase">
         {children}
       </h2>
@@ -41,7 +44,10 @@ export function SectionTitle({
   );
 }
 
-const TONES: Record<string, string> = {
+/** 语义色集合。调用方只允许这五个值，拼错由 tsc 拦下。 */
+export type Tone = "accent" | "ok" | "warn" | "danger" | "dim";
+
+const TONES: Record<Tone, string> = {
   accent: "text-accent border-accent/40 bg-accentsoft",
   ok: "text-ok border-ok/40 bg-ok/10",
   warn: "text-warn border-warn/40 bg-warn/10",
@@ -55,12 +61,12 @@ export function Badge({
   className = "",
 }: {
   children: ReactNode;
-  tone?: keyof typeof TONES | string;
+  tone?: Tone;
   className?: string;
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium ${TONES[tone] ?? TONES.dim} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium ${TONES[tone]} ${className}`}
     >
       {children}
     </span>
@@ -69,12 +75,12 @@ export function Badge({
 
 type BtnProps = {
   children: ReactNode;
-  onClick?: (e?: unknown) => void;
   variant?: "primary" | "ghost" | "danger";
   className?: string;
-  title?: string;
-  disabled?: boolean;
-};
+} & Pick<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "onClick" | "title" | "disabled" | "type"
+>;
 
 export function Btn({
   children,
@@ -83,6 +89,7 @@ export function Btn({
   className = "",
   title,
   disabled,
+  type = "button",
 }: BtnProps) {
   const base =
     "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40";
@@ -93,7 +100,7 @@ export function Btn({
   };
   return (
     <button
-      type="button"
+      type={type}
       title={title}
       disabled={disabled}
       onClick={onClick}
@@ -104,6 +111,11 @@ export function Btn({
   );
 }
 
+/**
+ * 模态框：补上 dialog 语义、焦点圈定与恢复、ESC 关闭。
+ * 原先只有裸 div + 点击遮罩，键盘用户打开后 Tab 会跑到背后的页面里，
+ * 而删除/清空这类不可逆操作的确认框正是最需要焦点约束的地方。
+ */
 export function Modal({
   open,
   title,
@@ -119,17 +131,73 @@ export function Modal({
   footer?: ReactNode;
   wide?: boolean;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    restoreFocusRef.current = document.activeElement as HTMLElement | null;
+    const node = dialogRef.current;
+    const first = node?.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    first?.focus();
+
+    return () => {
+      restoreFocusRef.current?.focus?.();
+    };
+  }, [open]);
+
+  const onKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const node = dialogRef.current;
+      if (!node) return;
+      const focusable = Array.from(
+        node.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    [onClose]
+  );
+
   if (!open) return null;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onKeyDown={onKeyDown}
         className={`w-full rounded-xl border border-line bg-panel shadow-2xl ${wide ? "max-w-2xl" : "max-w-md"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-line px-5 py-3 text-base font-semibold">
+        <div
+          id={titleId}
+          className="border-b border-line px-5 py-3 text-base font-semibold"
+        >
           {title}
         </div>
         <div className="px-5 py-4">{children}</div>
@@ -140,6 +208,51 @@ export function Modal({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * 破坏性操作确认框。替代 window.confirm：
+ * 后者在 WKWebView/macOS 上会静默返回 true，且无法样式化、无法测试。
+ */
+export function ConfirmDialog({
+  open,
+  title,
+  body,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+  danger = true,
+}: {
+  open: boolean;
+  title: string;
+  body: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <Modal
+      open={open}
+      title={title}
+      onClose={onCancel}
+      footer={
+        <>
+          <Btn onClick={onCancel}>{cancelLabel}</Btn>
+          <Btn variant={danger ? "danger" : "primary"} onClick={onConfirm}>
+            {confirmLabel}
+          </Btn>
+        </>
+      }
+    >
+      <div className="flex items-start gap-3 text-sm text-dim">
+        {danger && <AlertTriangle size={18} className="mt-0.5 shrink-0 text-danger" />}
+        <p className="whitespace-pre-wrap">{body}</p>
+      </div>
+    </Modal>
   );
 }
 
@@ -169,16 +282,16 @@ function useCountUp(target: number, duration = 600): number {
   return val;
 }
 
-const STAT_TONES: Record<string, string> = {
+const STAT_TONES: Record<"text" | Tone, string> = {
   text: "text-text",
   accent: "text-accent",
   ok: "text-ok",
   warn: "text-warn",
   danger: "text-danger",
+  dim: "text-dim",
 };
 
-/** 全局统一的统计卡片：顶部彩条 + 图标 + 滚动数字 + 提示行。
- * 各页面的 StatCard / StatPill / SummaryCard / SummaryPill 均由此替代。 */
+/** 全局统一的统计卡片：顶部彩条 + 图标 + 滚动数字 + 提示行。 */
 export function StatCard({
   icon: Icon,
   label,
@@ -191,10 +304,10 @@ export function StatCard({
   label: string;
   value: number | string;
   hint?: string;
-  tone?: keyof typeof STAT_TONES | string;
+  tone?: "text" | Tone;
   bar?: string;
 }) {
-  const color = STAT_TONES[tone] ?? STAT_TONES.text;
+  const color = STAT_TONES[tone];
   const numeric = typeof value === "number";
   const shown = useCountUp(numeric ? value : 0);
   return (

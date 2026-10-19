@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useEffect } from "react";
+import { lazy, memo, Suspense, useEffect, type ComponentType } from "react";
 import {
   Cpu,
   FileText,
@@ -47,8 +47,7 @@ const NAV_KEYS: ViewKey[] = [
   "logs",
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const NAV_ICONS: Record<ViewKey, any> = {
+const NAV_ICONS: Record<ViewKey, ComponentType<{ size?: number }>> = {
   overview: LayoutDashboard,
   processes: Cpu,
   servers: Server,
@@ -101,9 +100,10 @@ export default function App() {
   );
 
   useEffect(() => {
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // loadAll 内部已经串行触发 refreshRuntime / refreshAi；
+    // 依赖保持为空是刻意的（只在挂载时跑一次），因此显式声明稳定引用。
+    void loadAll();
+  }, [loadAll]);
 
   useEffect(() => {
     if (!isTauri()) return; // 演示模式没有后端，不建定时器

@@ -86,20 +86,49 @@ export async function saveData(data: WorkbenchData): Promise<void> {
  * URL 走 opener 插件；目录必须经后端 `open_known_path` 白名单校验，
  * 因此 capabilities 里不再给 WebView 直接的 allow-open-path 权限。 */
 export async function openExternal(target: string): Promise<void> {
-  const isUrl = /^[a-z][a-z0-9+.-]*:\/\//i.test(target);
+  const trimmed = target.trim();
+  // 只放行 http/https：数据源虽是本机目录，但信任边界输入不该把
+  // file:// / ms-msdt: 之类会被系统默认处理器接管的 scheme 送进 opener。
+  const isHttpUrl = /^https?:\/\//i.test(trimmed);
+  const isOtherScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed);
   if (!isTauri()) {
-    if (isUrl) window.open(target, "_blank", "noopener");
+    if (isHttpUrl) window.open(trimmed, "_blank", "noopener");
     return;
   }
-  if (isUrl) {
+  if (isHttpUrl) {
     const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(target);
+    await openUrl(trimmed);
     return;
   }
-  await invoke("open_known_path", { path: target });
+  if (isOtherScheme) {
+    throw new Error(`不支持的链接协议: ${trimmed.split(":")[0]}`);
+  }
+  await invoke("open_known_path", { path: trimmed });
 }
 
 // ── 系统通知 ──────────────────────────────────────────────
+
+/**
+ * 请求通知权限（桌面端在首次告警前调用一次）。
+ * Tauri 的 notification 插件在未授权时 sendNotification 会静默失败，
+ * 预算告警就成了「界面有横幅、系统没通知」的假象。
+ */
+export async function ensureNotificationPermission(): Promise<boolean> {
+  try {
+    if (isTauri()) {
+      const { isPermissionGranted, requestPermission } =
+        await import("@tauri-apps/plugin-notification");
+      if (await isPermissionGranted()) return true;
+      return (await requestPermission()) === "granted";
+    }
+    if (typeof Notification === "undefined") return false;
+    if (Notification.permission === "granted") return true;
+    if (Notification.permission === "denied") return false;
+    return (await Notification.requestPermission()) === "granted";
+  } catch {
+    return false;
+  }
+}
 
 /** 发送系统通知（桌面端原生通知，浏览器端尝试 Notification API）。 */
 export async function notify(title: string, body: string): Promise<void> {
