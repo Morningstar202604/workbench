@@ -35,19 +35,29 @@ export function formatTime(ms: number): string {
   return dayjs(ms).format("MM-DD HH:mm");
 }
 
+/**
+ * 到期状态 → 展示文案 + 直接可用的 Badge 色调。
+ * 原先返回业务态 "normal"/"muted"，每个调用方再各写一次到视觉色调的映射，
+ * 现在收敛成一份（"正常"用 dim 呈现，不额外造一个语义层）。
+ *
+ * 日期比较按「本地日历日」而非时长：`diff(now, "day")` 会把今天 23:59
+ * 与现在 00:01 算成 0 天、却把「今天」在 UTC 偏移下算成前一天。这里把两边
+ * 都归一到本地 00:00 再比，跨时区/跨夏令时都稳定。
+ */
 export function dueLabel(due: string | null): {
   text: string;
-  tone: "normal" | "warn" | "danger" | "muted";
+  tone: "warn" | "danger" | "dim";
 } {
-  if (!due) return { text: t("util.noDueDate"), tone: "muted" };
+  if (!due) return { text: t("util.noDueDate"), tone: "dim" };
+  // dayjs 解析 "YYYY-MM-DD" 得到的就是本地当天 00:00
   const d = dayjs(due);
-  if (!d.isValid()) return { text: due, tone: "normal" };
-  const days = d.diff(dayjs(), "day");
+  if (!d.isValid()) return { text: due, tone: "dim" };
+  const days = d.startOf("day").diff(dayjs().startOf("day"), "day");
   if (days < 0)
     return { text: t("util.overdue", { date: d.format("MM-DD") }), tone: "danger" };
   if (days === 0) return { text: t("util.today"), tone: "warn" };
   if (days <= 3) return { text: t("util.withinDays", { days }), tone: "warn" };
-  return { text: d.format("MM-DD"), tone: "normal" };
+  return { text: d.format("MM-DD"), tone: "dim" };
 }
 
 export function shortPath(p: string | null | undefined, max = 60): string {

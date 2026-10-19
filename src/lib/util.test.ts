@@ -81,15 +81,21 @@ describe("formatDuration / formatUptime", () => {
 
 describe("dueLabel", () => {
   it("空截止日期", () => {
-    expect(dueLabel(null)).toEqual({ text: "无期限", tone: "muted" });
+    expect(dueLabel(null)).toEqual({ text: "无期限", tone: "dim" });
   });
   it("非法日期原样返回", () => {
-    expect(dueLabel("not-a-date")).toEqual({ text: "not-a-date", tone: "normal" });
+    expect(dueLabel("not-a-date")).toEqual({ text: "not-a-date", tone: "dim" });
   });
-  it("今天与近期", () => {
-    const today = new Date().toISOString().slice(0, 10);
-    expect(dueLabel(today).text).toBe("今天");
-    expect(dueLabel(today).tone).toBe("warn");
+  // 回归：用 toISOString()（UTC）生成「今天」在东八区凌晨会得到昨天，
+  // 导致当天截止被误判为逾期。日期必须按本地日历日生成与比较。
+  it("今天与近期按本地日历日判定", () => {
+    const localToday = [
+      new Date().getFullYear(),
+      String(new Date().getMonth() + 1).padStart(2, "0"),
+      String(new Date().getDate()).padStart(2, "0"),
+    ].join("-");
+    expect(dueLabel(localToday).text).toBe("今天");
+    expect(dueLabel(localToday).tone).toBe("warn");
   });
 });
 

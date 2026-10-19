@@ -260,135 +260,55 @@ export const demoCostOverview: CostOverview = {
   budget_exceeded: false,
 };
 
-/** 近 14 天趋势（构造值，形状贴近真实扫描结果）。 */
-export const demoCostTrend: CostTrendRow[] = [
-  {
-    day: "09-29",
-    input_tokens: 320_000,
-    output_tokens: 78_000,
-    cache_read_tokens: 1_100_000,
-    cache_creation_tokens: 160_000,
-    cost: 0.912,
-    record_count: 18,
-  },
-  {
-    day: "09-30",
-    input_tokens: 410_000,
-    output_tokens: 96_000,
-    cache_read_tokens: 1_540_000,
-    cache_creation_tokens: 210_000,
-    cost: 1.176,
-    record_count: 22,
-  },
-  {
-    day: "10-01",
-    input_tokens: 268_000,
-    output_tokens: 61_000,
-    cache_read_tokens: 980_000,
-    cache_creation_tokens: 130_000,
-    cost: 0.744,
-    record_count: 15,
-  },
-  {
-    day: "10-02",
-    input_tokens: 512_000,
-    output_tokens: 124_000,
-    cache_read_tokens: 2_050_000,
-    cache_creation_tokens: 280_000,
-    cost: 1.462,
-    record_count: 27,
-  },
-  {
-    day: "10-03",
-    input_tokens: 148_000,
-    output_tokens: 36_000,
-    cache_read_tokens: 520_000,
-    cache_creation_tokens: 74_000,
-    cost: 0.418,
-    record_count: 9,
-  },
-  {
-    day: "10-04",
-    input_tokens: 96_000,
-    output_tokens: 22_000,
-    cache_read_tokens: 340_000,
-    cache_creation_tokens: 48_000,
-    cost: 0.271,
-    record_count: 6,
-  },
-  {
-    day: "10-05",
-    input_tokens: 382_000,
-    output_tokens: 91_000,
-    cache_read_tokens: 1_420_000,
-    cache_creation_tokens: 195_000,
-    cost: 1.084,
-    record_count: 21,
-  },
-  {
-    day: "10-06",
-    input_tokens: 466_000,
-    output_tokens: 112_000,
-    cache_read_tokens: 1_780_000,
-    cache_creation_tokens: 245_000,
-    cost: 1.328,
-    record_count: 25,
-  },
-  {
-    day: "10-07",
-    input_tokens: 398_000,
-    output_tokens: 95_000,
-    cache_read_tokens: 1_460_000,
-    cache_creation_tokens: 198_000,
-    cost: 1.132,
-    record_count: 19,
-  },
-  {
-    day: "10-08",
-    input_tokens: 524_000,
-    output_tokens: 128_000,
-    cache_read_tokens: 2_140_000,
-    cache_creation_tokens: 292_000,
-    cost: 1.504,
-    record_count: 28,
-  },
-  {
-    day: "10-09",
-    input_tokens: 442_000,
-    output_tokens: 104_000,
-    cache_read_tokens: 1_690_000,
-    cache_creation_tokens: 228_000,
-    cost: 1.248,
-    record_count: 23,
-  },
-  {
-    day: "10-10",
-    input_tokens: 356_000,
-    output_tokens: 84_000,
-    cache_read_tokens: 1_320_000,
-    cache_creation_tokens: 178_000,
-    cost: 1.006,
-    record_count: 17,
-  },
-  {
-    day: "10-11",
-    input_tokens: 448_000,
-    output_tokens: 108_000,
-    cache_read_tokens: 1_720_000,
-    cache_creation_tokens: 232_000,
-    cost: 1.268,
-    record_count: 24,
-  },
-  {
-    day: "10-12",
-    input_tokens: 412_000,
-    output_tokens: 96_500,
-    cache_read_tokens: 1_820_000,
-    cache_creation_tokens: 240_000,
-    cost: 1.284,
-    record_count: 20,
-  },
+/**
+ * 近 14 天趋势（构造值，形状贴近真实扫描结果）。
+ * 日期按「今天往前推」动态生成：写死日期会让 demo 在几周后变成一屏过期数据，
+ * 且必须保持后端契约的 YYYY-MM-DD 格式（趋势图取 slice(5) 显示 MM-DD）。
+ */
+const demoTrendCosts = [
+  0.912, 1.176, 0.744, 1.462, 0.418, 0.271, 1.084, 1.328, 1.132, 1.504, 1.248, 1.006,
+  1.268, 1.284,
 ];
+
+const demoTrendTokens = [
+  [320_000, 78_000, 1_100_000, 160_000],
+  [410_000, 96_000, 1_540_000, 210_000],
+  [268_000, 61_000, 980_000, 130_000],
+  [512_000, 124_000, 2_050_000, 280_000],
+  [148_000, 36_000, 520_000, 74_000],
+  [96_000, 22_000, 340_000, 48_000],
+  [382_000, 91_000, 1_420_000, 195_000],
+  [466_000, 112_000, 1_780_000, 245_000],
+  [398_000, 95_000, 1_460_000, 198_000],
+  [524_000, 128_000, 2_140_000, 292_000],
+  [442_000, 104_000, 1_690_000, 228_000],
+  [356_000, 84_000, 1_320_000, 178_000],
+  [448_000, 108_000, 1_720_000, 232_000],
+  [412_000, 96_500, 1_820_000, 240_000],
+];
+
+const demoTrendCounts = [18, 22, 15, 27, 9, 6, 21, 25, 19, 28, 23, 17, 24, 20];
+
+function isoDay(offsetFromToday: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetFromToday);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+export const demoCostTrend: CostTrendRow[] = demoTrendCosts.map((cost, i) => {
+  const [input, output, cacheRead, cacheCreation] = demoTrendTokens[i];
+  return {
+    day: isoDay(i - demoTrendCosts.length + 1),
+    input_tokens: input,
+    output_tokens: output,
+    cache_read_tokens: cacheRead,
+    cache_creation_tokens: cacheCreation,
+    cost,
+    record_count: demoTrendCounts[i],
+  };
+});
 
 /** 按模型分解（构造值）。 */
 export const demoCostModelBreakdown: ModelBreakdownRow[] = [
