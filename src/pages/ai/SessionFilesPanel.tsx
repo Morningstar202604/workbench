@@ -75,6 +75,15 @@ export function SessionFilesPanel() {
                   key={f.path}
                   className="cursor-pointer hover:bg-accentsoft/20"
                   onClick={() => setPreviewFile(f)}
+                  // 行本身不可聚焦：补键盘等价入口，否则无法用键盘看预览
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setPreviewFile(f);
+                    }
+                  }}
                 >
                   <Td>
                     <Badge tone={f.tool.includes("Claude") ? "accent" : "ok"}>

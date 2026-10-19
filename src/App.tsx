@@ -1,19 +1,5 @@
-import { lazy, memo, Suspense, useEffect, type ComponentType } from "react";
-import {
-  Cpu,
-  FileText,
-  FolderKanban,
-  LayoutDashboard,
-  ListChecks,
-  Moon,
-  Pin,
-  PinOff,
-  RefreshCw,
-  Server,
-  Settings as SettingsIcon,
-  Sparkles,
-  Sun,
-} from "lucide-react";
+import { Suspense, useEffect } from "react";
+import { Moon, Pin, PinOff, RefreshCw, Sun } from "lucide-react";
 import { useStore } from "./lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { invoke } from "@tauri-apps/api/core";
@@ -21,42 +7,13 @@ import { isTauri } from "./lib/api";
 import { APP_VERSION, localeFor, useLang, useT } from "./lib/i18n";
 import logoUrl from "./assets/logo.png";
 import { Btn, Modal, Spinner } from "./ui";
-import type { ViewKey } from "./types";
+import { PAGE_COMPONENTS, PAGES } from "./pages/registry";
 
-// ── 按需加载所有页面 ──────────────────────────────────────
-// memo：App 自己订阅的字段（loading / toast / lastRefreshAt…）变化时，
-// 页面组件自身订阅的切片若没变就不该跟着重渲染 —— 否则任何一次 store 更新
-// 都会把整棵页面树重建一次（进程页 400 行时实测单次约 225ms）。
-const Overview = memo(lazy(() => import("./pages/Overview")));
-const Processes = memo(lazy(() => import("./pages/Processes")));
-const Servers = memo(lazy(() => import("./pages/Servers")));
-const AiSessions = memo(lazy(() => import("./pages/AiSessions")));
-const Projects = memo(lazy(() => import("./pages/Projects")));
-const Tasks = memo(lazy(() => import("./pages/Tasks")));
-const Settings = memo(lazy(() => import("./pages/Settings")));
-const Logs = memo(lazy(() => import("./pages/Logs")));
-
-const NAV_KEYS: ViewKey[] = [
-  "overview",
-  "processes",
-  "servers",
-  "ai",
-  "projects",
-  "tasks",
-  "settings",
-  "logs",
-];
-
-const NAV_ICONS: Record<ViewKey, ComponentType<{ size?: number }>> = {
-  overview: LayoutDashboard,
-  processes: Cpu,
-  servers: Server,
-  ai: Sparkles,
-  projects: FolderKanban,
-  tasks: ListChecks,
-  settings: SettingsIcon,
-  logs: FileText,
-};
+/** 当前视图的页面组件。注册表由 pages/registry 统一维护。 */
+function CurrentPage({ view }: { view: keyof typeof PAGE_COMPONENTS }) {
+  const Page = PAGE_COMPONENTS[view];
+  return <Page />;
+}
 
 export default function App() {
   const t = useT();
@@ -107,8 +64,33 @@ export default function App() {
 
   useEffect(() => {
     if (!isTauri()) return; // 演示模式没有后端，不建定时器
-    const id = setInterval(refreshRuntime, refreshMs);
-    return () => clearInterval(id);
+    // 窗口隐藏（最小化到托盘 / 被其他窗口完全遮挡）时降频：
+    // 一次刷新要做进程快照 + 端口采样，用户看不见界面时全速轮询纯属浪费电。
+    // 隐藏后降到 30s（仍保持数据大致新鲜），恢复可见时立即补一次。
+    const HIDDEN_INTERVAL_MS = 30_000;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let currentInterval = 0;
+
+    const schedule = (visible: boolean) => {
+      const interval = visible ? refreshMs : Math.max(refreshMs, HIDDEN_INTERVAL_MS);
+      if (timer && interval === currentInterval) return;
+      if (timer) clearInterval(timer);
+      currentInterval = interval;
+      timer = setInterval(refreshRuntime, interval);
+    };
+
+    const onVisibility = () => {
+      const visible = document.visibilityState === "visible";
+      schedule(visible);
+      if (visible) void refreshRuntime();
+    };
+
+    schedule(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (timer) clearInterval(timer);
+    };
   }, [refreshMs, refreshRuntime]);
 
   const tauri = isTauri();
@@ -138,8 +120,7 @@ export default function App() {
           </div>
         </div>
         <nav className="flex flex-col gap-0.5 px-2">
-          {NAV_KEYS.map((key) => {
-            const Icon = NAV_ICONS[key];
+          {PAGES.map(({ key, icon: Icon }) => {
             return (
               <button
                 key={key}
@@ -232,14 +213,7 @@ export default function App() {
               </div>
             }
           >
-            {view === "overview" && <Overview />}
-            {view === "processes" && <Processes />}
-            {view === "servers" && <Servers />}
-            {view === "ai" && <AiSessions />}
-            {view === "projects" && <Projects />}
-            {view === "tasks" && <Tasks />}
-            {view === "settings" && <Settings />}
-            {view === "logs" && <Logs />}
+            <CurrentPage view={view} />
           </Suspense>
         </main>
       </div>

@@ -34,13 +34,5 @@ export type { ModelBreakdownRow } from "./generated/ModelBreakdownRow";
 
 // ── 仅前端使用的类型 ──────────────────────────────────────────
 
-/** 侧边栏视图 key（TITLES/NAV 的索引类型） */
-export type ViewKey =
-  | "overview"
-  | "processes"
-  | "servers"
-  | "ai"
-  | "projects"
-  | "tasks"
-  | "settings"
-  | "logs";
+/** 侧边栏视图 key：由页面注册表派生，新增页面只需改 pages/registry。 */
+export type { ViewKey } from "./pages/registry";

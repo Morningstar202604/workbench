@@ -355,13 +355,25 @@ export default function Processes() {
                   }
 
                   const expanded = expandedPid === p.pid;
+                  const toggle = () => setExpandedPid(expanded ? null : p.pid);
                   return (
                     <Tr
                       key={p.pid}
                       data-index={v.index}
                       ref={virtualizer.measureElement}
                       className={expanded ? "bg-accentsoft/10" : ""}
-                      onClick={() => setExpandedPid(expanded ? null : p.pid)}
+                      onClick={toggle}
+                      // 表格行本身不可聚焦，键盘用户无法展开详情：补 role/tabIndex
+                      // 与 Enter/Space，和鼠标点击等价。
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={expanded}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          toggle();
+                        }
+                      }}
                     >
                       <Td className="w-6">
                         {expanded ? (

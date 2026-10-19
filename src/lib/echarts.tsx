@@ -82,7 +82,44 @@ export interface EChartProps {
   className?: string;
 }
 
-export function EChart({ option, style, notMerge, lazyUpdate, className }: EChartProps) {
+/**
+ * 主题切换的单例广播。
+ *
+ * 原先每个 EChart 实例各自挂一个 MutationObserver 盯 `data-theme`，
+ * 一页 4 个图表就是 4 个 observer 观察同一个属性。改成模块级一个
+ * observer + 订阅表，切主题时统一通知。
+ */
+type ThemeListener = () => void;
+const themeListeners = new Set<ThemeListener>();
+let themeObserver: MutationObserver | null = null;
+
+function subscribeTheme(listener: ThemeListener): () => void {
+  themeListeners.add(listener);
+  if (!themeObserver && typeof MutationObserver !== "undefined") {
+    themeObserver = new MutationObserver(() => {
+      for (const fn of themeListeners) fn();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+  }
+  return () => {
+    themeListeners.delete(listener);
+    if (themeListeners.size === 0 && themeObserver) {
+      themeObserver.disconnect();
+      themeObserver = null;
+    }
+  };
+}
+
+export function EChart({
+  option,
+  style,
+  notMerge = false,
+  lazyUpdate,
+  className,
+}: EChartProps) {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<EChartsType | null>(null);
   // 供主题切换的 observer 回放最新选项；在 effect 内同步以免渲染期写 ref
@@ -113,29 +150,32 @@ export function EChart({ option, style, notMerge, lazyUpdate, className }: EChar
     // 旧尺寸被拉伸。ResizeObserver 在 jsdom 里由 test/setup.ts 打桩。
     const observer = new ResizeObserver(onResize);
     if (ref.current) observer.observe(ref.current);
+    const unsubscribeTheme = subscribeTheme(initChart);
 
     return () => {
       window.removeEventListener("resize", onResize);
       observer.disconnect();
+      unsubscribeTheme();
       chartRef.current?.dispose();
       chartRef.current = null;
     };
   }, [initChart]);
 
-  // 主题切换时按新主题重建实例并回放当前 option
-  useEffect(() => {
-    const obs = new MutationObserver(() => initChart());
-    obs.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-    return () => obs.disconnect();
-  }, [initChart]);
-
-  // option 变更
+  // option 变更。
+  //
+  // 默认走 merge + replaceMerge:["series"] 而不是 notMerge：
+  // notMerge 每次都会丢弃整个模型重建所有 series（ECharts 内部
+  // `if (!this._model || notMerge) new GlobalModel()`），对 3 秒一刷的
+  // 图表等于每秒重播一次完整入场动画，且丢失渐变过渡。
+  // replaceMerge:["series"] 既保留坐标轴/网格的复用，又能让 series 数量
+  // 减少时不残留旧系列。
   useEffect(() => {
     optionRef.current = option;
-    chartRef.current?.setOption(option, { notMerge, lazyUpdate });
+    chartRef.current?.setOption(option, {
+      notMerge,
+      lazyUpdate,
+      replaceMerge: notMerge ? undefined : ["series"],
+    });
   }, [option, notMerge, lazyUpdate]);
 
   return <div ref={ref} style={style} className={className} />;
