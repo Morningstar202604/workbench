@@ -56,6 +56,48 @@ export function chartTheme(theme: ThemeName): ChartTheme {
 }
 
 /**
+ * 语义色板：原先在 6 个页面里各写一份 hex 数组（AiSessions / Overview /
+ * Processes / Servers / Tasks / Projects），改一处就漏其余。统一到这里，
+ * 浅色主题取低饱和版本以保证对比度。
+ */
+export const PALETTE = {
+  cyan: "#22d3ee",
+  violet: "#a78bfa",
+  green: "#34d399",
+  amber: "#fbbf24",
+  red: "#f87171",
+  blue: "#60a5fa",
+  fuchsia: "#e879f9",
+  slate: "#64748b",
+} as const;
+
+/** 多系列图表按序取色。浅色主题下 cyan/green/amber/red 换成深色版本。 */
+export function seriesColors(theme: ThemeName): string[] {
+  const t = chartTheme(theme);
+  return [
+    t.accent,
+    PALETTE.violet,
+    t.ok,
+    t.warn,
+    t.danger,
+    PALETTE.blue,
+    PALETTE.fuchsia,
+  ];
+}
+
+/** 单色（不随主题）的固定语义色，用于分类标签等不参与主题切换的场景。 */
+export const FIXED_COLORS = {
+  browser: PALETTE.cyan,
+  dev: PALETTE.violet,
+  ai: PALETTE.amber,
+  system: PALETTE.green,
+  other: PALETTE.slate,
+  low: PALETTE.slate,
+  normal: PALETTE.cyan,
+  high: PALETTE.red,
+} as const;
+
+/**
  * 图表中「环形图扇区之间的间隙」应使用的颜色 —— 即面板背景色。
  * 不传参时回退读 DOM，供无法拿到 theme 的场景（如测试）使用。
  */
