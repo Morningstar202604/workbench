@@ -132,9 +132,13 @@ pub async fn list_dev_servers(
                 .to_ascii_lowercase();
             let classified = devserver::classify_dev_server(&cmd_lower, &exe_name_lower);
             if let Some((framework, confidence)) = classified {
-                let cmd_parts: Vec<String> =
-                    proc.cmd_line.split(' ').map(|s| s.to_string()).collect();
-                let project_dir = devserver::guess_project_dir(&cmd_parts, &proc.exe_path);
+                // 用结构化 argv 而不是把 cmd_line 按空格重切：含空格的路径
+                // 会被切碎，推出一个不存在的相对目录并被登记进白名单。
+                let project_dir = devserver::guess_project_dir(
+                    &proc.argv,
+                    &proc.exe_path,
+                    &proc.cwd,
+                );
                 servers.push(DevServer {
                     port: entry.local_port,
                     protocol: entry.protocol.clone(),
@@ -546,39 +550,58 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
     .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
+// 成本读取全部走 spawn_blocking：这几个命令一次要读并解析整个 cost_data.json
+// （上万条记录时单次数十毫秒），而 Tauri 的非 async 命令在主线程执行 ——
+// 前端进入 AI 页时用 Promise.all 同时发 4 个，等于把主线程冻结数百毫秒。
+
 /// 获取成本总览（不重新扫描）
-#[tauri::command]
-pub fn get_cost_overview(app: AppHandle) -> Result<CostOverview, String> {
-    cost_store::build_overview(&app)
+#[tauri::command(async)]
+pub async fn get_cost_overview(app: AppHandle) -> Result<CostOverview, String> {
+    tauri::async_runtime::spawn_blocking(move || cost_store::build_overview(&app))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 获取成本趋势
-#[tauri::command]
-pub fn get_cost_trend(app: AppHandle, days: usize) -> Result<Vec<CostTrendRow>, String> {
-    cost_store::build_trend(&app, days)
+#[tauri::command(async)]
+pub async fn get_cost_trend(app: AppHandle, days: usize) -> Result<Vec<CostTrendRow>, String> {
+    tauri::async_runtime::spawn_blocking(move || cost_store::build_trend(&app, days))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 按模型分解成本
-#[tauri::command]
-pub fn get_model_breakdown(app: AppHandle) -> Result<Vec<ModelBreakdownRow>, String> {
-    cost_store::build_model_breakdown(&app)
+#[tauri::command(async)]
+pub async fn get_model_breakdown(app: AppHandle) -> Result<Vec<ModelBreakdownRow>, String> {
+    tauri::async_runtime::spawn_blocking(move || cost_store::build_model_breakdown(&app))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 获取 / 保存成本设置（预算 / 告警阈值 / 是否计入估算）
-#[tauri::command]
-pub fn get_cost_settings_cmd(app: AppHandle) -> Result<CostSettings, String> {
-    cost_store::get_cost_settings(&app)
+#[tauri::command(async)]
+pub async fn get_cost_settings_cmd(app: AppHandle) -> Result<CostSettings, String> {
+    tauri::async_runtime::spawn_blocking(move || cost_store::get_cost_settings(&app))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
-#[tauri::command]
-pub fn save_cost_settings_cmd(app: AppHandle, settings: CostSettings) -> Result<(), String> {
-    cost_store::save_cost_settings(&app, settings)
+#[tauri::command(async)]
+pub async fn save_cost_settings_cmd(
+    app: AppHandle,
+    settings: CostSettings,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || cost_store::save_cost_settings(&app, settings))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 清空全部成本记录
-#[tauri::command]
-pub fn clear_cost_records(app: AppHandle) -> Result<(), String> {
-    cost_store::clear_records(&app)
+#[tauri::command(async)]
+pub async fn clear_cost_records(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || cost_store::clear_records(&app))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 扫描结果回传

@@ -1,22 +1,34 @@
 //! 日志系统：写日志到 app_data_dir/workbench.log。
-//! - 启动时滚动：文件超过 5MB 则 rename 为 workbench.log.1（旧 .1 删除），防止无限增长。
+//! - 运行期滚动：后台线程每分钟检查一次大小，超限就 truncate 当前文件。
+//!   只在启动时检查是不够的 —— 关窗只是隐藏到托盘（lib.rs），进程极少重启，
+//!   长期运行会让日志无限增长（实测 ~9KB/h，一年 27MB）。
 //! - 读取采用尾部倒读（tail），日志再大也只按需读取最后几块，避免整文件载入。
 use chrono::Local;
 use log::LevelFilter;
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
 const TAIL_CHUNK: u64 = 64 * 1024;
+/// 运行期检查间隔：日志增长很慢，一分钟一次足够，开销可忽略。
+const ROTATE_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 
 pub fn init_logging(app: &AppHandle) {
     let log_path = match log_file_path(app) {
         Some(p) => p,
         None => return,
     };
-    rotate_on_startup(&log_path);
+    prune_if_needed(&log_path);
+
+    // release 默认 Info：此前 Debug 恒定开启，一次 UI 刷新会打两条
+    // 「list_processes 返回 N 条」，日志里 70% 是这种噪音。
+    let level = if cfg!(debug_assertions) {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Info
+    };
 
     let dispatch = fern::Dispatch::new()
         .format(|out, message, record| {
@@ -27,7 +39,7 @@ pub fn init_logging(app: &AppHandle) {
                 message
             ))
         })
-        .level(LevelFilter::Debug);
+        .level(level);
 
     // 日志文件不可写（目录权限、被杀软占用、磁盘满）时降级到控制台，
     // 绝不因为「日志写不了」而让整个应用启动失败。
@@ -45,17 +57,36 @@ pub fn init_logging(app: &AppHandle) {
     if dispatch.apply().is_err() {
         eprintln!("日志子系统安装失败");
     }
+
+    spawn_rotator(log_path);
 }
 
-/// 启动时检查大小，超限滚动一份备份。
-fn rotate_on_startup(path: &std::path::Path) {
-    let Ok(meta) = fs::metadata(path) else { return };
+/// 后台轮转线程：超过上限就截断。用截断而不是 rename，是因为 fern 持有
+/// 的是已打开的 File 句柄 —— rename 在 Windows 上会因文件被占用失败，
+/// 而截断同一句柄下的文件内容是合法且原子的（写入位置随之回到 0）。
+fn spawn_rotator(path: PathBuf) {
+    std::thread::Builder::new()
+        .name("log-rotator".to_string())
+        .spawn(move || loop {
+            std::thread::sleep(ROTATE_CHECK_INTERVAL);
+            prune_if_needed(&path);
+        })
+        .ok();
+}
+
+/// 超过上限就把日志截断为空文件（保留文件本身，句柄继续有效）。
+fn prune_if_needed(path: &Path) {
+    let Ok(meta) = fs::metadata(path) else {
+        return;
+    };
     if meta.len() <= MAX_LOG_BYTES {
         return;
     }
-    let backup = path.with_extension("log.1");
-    fs::remove_file(&backup).ok();
-    fs::rename(path, &backup).ok();
+    if let Ok(f) = fs::OpenOptions::new().write(true).open(path) {
+        if f.set_len(0).is_ok() {
+            log::warn!("日志超过 {} 字节，已截断", MAX_LOG_BYTES);
+        }
+    }
 }
 
 fn log_file_path(app: &AppHandle) -> Option<PathBuf> {
@@ -70,7 +101,19 @@ pub fn read_recent_logs(app: &AppHandle, max_lines: usize) -> String {
         Some(p) => p,
         None => return String::new(),
     };
-    let mut file = match File::open(&path) {
+    read_tail(&path, max_lines)
+}
+
+/// 尾部倒读实现。抽成纯函数以便单测。
+///
+/// 注意块边界：按字节分块读取会把多字节 UTF-8 字符切断在块边界
+/// （中文日志很常见），`from_utf8_lossy` 会在切断处产生 U+FFFD 替换字符。
+/// 这里先把整段 bytes 拼好、再按「最后一个完整行」裁掉可能残缺的首行。
+fn read_tail(path: &Path, max_lines: usize) -> String {
+    if max_lines == 0 {
+        return String::new();
+    }
+    let mut file = match File::open(path) {
         Ok(f) => f,
         Err(_) => return String::new(),
     };
@@ -97,7 +140,19 @@ pub fn read_recent_logs(app: &AppHandle, max_lines: usize) -> String {
         chunks.push(buf);
     }
     chunks.reverse(); // 恢复文件顺序
-    let bytes: Vec<u8> = chunks.concat();
+    let mut bytes: Vec<u8> = chunks.concat();
+
+    // 未读到文件头时，首行可能是被块边界切断的半行：
+    // 找到第一个换行并丢弃它之前的内容，避免输出残缺行。
+    if pos > 0 {
+        if let Some(idx) = bytes.iter().position(|b| *b == b'\n') {
+            bytes.drain(..=idx);
+        } else {
+            // 整段没有换行说明还在一行中间，无法安全截取
+            return String::new();
+        }
+    }
+
     let text = String::from_utf8_lossy(&bytes);
     let lines: Vec<&str> = text.lines().collect();
     let start = lines.len().saturating_sub(max_lines);
@@ -108,4 +163,82 @@ pub fn read_recent_logs(app: &AppHandle, max_lines: usize) -> String {
 pub fn clear_logs(app: &AppHandle) -> Result<(), String> {
     let path = log_file_path(app).ok_or("无法定位日志路径")?;
     fs::write(&path, "").map_err(|e| format!("清空日志失败: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp_log(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("wb-log-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        dir.join(name)
+    }
+
+    #[test]
+    fn reads_last_n_lines() {
+        let path = tmp_log("tail-basic.log");
+        let content: String = (0..100).map(|i| format!("line-{i}\n")).collect();
+        fs::write(&path, content).unwrap();
+        let out = read_tail(&path, 5);
+        assert_eq!(out, "line-95\nline-96\nline-97\nline-98\nline-99");
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn missing_or_empty_file_returns_empty() {
+        assert_eq!(read_tail(Path::new("C:/definitely/absent.log"), 10), "");
+        let path = tmp_log("tail-empty.log");
+        fs::write(&path, "").unwrap();
+        assert_eq!(read_tail(&path, 10), "");
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn max_lines_zero_returns_empty() {
+        let path = tmp_log("tail-zero.log");
+        fs::write(&path, "a\nb\n").unwrap();
+        assert_eq!(read_tail(&path, 0), "");
+        fs::remove_file(&path).ok();
+    }
+
+    /// 回归：按字节块倒读会切断多字节 UTF-8 字符，产生 U+FFFD 替换字符。
+    /// 中文日志里这会把行首/行尾变成「�」，读起来像乱码。
+    #[test]
+    fn chunk_boundary_does_not_corrupt_multibyte_chars() {
+        let path = tmp_log("tail-utf8.log");
+        // 每行都含中文；总量远超一个块，确保跨越块边界
+        let mut content = String::new();
+        for i in 0..5000 {
+            content.push_str(&format!("[2026-01-01 00:00:00] [INFO]: 中文日志第{i}行\n"));
+        }
+        fs::write(&path, &content).unwrap();
+
+        let out = read_tail(&path, 20);
+        assert!(
+            !out.contains('\u{FFFD}'),
+            "尾部读取不应产生替换字符，got: {out}"
+        );
+        assert!(out.lines().all(|l| l.starts_with("[2026-01-01")), "每行都应是完整行");
+        assert_eq!(out.lines().count(), 20);
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn prune_truncates_oversized_log() {
+        let path = tmp_log("prune.log");
+        // 造一个超过上限的文件
+        let big = vec![b'x'; (MAX_LOG_BYTES + 1024) as usize];
+        fs::write(&path, &big).unwrap();
+        assert!(fs::metadata(&path).unwrap().len() > MAX_LOG_BYTES);
+
+        prune_if_needed(&path);
+        assert_eq!(fs::metadata(&path).unwrap().len(), 0, "超限日志应被截断");
+
+        // 未超限的文件不动
+        fs::write(&path, "small\n").unwrap();
+        prune_if_needed(&path);
+        assert_eq!(fs::metadata(&path).unwrap().len(), 6);
+        fs::remove_file(&path).ok();
+    }
 }

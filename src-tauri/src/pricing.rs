@@ -187,28 +187,10 @@ impl PricingTable {
     }
 }
 
-/// 从 JSONL 内容中推断模型名（如果存在）。
-/// Claude Code 文件通常在顶层有 `model` 字段，但很多时候只有 session 元信息里才有。
-/// 推断不出来时返回 "unknown" —— 绝不编造一个具体型号：编造会让它按那个型号的价格
-/// 参与成本聚合，把一个 haiku/gpt 会话算成 sonnet 的钱。
-/// 未知型号查表得 0 价，由 scan_sessions_to_records 标成 zero_pricing 供 UI 明示。
-pub fn infer_model(raw_jsonl_head: &str) -> String {
-    // 尝试从首行 JSON 中找 model 字段
-    if let Ok(v) = serde_json::from_str::<serde_json::Value>(raw_jsonl_head) {
-        if let Some(m) = v.get("model").and_then(|s| s.as_str()) {
-            if !m.is_empty() {
-                return m.to_string();
-            }
-        }
-        // Claude Code 有的嵌套在 leaf.session 中
-        if let Some(m) = v.get("manifest").and_then(|m| m.get("model")).and_then(|s| s.as_str()) {
-            if !m.is_empty() {
-                return m.to_string();
-            }
-        }
-    }
-    "unknown".to_string()
-}
+// 模型名推断已移到 session_meter::model_from_value：
+// 真实 Claude Code 把模型放在 message.model、Codex 放在 turn_context.payload.model，
+// 原先这里的「只读顶层 model」实现在真实数据上永远返回 unknown，
+// 导致所有记录被判成 zero_pricing。保留两份实现只会再次漂移。
 
 #[cfg(test)]
 mod tests {
@@ -286,17 +268,10 @@ mod tests {
     }
 
     #[test]
-    fn infer_model_never_invents_a_specific_model() {
+    fn unknown_model_is_never_priced() {
         // 关键回归：宁可 unknown（走 zero_pricing，UI 显示「未定价」），
         // 也不能把 haiku/gpt 会话编成 sonnet 计费。
-        assert_eq!(infer_model(""), "unknown");
         assert!(!PricingTable::default().is_priced("unknown"));
         assert!(PricingTable::default().is_priced("claude-sonnet-4-5"));
-    }
-
-    #[test]
-    fn infer_model_from_json() {
-        let json = r#"{"model":"gpt-4o-mini","type":"summary"}"#;
-        assert_eq!(infer_model(json), "gpt-4o-mini");
     }
 }

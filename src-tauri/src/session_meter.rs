@@ -19,7 +19,7 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 
 use crate::cost_store::CostRecord;
-use crate::pricing::{infer_model, PricingTable};
+use crate::pricing::PricingTable;
 
 /// 单日聚合的用量。
 #[derive(Debug, Clone, PartialEq)]
@@ -33,23 +33,35 @@ pub struct UsageAgg {
     pub source: String,
 }
 
-/// 从单个 JSONL 文件提取 (模型, 按日聚合的用量列表)。
+/// 一个文件按 (日期, 模型) 聚合后的用量。
+///
+/// 为什么按模型分组而不是「一个文件一个模型」：同一会话里主对话用 opus、
+/// 子任务用 haiku 是常态，用第一个读到的模型给整个文件定价会把 haiku 的
+/// 用量按 opus 的价格算（贵 10 倍以上）。每行 usage 自带模型，直接分组即可。
+#[derive(Debug, Clone, PartialEq)]
+pub struct ModelUsage {
+    pub model: String,
+    pub aggs: Vec<UsageAgg>,
+}
+
+/// 从单个 JSONL 文件提取按 (模型, 日期) 聚合的用量。
 /// `mtime_day`：文件 mtime 对应日期，作为无行级时间戳时的兜底归属日。
-pub fn extract_usage(path: &str, mtime_day: &str) -> (String, Vec<UsageAgg>) {
-    let file = match fs::File::open(path) {
-        Ok(f) => f,
-        Err(_) => {
-            // 读不动的文件不猜模型：标 zero_pricing，金额为 0，由 UI 明示未定价
-            return (infer_model(""), vec![zero_agg(mtime_day, "zero_pricing")]);
-        }
+pub fn extract_usage(path: &str, mtime_day: &str) -> Vec<ModelUsage> {
+    let Ok(file) = fs::File::open(path) else {
+        // 读不动的文件（被杀软锁住、OneDrive 未水合、超长路径）不产出记录：
+        // 原先会写一条 zero_pricing 并用真实 (path, mtime, size) 作为跳过键，
+        // 于是该文件被永久排除在后续扫描之外，即使后来可读也不会再计费。
+        log::debug!("跳过无法打开的会话文件: {path}");
+        return Vec::new();
     };
 
     let reader = BufReader::new(file);
-    let mut by_day: HashMap<String, UsageAgg> = HashMap::new();
+    // (day, model) -> 用量
+    let mut by_day_model: HashMap<(String, String), UsageAgg> = HashMap::new();
     let mut chars_by_day: HashMap<String, usize> = HashMap::new();
-    let mut found_model: Option<String> = None;
+    // 按日兜底用的模型：优先取最后见到的已知模型（比「第一个」更贴近当前会话）
+    let mut last_known_model: Option<String> = None;
     let mut found_usage = false;
-    let mut head_line = String::new();
     let mut latest_day: Option<String> = None;
 
     for line_result in reader.lines() {
@@ -57,13 +69,9 @@ pub fn extract_usage(path: &str, mtime_day: &str) -> (String, Vec<UsageAgg>) {
         if line.trim().is_empty() {
             continue;
         }
-        if head_line.is_empty() {
-            head_line = line.clone();
-        }
         let parsed: Option<serde_json::Value> = serde_json::from_str(&line).ok();
 
         // 归属日：行级 timestamp 优先；取不到就挂到已见到的最近一天，最后兜底 mtime 日。
-        // 同时累计每天的字符数，供无 usage 时的启发式估算按日分桶使用。
         let day = parsed
             .as_ref()
             .and_then(line_day)
@@ -75,21 +83,26 @@ pub fn extract_usage(path: &str, mtime_day: &str) -> (String, Vec<UsageAgg>) {
         *chars_by_day.entry(day.clone()).or_insert(0) += line.chars().count();
 
         let Some(value) = parsed else { continue };
-        if found_model.is_none() {
-            found_model = model_from_value(&value);
+
+        // 行级模型：Claude Code 在 message.model，Codex 在 turn_context.payload.model
+        let line_model = model_from_value(&value);
+        if let Some(m) = &line_model {
+            last_known_model = Some(m.clone());
         }
+
         let Some(usage) = usage_from_value(&value) else {
             continue;
         };
-
-        // 纯缓存行（input/output 均为 0 但 cache 分量非 0）同样是真实计费事件，不能跳过
         if usage.is_empty() {
             continue;
         }
 
         found_usage = true;
-        let agg = by_day
-            .entry(day.clone())
+        let model = line_model
+            .or_else(|| last_known_model.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+        let agg = by_day_model
+            .entry((day.clone(), model))
             .or_insert_with(|| zero_agg(&day, "measured"));
         agg.input = agg.input.saturating_add(usage.input);
         agg.output = agg.output.saturating_add(usage.output);
@@ -97,17 +110,14 @@ pub fn extract_usage(path: &str, mtime_day: &str) -> (String, Vec<UsageAgg>) {
         agg.cache_creation = agg.cache_creation.saturating_add(usage.cache_creation);
     }
 
-    let model = found_model.unwrap_or_else(|| infer_model(&head_line));
-
     if found_usage {
-        let mut aggs: Vec<UsageAgg> = by_day.into_values().collect();
-        aggs.sort_by(|a, b| a.day.cmp(&b.day));
-        return (model, aggs);
+        return group_by_model(by_day_model);
     }
 
     // 降级：按日分桶的字符估算（4 chars/token 是业界常用经验值）。
-    // 关键点是分桶而不是整文件记到 mtime 日：会话追加只会改变最新一天的桶，
-    // 往日柱子保持稳定，趋势图不会自己重写历史。
+    // 只对**没有 usage 字段**的文件生效；分桶而不是整文件记到 mtime 日，
+    // 保证追写只改变最新一天的桶，趋势图不会自己重写历史。
+    let model = last_known_model.unwrap_or_else(|| "unknown".to_string());
     let mut aggs: Vec<UsageAgg> = chars_by_day
         .into_iter()
         .filter_map(|(day, chars)| {
@@ -126,11 +136,30 @@ pub fn extract_usage(path: &str, mtime_day: &str) -> (String, Vec<UsageAgg>) {
             })
         })
         .collect();
-    if !aggs.is_empty() {
-        aggs.sort_by(|a, b| a.day.cmp(&b.day));
-        return (model, aggs);
+    if aggs.is_empty() {
+        // 空文件 / 全是空白行：没有可计量内容，不产出记录
+        return Vec::new();
     }
-    (model, vec![zero_agg(mtime_day, "zero_pricing")])
+    aggs.sort_by(|a, b| a.day.cmp(&b.day));
+    vec![ModelUsage { model, aggs }]
+}
+
+/// (day, model) 映射 → 按模型分组、组内按日期排序。
+fn group_by_model(by_day_model: HashMap<(String, String), UsageAgg>) -> Vec<ModelUsage> {
+    let mut by_model: HashMap<String, Vec<UsageAgg>> = HashMap::new();
+    for ((_, model), agg) in by_day_model {
+        by_model.entry(model).or_default().push(agg);
+    }
+    let mut out: Vec<ModelUsage> = by_model
+        .into_iter()
+        .map(|(model, mut aggs)| {
+            aggs.sort_by(|a, b| a.day.cmp(&b.day));
+            ModelUsage { model, aggs }
+        })
+        .collect();
+    // 输出顺序稳定：按模型名排序，避免 HashMap 迭代顺序导致测试/日志抖动
+    out.sort_by(|a, b| a.model.cmp(&b.model));
+    out
 }
 
 fn zero_agg(day: &str, source: &str) -> UsageAgg {
@@ -144,20 +173,26 @@ fn zero_agg(day: &str, source: &str) -> UsageAgg {
     }
 }
 
-/// 从 JSON 值提取模型名（顶层 model / manifest.model）。
+/// 从一行 JSON 提取模型名。
+///
+/// 真实格式（此前只读顶层 `model`，导致真实会话全部取不到模型、被判为
+/// zero_pricing，整个成本面板显示 $0）：
+/// - Claude Code: `{"type":"assistant","message":{"model":"claude-sonnet-4-5",...}}`
+/// - Codex:       `{"type":"turn_context","payload":{"model":"gpt-5-codex",...}}`
+/// - 顶层 `model` / `manifest.model`：保留兼容
+/// - `<synthetic>` 是工具合成消息，不可定价，视为「无模型」
 fn model_from_value(v: &serde_json::Value) -> Option<String> {
-    if let Some(m) = v.get("model").and_then(|s| s.as_str()) {
-        if !m.is_empty() {
-            return Some(m.to_string());
-        }
-    }
-    if let Some(m) = v
-        .get("manifest")
-        .and_then(|mf| mf.get("model"))
-        .and_then(|s| s.as_str())
-    {
-        if !m.is_empty() {
-            return Some(m.to_string());
+    let candidates = [
+        v.get("model"),
+        v.get("message").and_then(|m| m.get("model")),
+        v.get("payload").and_then(|p| p.get("model")),
+        v.get("manifest").and_then(|m| m.get("model")),
+    ];
+    for c in candidates.into_iter().flatten() {
+        let Some(m) = c.as_str() else { continue };
+        let trimmed = m.trim();
+        if !trimmed.is_empty() && trimmed != "<synthetic>" {
+            return Some(trimmed.to_string());
         }
     }
     None
@@ -264,35 +299,40 @@ pub fn scan_sessions_to_records(
         }
 
         let mtime_day = unix_to_day(f.modified);
-        let (model, aggs) = extract_usage(&f.path, &mtime_day);
-        let priced = table.is_priced(&model);
-        for agg in aggs {
-            let (cost_inp, cost_out, cost_total) = table.calc_cost(
-                &model,
-                agg.input,
-                agg.output,
-                agg.cache_read,
-                agg.cache_creation,
-            );
-            // 查不到单价的型号：一律记 zero_pricing，绝不让它伪装成「花了 $0.00」的有效账单
-            let source = if priced { agg.source } else { "zero_pricing".to_string() };
-            records.push(CostRecord {
-                file_path: f.path.clone(),
-                file_mtime: f.modified,
-                file_size: f.size,
-                tool: f.tool.clone(),
-                project: f.project.clone(),
-                model: model.clone(),
-                input_tokens: agg.input,
-                output_tokens: agg.output,
-                cache_read_tokens: agg.cache_read,
-                cache_creation_tokens: agg.cache_creation,
-                cost_input: round3(cost_inp),
-                cost_output: round3(cost_out),
-                cost_total: round3(cost_total),
-                cost_source: source,
-                day: agg.day,
-            });
+        for ModelUsage { model, aggs } in extract_usage(&f.path, &mtime_day) {
+            let priced = table.is_priced(&model);
+            for agg in aggs {
+                let (cost_inp, cost_out, cost_total) = table.calc_cost(
+                    &model,
+                    agg.input,
+                    agg.output,
+                    agg.cache_read,
+                    agg.cache_creation,
+                );
+                // 查不到单价的型号：一律记 zero_pricing，绝不让它伪装成「花了 $0.00」的有效账单
+                let source = if priced {
+                    agg.source
+                } else {
+                    "zero_pricing".to_string()
+                };
+                records.push(CostRecord {
+                    file_path: f.path.clone(),
+                    file_mtime: f.modified,
+                    file_size: f.size,
+                    tool: f.tool.clone(),
+                    project: f.project.clone(),
+                    model: model.clone(),
+                    input_tokens: agg.input,
+                    output_tokens: agg.output,
+                    cache_read_tokens: agg.cache_read,
+                    cache_creation_tokens: agg.cache_creation,
+                    cost_input: round3(cost_inp),
+                    cost_output: round3(cost_out),
+                    cost_total: round3(cost_total),
+                    cost_source: source,
+                    day: agg.day,
+                });
+            }
         }
     }
     records
@@ -380,14 +420,17 @@ mod tests {
     #[test]
     fn measured_usage_splits_by_line_timestamp() {
         let tmp = std::env::temp_dir().join("wb-day-split.jsonl");
+        // 真实 Claude Code 格式：model 在 message.model，顶层没有 model
         let lines = [
-            r#"{"type":"assistant","model":"claude-sonnet-4-5","timestamp":"2026-01-04T10:00:00Z","message":{"usage":{"input_tokens":100,"output_tokens":10,"cache_read_input_tokens":500,"cache_creation_input_tokens":50}}}"#,
-            r#"{"type":"assistant","model":"claude-sonnet-4-5","timestamp":"2026-01-04T23:30:00Z","message":{"usage":{"input_tokens":200,"output_tokens":20}}}"#,
-            r#"{"type":"assistant","model":"claude-sonnet-4-5","timestamp":"2026-01-05T01:00:00Z","message":{"usage":{"input_tokens":300,"output_tokens":30,"cache_read_input_tokens":900}}}"#,
+            r#"{"type":"assistant","timestamp":"2026-01-04T10:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":10,"cache_read_input_tokens":500,"cache_creation_input_tokens":50}}}"#,
+            r#"{"type":"assistant","timestamp":"2026-01-04T23:30:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":200,"output_tokens":20}}}"#,
+            r#"{"type":"assistant","timestamp":"2026-01-05T01:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":300,"output_tokens":30,"cache_read_input_tokens":900}}}"#,
         ];
         fs::write(&tmp, lines.join("\n")).unwrap();
-        let (model, aggs) = extract_usage(tmp.to_str().unwrap(), "2026-01-05");
-        assert_eq!(model, "claude-sonnet-4-5");
+        let groups = extract_usage(tmp.to_str().unwrap(), "2026-01-05");
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].model, "claude-sonnet-4-5");
+        let aggs = &groups[0].aggs;
         assert_eq!(aggs.len(), 2, "跨两天应拆成两条记录，got {:?}", aggs);
         let total_input: u64 = aggs.iter().map(|a| a.input).sum();
         let total_cache_read: u64 = aggs.iter().map(|a| a.cache_read).sum();
@@ -397,12 +440,121 @@ mod tests {
         fs::remove_file(&tmp).ok();
     }
 
+    /// 回归（严重）：真实 Claude Code 把模型放在 message.model，顶层没有 model。
+    /// 旧实现只读顶层，导致 model 恒为 unknown → is_priced=false →
+    /// 全部记录被标成 zero_pricing，成本面板对真实数据永远显示 $0。
+    #[test]
+    fn claude_code_nested_model_is_read_and_priced() {
+        let tmp = std::env::temp_dir().join("wb-nested-model.jsonl");
+        let line = r#"{"type":"assistant","timestamp":"2026-01-06T10:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":1000000,"output_tokens":0}}}"#;
+        fs::write(&tmp, format!("{line}\n")).unwrap();
+        let entries = vec![SessionFileEntry {
+            path: tmp.to_str().unwrap().to_string(),
+            tool: "Claude Code".to_string(),
+            project: "p".to_string(),
+            modified: 1_767_000_000,
+            size: 1,
+        }];
+        let records =
+            scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].model, "claude-sonnet-4-5");
+        assert_eq!(records[0].cost_source, "measured", "真实格式必须能定价");
+        // sonnet-4-5 输入 $3/MTok → 100 万 input = $3
+        assert!((records[0].cost_total - 3.0).abs() < 0.01, "got {}", records[0].cost_total);
+        fs::remove_file(&tmp).ok();
+    }
+
+    /// Codex 把模型放在 turn_context.payload.model。
+    #[test]
+    fn codex_payload_model_is_read() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"type":"turn_context","payload":{"model":"gpt-5-codex","cwd":"C:/p"}}"#,
+        )
+        .unwrap();
+        assert_eq!(model_from_value(&v).as_deref(), Some("gpt-5-codex"));
+    }
+
+    /// <synthetic> 是工具合成消息，不可定价，不能当成该会话的模型。
+    #[test]
+    fn synthetic_model_is_ignored() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"type":"assistant","message":{"model":"<synthetic>","usage":{"input_tokens":5}}}"#,
+        )
+        .unwrap();
+        assert_eq!(model_from_value(&v), None);
+    }
+
+    /// 同一会话里主对话 opus、子任务 haiku：必须按各自模型的价分别计费，
+    /// 不能用一个模型统一套价（那会把 haiku 的用量按 opus 价格算，贵 10 倍以上）。
+    #[test]
+    fn mixed_models_in_one_file_are_priced_separately() {
+        let tmp = std::env::temp_dir().join("wb-mixed-models.jsonl");
+        let lines = [
+            r#"{"type":"assistant","timestamp":"2026-01-08T10:00:00Z","message":{"model":"claude-opus-4-1","usage":{"input_tokens":1000000,"output_tokens":0}}}"#,
+            r#"{"type":"assistant","timestamp":"2026-01-08T11:00:00Z","message":{"model":"claude-haiku-4-5","usage":{"input_tokens":1000000,"output_tokens":0}}}"#,
+        ];
+        fs::write(&tmp, lines.join("\n")).unwrap();
+
+        let groups = extract_usage(tmp.to_str().unwrap(), "2026-01-08");
+        assert_eq!(groups.len(), 2, "应按模型分成两组，got {:?}", groups);
+        let models: Vec<&str> = groups.iter().map(|g| g.model.as_str()).collect();
+        assert!(models.contains(&"claude-opus-4-1"));
+        assert!(models.contains(&"claude-haiku-4-5"));
+
+        let entries = vec![SessionFileEntry {
+            path: tmp.to_str().unwrap().to_string(),
+            tool: "Claude Code".to_string(),
+            project: "p".to_string(),
+            modified: 1_767_000_000,
+            size: 1,
+        }];
+        let records =
+            scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
+        assert_eq!(records.len(), 2);
+        let opus = records.iter().find(|r| r.model == "claude-opus-4-1").unwrap();
+        let haiku = records.iter().find(|r| r.model == "claude-haiku-4-5").unwrap();
+        // opus 输入 $15/MTok，haiku $1/MTok
+        assert!((opus.cost_total - 15.0).abs() < 0.01, "opus got {}", opus.cost_total);
+        assert!((haiku.cost_total - 1.0).abs() < 0.01, "haiku got {}", haiku.cost_total);
+        fs::remove_file(&tmp).ok();
+    }
+
+    /// 读不动的文件不应留下带真实 (path, mtime, size) 的记录，
+    /// 否则 existing_keys 会永久跳过它，文件后来可读了也不再计费。
+    #[test]
+    fn unreadable_file_produces_no_records() {
+        let groups = extract_usage("C:/definitely/not/a/real/session.jsonl", "2026-01-01");
+        assert!(groups.is_empty());
+
+        let entries = vec![SessionFileEntry {
+            path: "C:/definitely/not/a/real/session.jsonl".to_string(),
+            tool: "Claude Code".to_string(),
+            project: "p".to_string(),
+            modified: 1_767_000_000,
+            size: 10,
+        }];
+        let records =
+            scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
+        assert!(records.is_empty(), "不可读文件不应产出记录");
+    }
+
+    /// 空文件没有可计量内容，不应产出 zero_pricing 记录污染计数。
+    #[test]
+    fn empty_file_produces_no_records() {
+        let tmp = std::env::temp_dir().join("wb-empty.jsonl");
+        fs::write(&tmp, "").unwrap();
+        assert!(extract_usage(tmp.to_str().unwrap(), "2026-01-01").is_empty());
+        fs::remove_file(&tmp).ok();
+    }
+
     #[test]
     fn no_usage_falls_back_to_estimated() {
         let tmp = std::env::temp_dir().join("wb-estimate.jsonl");
         let content = "This is a test line with about forty characters of text content here.\nAnother line of similar length and content here.";
         fs::write(&tmp, content).unwrap();
-        let (_model, aggs) = extract_usage(tmp.to_str().unwrap(), "2026-01-06");
+        let groups = extract_usage(tmp.to_str().unwrap(), "2026-01-06");
+        let aggs = &groups[0].aggs;
         assert_eq!(aggs.len(), 1);
         assert_eq!(aggs[0].source, "estimated");
         assert!(aggs[0].input + aggs[0].output > 0);
@@ -418,7 +570,8 @@ mod tests {
         let day_b = r#"{"type":"user","timestamp":"2026-01-04T09:00:00Z","message":{"content":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}"#;
         fs::write(&tmp, format!("{day_a}\n{day_b}\n")).unwrap();
 
-        let (_m, first_two) = extract_usage(tmp.to_str().unwrap(), "2026-01-09");
+        let groups = extract_usage(tmp.to_str().unwrap(), "2026-01-09");
+        let first_two = &groups[0].aggs;
         assert_eq!(
             first_two.iter().map(|a| a.day.as_str()).collect::<Vec<_>>(),
             vec!["2026-01-03", "2026-01-04"],
@@ -432,7 +585,8 @@ mod tests {
         text.push('\n');
         fs::write(&tmp, &text).unwrap();
 
-        let (_m, after) = extract_usage(tmp.to_str().unwrap(), "2026-01-09");
+        let groups_after = extract_usage(tmp.to_str().unwrap(), "2026-01-09");
+        let after = &groups_after[0].aggs;
         assert_eq!(after.len(), 3);
         for day in ["2026-01-03", "2026-01-04"] {
             let before = first_two.iter().find(|a| a.day == day).unwrap();
@@ -449,7 +603,7 @@ mod tests {
     #[test]
     fn records_use_raw_input_without_cache_subtraction() {
         let tmp = std::env::temp_dir().join("wb-no-subtract.jsonl");
-        let line = r#"{"model":"claude-sonnet-4-5","timestamp":"2026-01-06T10:00:00Z","message":{"usage":{"input_tokens":1000,"output_tokens":500,"cache_read_input_tokens":9000}}}"#;
+        let line = r#"{"type":"assistant","timestamp":"2026-01-06T10:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":1000,"output_tokens":500,"cache_read_input_tokens":9000}}}"#;
         fs::write(&tmp, format!("{line}\n")).unwrap();
         let meta = fs::metadata(&tmp).unwrap();
         let modified = meta

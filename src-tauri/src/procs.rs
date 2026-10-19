@@ -27,6 +27,10 @@ pub struct ProcInfo {
     pub name: String,
     pub exe_path: String,
     pub cmd_line: String,
+    /// 结构化 argv（与 cmd_line 同源，但不做 join/split，保留含空格的参数）
+    pub argv: Vec<String>,
+    /// 进程工作目录（取不到时为空串）
+    pub cwd: String,
     pub cpu: f32,
     #[ts(type = "number")]
     pub memory: u64,
@@ -105,6 +109,19 @@ fn collect_processes() -> Vec<ProcInfo> {
                 .map(|s| s.to_string_lossy().to_string())
                 .collect::<Vec<_>>()
                 .join(" "),
+            // 结构化 argv：项目目录推断不能靠「把 cmd_line 按空格重新切开」，
+            // 含空格的路径会被切碎，推出一个不存在的相对目录。
+            argv: p
+                .cmd()
+                .iter()
+                .map(|s| s.to_string_lossy().to_string())
+                .collect(),
+            // 进程工作目录：非 Node 项目（uvicorn / go run / dotnet run）
+            // 的命令行里没有 node_modules，只能靠 cwd 推断项目根。
+            cwd: p
+                .cwd()
+                .map(|d| d.to_string_lossy().to_string())
+                .unwrap_or_default(),
             cpu: p.cpu_usage(),
             memory: p.memory(),
             parent_pid: p.parent().map(|pid| pid.as_u32()),

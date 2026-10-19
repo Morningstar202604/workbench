@@ -62,10 +62,15 @@ pub fn classify_dev_server(cmd_lower: &str, exe_name_lower: &str) -> Option<(&'s
     None
 }
 
-/// 从命令行/可执行路径猜项目根目录：优先截 `node_modules` 之前的部分。
-pub fn guess_project_dir(cmd_parts: &[String], exe_path: &str) -> Option<String> {
-    let candidates = std::iter::once(exe_path.to_string()).chain(cmd_parts.iter().cloned());
-    for c in candidates {
+/// 从进程的 argv / exe 路径 / 工作目录猜项目根。
+///
+/// 优先 `node_modules` 之前的前缀（Node 项目最精确）；否则退回进程 cwd ——
+/// 这修好了此前完全失效的一类：Python(uvicorn/django)、Go、.NET 的命令行里
+/// 没有 node_modules，原来永远推出 None，UI 上既没有「打开目录」也永远显示
+/// 「未运行」（Projects 页的 isRunning 依赖这个目录）。
+pub fn guess_project_dir(argv: &[String], exe_path: &str, cwd: &str) -> Option<String> {
+    // 1) node_modules 前缀：取所有参数（含 exe）里最靠前的一处
+    for c in std::iter::once(exe_path.to_string()).chain(argv.iter().cloned()) {
         if let Some(idx) = c.to_ascii_lowercase().find("node_modules") {
             let prefix = &c[..idx];
             let trimmed = prefix.trim_end_matches(['\\', '/']);
@@ -73,6 +78,26 @@ pub fn guess_project_dir(cmd_parts: &[String], exe_path: &str) -> Option<String>
                 return Some(trimmed.to_string());
             }
         }
+    }
+
+    // 2) 参数里形如 <dir>/main:app 的模块路径（uvicorn main:app）
+    for arg in argv {
+        // 排除 Windows 盘符（C:\...）里的冒号
+        if arg.contains(':') && !arg.contains(":\\") && !arg.contains(":/") {
+            let before = arg.split(':').next().unwrap_or("");
+            if let Some(idx) = before.rfind(['\\', '/']) {
+                let dir = &before[..idx];
+                if !dir.trim().is_empty() {
+                    return Some(dir.to_string());
+                }
+            }
+        }
+    }
+
+    // 3) 兜底：进程 cwd。只接受绝对路径，避免把相对串塞进白名单。
+    let trimmed = cwd.trim().trim_end_matches(['\\', '/']);
+    if !trimmed.is_empty() && std::path::Path::new(trimmed).is_absolute() {
+        return Some(trimmed.to_string());
     }
     None
 }
@@ -110,20 +135,53 @@ mod tests {
 
     #[test]
     fn guesses_project_dir_from_node_modules_path() {
-        let parts = vec!["node".to_string(), "vite".to_string()];
+        let argv = vec!["node".to_string(), "vite".to_string()];
         assert_eq!(
-            guess_project_dir(&parts, "c:\\proj\\myapp\\node_modules\\.bin\\vite"),
+            guess_project_dir(&argv, "c:\\proj\\myapp\\node_modules\\.bin\\vite", ""),
             Some("c:\\proj\\myapp".to_string())
         );
-        let parts = vec![
+    }
+
+    /// 回归：非 Node 项目原来永远推出 None（命令行里没有 node_modules），
+    /// 导致 UI 不显示「打开目录」、Projects 页永远判定「未运行」。
+    #[test]
+    fn non_node_projects_fall_back_to_cwd_or_module_path() {
+        // uvicorn 模块路径 c:\proj\api\main:app → 项目根 c:\proj\api
+        let argv = vec![
             "python".to_string(),
             "-m".to_string(),
             "uvicorn".to_string(),
             "c:\\proj\\api\\main:app".to_string(),
         ];
         assert_eq!(
-            guess_project_dir(&parts, "c:\\python\\python.exe"),
+            guess_project_dir(&argv, "c:\\python\\python.exe", "c:\\proj\\api"),
+            Some("c:\\proj\\api".to_string())
+        );
+
+        // go run：只能靠 cwd
+        let argv = vec!["go".to_string(), "run".to_string(), "main.go".to_string()];
+        assert_eq!(
+            guess_project_dir(&argv, "c:\\Go\\bin\\go.exe", "c:\\proj\\gosvc"),
+            Some("c:\\proj\\gosvc".to_string())
+        );
+
+        // 相对 cwd 不被接受（会随 CWD 漂移）
+        assert_eq!(
+            guess_project_dir(&argv, "c:\\Go\\bin\\go.exe", "proj\\gosvc"),
             None
+        );
+    }
+
+    /// 含空格的路径不能被空格切碎后推出一个相对目录。
+    #[test]
+    fn paths_with_spaces_are_not_split() {
+        let argv = vec![
+            "node".to_string(),
+            "C:\\My Projects\\app\\node_modules\\vite\\bin\\vite.js".to_string(),
+        ];
+        assert_eq!(
+            guess_project_dir(&argv, "C:\\nodejs\\node.exe", ""),
+            Some("C:\\My Projects\\app".to_string())
         );
     }
 }

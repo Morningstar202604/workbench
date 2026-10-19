@@ -18,6 +18,8 @@ const proc = (over: Partial<ProcInfo>): ProcInfo => ({
   name: "app.exe",
   exe_path: "C:\\app.exe",
   cmd_line: "",
+  argv: [],
+  cwd: "",
   cpu: 0,
   memory: 0,
   parent_pid: null,

@@ -111,7 +111,14 @@ export function useT() {
   );
 }
 
-/** 翻译：当前语言 → 英语 → key 本身，三级回退 */
+/**
+ * 翻译：当前语言 → 英语 → key 本身，三级回退。
+ *
+ * 插值用**函数替换器**而不是直接传字符串：
+ * - 字符串形式下 `$&`、`` $` ``、`$$` 等会被当作替换模式展开，
+ *   而变量值经常是错误信息、路径、进程名，含 `$` 并不罕见
+ * - 函数返回值不会被再次解析，因此也消除了「值里含 {otherVar} 被二次替换」
+ */
 export function t(
   key: string,
   vars?: Record<string, string | number>,
@@ -120,7 +127,10 @@ export function t(
   const l = lang ?? current;
   let s = DICTS[l]?.[key] ?? DICTS.en[key] ?? key;
   if (vars) {
-    for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
+    for (const [k, v] of Object.entries(vars)) {
+      const value = String(v);
+      s = s.replaceAll(`{${k}}`, () => value);
+    }
   }
   return s;
 }
