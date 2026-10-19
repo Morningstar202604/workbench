@@ -95,6 +95,32 @@ fn builtin_pricing() -> HashMap<&'static str, PricePair> {
     m
 }
 
+/// 预构建的内置价格表：HashMap + 按长度降序的前缀键。
+///
+/// 原先每次 `lookup` 都重建一次 HashMap（56 条 insert）再 `collect + sort`
+/// 全部键 —— 实测 4.85µs/次。一次成本扫描对每条记录调 2 次 lookup
+/// （is_priced + calc_cost），1 万条记录就是近 100ms 的纯开销。
+/// 内置表是编译期常量，进程内只需构建一次。
+struct BuiltinTable {
+    prices: HashMap<&'static str, PricePair>,
+    /// 前缀匹配候选，按长度降序（优先最长前缀）
+    prefix_keys: Vec<&'static str>,
+}
+
+fn builtin_table() -> &'static BuiltinTable {
+    use std::sync::OnceLock;
+    static TABLE: OnceLock<BuiltinTable> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let prices = builtin_pricing();
+        let mut prefix_keys: Vec<&'static str> = prices.keys().copied().collect();
+        prefix_keys.sort_by_key(|k| std::cmp::Reverse(k.len()));
+        BuiltinTable {
+            prices,
+            prefix_keys,
+        }
+    })
+}
+
 /// 价格表：内置快照 + 用户覆盖。
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct PricingTable {
@@ -110,17 +136,15 @@ impl PricingTable {
         if let Some(p) = self.overrides.get(&key) {
             return *p;
         }
+        let builtin = builtin_table();
         // 2) 内置精确
-        let builtin = builtin_pricing();
-        if let Some(p) = builtin.get(key.as_str()) {
+        if let Some(p) = builtin.prices.get(key.as_str()) {
             return *p;
         }
-        // 3) 前缀匹配（按长度降序，优先最长前缀）
-        let mut keys: Vec<_> = builtin.keys().copied().collect();
-        keys.sort_by_key(|k| std::cmp::Reverse(k.len()));
-        for k in keys {
+        // 3) 前缀匹配（键已按长度降序预排，最长前缀优先）
+        for k in &builtin.prefix_keys {
             if key.starts_with(k) {
-                return builtin[k];
+                return builtin.prices[k];
             }
         }
         (0.0, 0.0)

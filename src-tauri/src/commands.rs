@@ -32,15 +32,40 @@ fn silent(cmd: Command) -> Command {
     cmd
 }
 
-/// 在 Windows 上取 netstat 输出。chcp 65001 确保中文 Windows 的表头按 UTF-8 输出。
-/// TODO(P1): 非 Windows 平台改走 POSIX netstat/ss —— 当前 ports.rs 的 POSIX 分支在
+/// 在 Windows 上取 netstat 输出。
+///
+/// 不再套 `cmd /c chcp 65001 && netstat`：相比直接执行 netstat 实测从 ~93ms
+/// 降到 ~36ms（多起一个 cmd 内建进程纯属浪费），而 ports.rs 的解析器只认
+/// `TCP/TCP6/UDP/LISTENING` 这类 ASCII token，从不读取本地化的表头文字，
+/// 因此 chcp 并不能改善解析结果。
+/// TODO(P1): 非 Windows 平台改走 POSIX ss/netstat —— 当前 ports.rs 的 POSIX 分支在
 /// 本 crate 里实际不会被执行，README 的跨平台说法也据此收敛为 Windows。
 fn run_netstat() -> Result<String, String> {
-    let output = silent(Command::new("cmd"))
-        .args(["/c", "chcp", "65001", ">", "nul", "&&", "netstat", "-ano"])
+    let output = silent(Command::new("netstat"))
+        .arg("-ano")
         .output()
         .map_err(|e| format!("netstat 执行失败: {e}"))?;
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// 端口采样短缓存。`list_ports` 与 `list_dev_servers` 在一次前端刷新里
+/// 各要一份端口表，原先各起一次 netstat 子进程；这里让同一刷新周期共享。
+const PORTS_TTL: std::time::Duration = std::time::Duration::from_millis(400);
+
+fn cached_port_entries() -> Result<Vec<PortEntry>, String> {
+    use std::sync::Mutex;
+    use std::time::Instant;
+    static CACHE: Mutex<Option<(Instant, Vec<PortEntry>)>> = Mutex::new(None);
+
+    let mut guard = CACHE.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some((at, entries)) = guard.as_ref() {
+        if at.elapsed() < PORTS_TTL {
+            return Ok(entries.clone());
+        }
+    }
+    let entries = ports::parse_netstat(&run_netstat()?);
+    *guard = Some((Instant::now(), entries.clone()));
+    Ok(entries)
 }
 
 /// 构建 PID 索引哈希表（消除 O(n*m) 端口→进程扫描）
@@ -74,7 +99,7 @@ pub async fn terminate_process(pid: u32) -> Result<(), String> {
 
 #[tauri::command(async)]
 pub async fn list_ports() -> Result<Vec<PortEntry>, String> {
-    tauri::async_runtime::spawn_blocking(|| Ok(ports::parse_netstat(&run_netstat()?)))
+    tauri::async_runtime::spawn_blocking(cached_port_entries)
         .await
         .map_err(|e| format!("任务执行失败: {e}"))?
 }
@@ -85,8 +110,7 @@ pub async fn list_dev_servers(
     dirs: tauri::State<'_, KnownDirs>,
 ) -> Result<Vec<DevServer>, String> {
     let servers = tauri::async_runtime::spawn_blocking(|| -> Result<Vec<DevServer>, String> {
-        let text = run_netstat()?;
-        let ports = ports::parse_netstat(&text);
+        let ports = cached_port_entries()?;
         let procs = procs::snapshot_processes();
         let pid_index = build_pid_index(procs);
 
@@ -329,27 +353,43 @@ pub struct SystemInfo {
     pub uptime_seconds: u64,
 }
 
+/// 系统静态信息。这些值在一次运行里几乎不变，缓存起来避免重复枚举进程表。
+///
+/// 原先每次刷新都 `System::new_all()`（实测 380–830ms，会枚举全部进程、
+/// 环境变量、可执行路径），只为拿核数/总内存/uptime —— 每 3 秒白烧一次
+/// 全量进程枚举。现在只用 memory-only 刷新（微秒级）+ 静态 API。
+fn cached_system_info() -> SystemInfo {
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<SystemInfo> = OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            use sysinfo::{MemoryRefreshKind, RefreshKind, System};
+            // 只刷新内存总量：不需要进程、磁盘、网络信息
+            let system = System::new_with_specifics(
+                RefreshKind::nothing().with_memory(MemoryRefreshKind::nothing().with_ram()),
+            );
+            SystemInfo {
+                hostname: System::host_name().unwrap_or_else(|| "Unknown".to_string()),
+                os_name: System::long_os_version()
+                    .or_else(System::os_version)
+                    .unwrap_or_else(|| "Windows".to_string()),
+                cpu_cores: std::thread::available_parallelism()
+                    .map(|n| n.get())
+                    .unwrap_or(0),
+                total_memory: system.total_memory(),
+                uptime_seconds: System::uptime(),
+            }
+        })
+        .clone()
+}
+
 #[tauri::command(async)]
 pub async fn system_info() -> Result<SystemInfo, String> {
     tauri::async_runtime::spawn_blocking(|| {
-        use sysinfo::System;
-        let system = System::new_all();
-
-        let hostname = System::host_name().unwrap_or_else(|| "Unknown".to_string());
-        let os_name = System::long_os_version()
-            .or_else(System::os_version)
-            .unwrap_or_else(|| "Windows".to_string());
-        let cpu_cores = system.cpus().len();
-        let total_memory = system.total_memory();
-        let uptime_seconds = System::uptime();
-
-        Ok(SystemInfo {
-            hostname,
-            os_name,
-            cpu_cores,
-            total_memory,
-            uptime_seconds,
-        })
+        let mut info = cached_system_info();
+        // uptime 会随时间走，单独刷新；其余字段（主机名/OS/核数/总内存）进程内不变
+        info.uptime_seconds = sysinfo::System::uptime();
+        Ok(info)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
@@ -412,21 +452,24 @@ pub async fn disk_info() -> Result<Vec<DiskInfo>, String> {
     .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
-#[tauri::command]
-pub fn load_data(app: AppHandle, dirs: tauri::State<'_, KnownDirs>) -> Result<WorkbenchData, String> {
+#[tauri::command(async)]
+pub async fn load_data(
+    app: AppHandle,
+    dirs: tauri::State<'_, KnownDirs>,
+) -> Result<WorkbenchData, String> {
     let data = data::load_from_disk(&app)?;
-    // data.json 可能被外部编辑过，回灌白名单时同样要过存在性校验
-    let accepted = dirs.record_validated(data.projects.iter().map(|p| p.path.as_str()));
-    log::debug!(
-        "从 data.json 登记 {} 个有效项目目录（共 {} 个）",
-        accepted,
-        data.projects.len()
-    );
+    // data.json 可能被外部编辑过，回灌白名单时同样要过存在性校验。
+    // 校验含 Path::is_dir()：断开的 UNC / 映射盘会阻塞数秒，
+    // 因此必须在 spawn_blocking 里做（这两个命令原先是非 async，跑在主线程）。
+    let paths: Vec<String> = data.projects.iter().map(|p| p.path.clone()).collect();
+    let total = paths.len();
+    let accepted = dirs.record_validated_blocking(paths).await?;
+    log::debug!("从 data.json 登记 {accepted} 个有效项目目录（共 {total} 个）");
     Ok(data)
 }
 
-#[tauri::command]
-pub fn save_data(
+#[tauri::command(async)]
+pub async fn save_data(
     app: AppHandle,
     dirs: tauri::State<'_, KnownDirs>,
     data: WorkbenchData,
@@ -438,7 +481,9 @@ pub fn save_data(
     );
     // 入参来自 WebView：只登记真实存在的绝对目录，避免注入脚本借 save_data
     // 把任意目录灌进白名单后，再用 git_branch / open_known_path 触达它。
-    let accepted = dirs.record_validated(data.projects.iter().map(|p| p.path.as_str()));
+    // 存在性校验会触碰文件系统，放进阻塞线程，避免断网盘卡住主线程。
+    let paths: Vec<String> = data.projects.iter().map(|p| p.path.clone()).collect();
+    let accepted = dirs.record_validated_blocking(paths).await?;
     log::debug!("save_data 登记 {accepted} 个项目目录");
     data::save_to_disk(&app, &data)
 }
