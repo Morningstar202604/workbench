@@ -64,32 +64,35 @@ export default function App() {
 
   useEffect(() => {
     if (!isTauri()) return; // 演示模式没有后端，不建定时器
-    // 窗口隐藏（最小化到托盘 / 被其他窗口完全遮挡）时降频：
-    // 一次刷新要做进程快照 + 端口采样，用户看不见界面时全速轮询纯属浪费电。
-    // 隐藏后降到 30s（仍保持数据大致新鲜），恢复可见时立即补一次。
-    const HIDDEN_INTERVAL_MS = 30_000;
+    // 窗口隐藏（最小化到托盘 / 宿主窗口隐藏）时完全暂停轮询：
+    // 一次刷新要做进程快照 + 端口采样，用户看不见界面时继续轮询纯属浪费电。
+    // 恢复可见时立即补一次。注意 visibilityState 只在宿主真正隐藏/最小化时
+    // 翻转，被其他窗口遮挡不一定触发。
     let timer: ReturnType<typeof setInterval> | null = null;
-    let currentInterval = 0;
 
-    const schedule = (visible: boolean) => {
-      const interval = visible ? refreshMs : Math.max(refreshMs, HIDDEN_INTERVAL_MS);
-      if (timer && interval === currentInterval) return;
+    const stop = () => {
       if (timer) clearInterval(timer);
-      currentInterval = interval;
-      timer = setInterval(refreshRuntime, interval);
+      timer = null;
+    };
+    const start = () => {
+      stop();
+      timer = setInterval(refreshRuntime, refreshMs);
     };
 
     const onVisibility = () => {
-      const visible = document.visibilityState === "visible";
-      schedule(visible);
-      if (visible) void refreshRuntime();
+      if (document.visibilityState === "visible") {
+        start();
+        void refreshRuntime();
+      } else {
+        stop();
+      }
     };
 
-    schedule(document.visibilityState === "visible");
+    if (document.visibilityState === "visible") start();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
-      if (timer) clearInterval(timer);
+      stop();
     };
   }, [refreshMs, refreshRuntime]);
 

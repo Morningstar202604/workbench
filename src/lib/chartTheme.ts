@@ -164,6 +164,7 @@ export function horizontalBarOption({
     },
     series: [
       {
+        id: "bar",
         type: "bar",
         barWidth,
         data: values.map((v) => ({

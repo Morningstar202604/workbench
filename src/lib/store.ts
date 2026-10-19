@@ -18,6 +18,7 @@ import {
   notify,
   opencodeSessions,
   opencodeSessionDetail,
+  openExternal,
   gitBranch,
   recentSessions,
   saveCostSettings,
@@ -112,6 +113,7 @@ interface Store extends UiState, RuntimeState {
   refreshAi: () => Promise<void>;
   loadSessionDetail: (port: number, id: string) => Promise<void>;
   fetchGitBranch: (dir: string) => Promise<string>;
+  openTarget: (target: string) => Promise<void>;
   killProcess: (pid: number) => Promise<void>;
   addTask: (t: Partial<Task>) => void;
   moveTask: (id: string, status: string) => void;
@@ -320,6 +322,21 @@ export const useStore = create<Store>()(
         const branch = await gitBranch(dir).catch(() => "");
         set((s) => ({ gitBranches: { ...s.gitBranches, [dir]: branch } }));
         return branch;
+      },
+
+      /**
+       * 打开 URL / 目录，失败时转成 toast。
+       *
+       * 所有调用点原先直接 `onClick={() => openExternal(...)}`：openExternal 是
+       * async，被拒绝的 Promise 没人消费就变成 unhandled rejection，界面毫无反应
+       * （目录被删、在离线盘上、或协议被拒时都会走到这里）。
+       */
+      openTarget: async (target) => {
+        try {
+          await openExternal(target);
+        } catch (e) {
+          set({ toast: t("store.openFailed", { err: String(e) }) });
+        }
       },
 
       killProcess: async (pid) => {

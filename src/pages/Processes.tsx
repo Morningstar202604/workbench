@@ -132,6 +132,7 @@ export default function Processes() {
       },
       series: [
         {
+          id: "histogram",
           type: "bar",
           data: bins.map((b, i) => ({
             value: b.count,
@@ -196,13 +197,13 @@ export default function Processes() {
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
             <Cpu size={14} className="text-warn" /> {t("procs.cpuDistTitle")}
           </h3>
-          <EChart option={cpuChart} style={{ height: 170 }} notMerge lazyUpdate />
+          <EChart option={cpuChart} style={{ height: 170 }} lazyUpdate />
         </Card>
         <Card className="p-4">
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
             <MemoryStick size={14} className="text-ok" /> {t("procs.memDistTitle")}
           </h3>
-          <EChart option={memChart} style={{ height: 170 }} notMerge lazyUpdate />
+          <EChart option={memChart} style={{ height: 170 }} lazyUpdate />
         </Card>
       </div>
 

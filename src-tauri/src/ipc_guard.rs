@@ -25,6 +25,11 @@ pub fn normalize_path(raw: &str) -> String {
     // UNC（\\server\share）与其扩展前缀（\\?\C:\...）保留双斜杠语义
     let (prefix, rest) = if let Some(stripped) = unified.strip_prefix("//") {
         ("//", stripped)
+    } else if unified.starts_with('/') {
+        // 单斜杠开头（/foo）在 Windows 上表示「当前盘根相对」，与相对路径
+        // foo 语义不同；归一后若丢掉前导斜杠，两者会撞成同一个键。
+        // 这类路径不是绝对路径，直接拒绝。
+        return String::new();
     } else {
         ("", unified.as_str())
     };
@@ -181,6 +186,12 @@ mod tests {
         // 单独盘符不是绝对路径（会随 CWD 漂移）
         assert_eq!(normalize_path("C:"), "");
         assert_eq!(normalize_path("c:/"), "");
+        // 单斜杠开头是「当前盘根相对」，不能与相对路径折叠
+        assert_eq!(normalize_path("/foo"), "");
+        assert_eq!(normalize_path("/Users/me"), "");
+        assert_eq!(normalize_path("/"), "");
+        // 它们与相对路径必须区分开
+        assert_ne!(normalize_path("/foo"), normalize_path("foo"));
     }
 
     #[test]

@@ -4,7 +4,6 @@ import { EChart } from "../lib/echarts";
 import { chartGapColor, FIXED_COLORS, horizontalBarOption } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { openExternal } from "../lib/api";
 import {
   Badge,
   Btn,
@@ -52,18 +51,27 @@ const emptyDraft: Draft = {
 export default function Projects() {
   const t = useT();
 
-  const { data, devs, addProject, updateProject, deleteProject, setView, theme } =
-    useStore(
-      useShallow((s) => ({
-        data: s.data,
-        devs: s.devs,
-        addProject: s.addProject,
-        updateProject: s.updateProject,
-        deleteProject: s.deleteProject,
-        setView: s.setView,
-        theme: s.theme,
-      }))
-    );
+  const {
+    data,
+    devs,
+    addProject,
+    updateProject,
+    deleteProject,
+    setView,
+    theme,
+    openTarget,
+  } = useStore(
+    useShallow((s) => ({
+      data: s.data,
+      devs: s.devs,
+      addProject: s.addProject,
+      updateProject: s.updateProject,
+      deleteProject: s.deleteProject,
+      setView: s.setView,
+      theme: s.theme,
+      openTarget: s.openTarget,
+    }))
+  );
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
 
@@ -116,6 +124,7 @@ export default function Projects() {
       tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
       series: [
         {
+          id: "status-pie",
           type: "pie",
           radius: ["46%", "68%"],
           label: { show: false },
@@ -168,12 +177,7 @@ export default function Projects() {
           <h3 className="mb-2 text-sm font-medium">{t("projects.statusDistTitle")}</h3>
           {data.projects.length > 0 ? (
             <>
-              <EChart
-                option={statusPieOption}
-                style={{ height: 140 }}
-                notMerge
-                lazyUpdate
-              />
+              <EChart option={statusPieOption} style={{ height: 140 }} lazyUpdate />
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                 {Object.entries(STATUS_MAP).map(([k, v]) => {
                   const count = data.projects.filter((p) => p.status === k).length;
@@ -201,7 +205,7 @@ export default function Projects() {
         <Card className="p-4 md:col-span-2">
           <h3 className="mb-2 text-sm font-medium">{t("projects.topTasksTitle")}</h3>
           {taskCountData.length > 0 ? (
-            <EChart option={taskBarOption} style={{ height: 160 }} notMerge lazyUpdate />
+            <EChart option={taskBarOption} style={{ height: 160 }} lazyUpdate />
           ) : (
             <Empty>{t("projects.noLinkedTasks")}</Empty>
           )}
@@ -280,7 +284,7 @@ export default function Projects() {
                     <Btn
                       className="!px-2 !py-1 !text-xs"
                       title={t("projects.openDir")}
-                      onClick={() => openExternal(p.path)}
+                      onClick={() => openTarget(p.path)}
                     >
                       <FolderOpen size={12} />
                     </Btn>

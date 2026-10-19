@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PAGES } from "../../pages/registry";
 import { dict as core } from "./core";
 import { dict as overview } from "./overview";
 import { dict as processes } from "./processes";
@@ -60,6 +61,21 @@ describe("i18n 三语对齐", () => {
       for (const lang of LANGS) {
         for (const [key, value] of Object.entries(dict[lang])) {
           expect(String(value).trim(), `${name}.${lang}「${key}」为空`).not.toBe("");
+        }
+      }
+    }
+  });
+
+  // 页面注册表是导航的唯一来源，但 t() 的签名接受任意 string：
+  // 新增页面时若忘了补 app.nav.* / app.title.*，运行时会直接渲染出
+  // 字面量 "app.nav.reports"，界面看着像 bug 却不报错。这里把它变成测试失败。
+  it("注册表里每个页面都有三语导航与标题文案", () => {
+    for (const page of PAGES) {
+      for (const lang of LANGS) {
+        const dict = core[lang] as Record<string, string>;
+        for (const prefix of ["app.nav", "app.title"]) {
+          const key = `${prefix}.${page.key}`;
+          expect(dict[key], `缺少 ${lang} 的 ${key}`).toBeTruthy();
         }
       }
     }

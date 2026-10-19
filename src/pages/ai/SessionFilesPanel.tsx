@@ -30,6 +30,7 @@ export function SessionFilesPanel() {
       tooltip: { trigger: "item", formatter: t("ai.sessionToolTooltip") },
       series: [
         {
+          id: "tool-pie",
           type: "pie",
           radius: ["42%", "64%"],
           label: { show: false },
@@ -116,12 +117,7 @@ export function SessionFilesPanel() {
           <SectionTitle>{t("ai.toolDist")}</SectionTitle>
           {toolCounts.length > 0 ? (
             <>
-              <EChart
-                option={sessionToolChart}
-                style={{ height: 160 }}
-                notMerge
-                lazyUpdate
-              />
+              <EChart option={sessionToolChart} style={{ height: 160 }} lazyUpdate />
               <div className="mt-2 space-y-1.5">
                 {toolCounts.map(([tool, count], i) => (
                   <div key={tool} className="flex items-center gap-2 text-xs">

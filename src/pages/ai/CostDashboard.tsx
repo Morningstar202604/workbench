@@ -93,6 +93,7 @@ export function CostDashboard() {
       },
       series: [
         {
+          id: "cost-trend",
           name: t("ai.costLegend"),
           type: "line",
           smooth: true,
@@ -137,6 +138,7 @@ export function CostDashboard() {
       },
       series: [
         {
+          id: "model-pie",
           type: "pie",
           radius: ["40%", "68%"],
           center: ["35%", "50%"],
@@ -282,23 +284,13 @@ export function CostDashboard() {
           {costTrendChart && (
             <Card className="p-4 lg:col-span-3">
               <SectionTitle>{t("ai.costTrendTitle")}</SectionTitle>
-              <EChart
-                option={costTrendChart}
-                style={{ height: 200 }}
-                notMerge
-                lazyUpdate
-              />
+              <EChart option={costTrendChart} style={{ height: 200 }} lazyUpdate />
             </Card>
           )}
           {modelBreakdownChart && (
             <Card className="p-4 lg:col-span-2">
               <SectionTitle>{t("ai.modelBreakdownTitle")}</SectionTitle>
-              <EChart
-                option={modelBreakdownChart}
-                style={{ height: 200 }}
-                notMerge
-                lazyUpdate
-              />
+              <EChart option={modelBreakdownChart} style={{ height: 200 }} lazyUpdate />
               <div className="mt-2 space-y-1">
                 {costModelBreakdown.slice(0, 5).map((r, i) => (
                   <div key={r.model} className="flex items-center gap-2 text-xs">

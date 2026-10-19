@@ -104,6 +104,7 @@ export default function Overview() {
       ],
       series: [
         {
+          id: "cpu",
           name: t("overview.seriesCpuTotal"),
           type: "line",
           smooth: true,
@@ -126,6 +127,7 @@ export default function Overview() {
           },
         },
         {
+          id: "memory",
           name: t("overview.seriesMemory"),
           type: "line",
           yAxisIndex: 1,
@@ -169,6 +171,7 @@ export default function Overview() {
       tooltip: { trigger: "item", formatter: t("overview.pieTooltip") },
       series: [
         {
+          id: "proc-category",
           type: "pie",
           radius: ["52%", "76%"],
           center: ["50%", "50%"],
@@ -246,6 +249,7 @@ export default function Overview() {
       series: diskSeries.length
         ? [
             {
+              id: "disk",
               type: "pie",
               radius: ["58%", "78%"],
               center: ["50%", "50%"],
@@ -264,6 +268,7 @@ export default function Overview() {
           ]
         : [
             {
+              id: "disk-empty",
               type: "pie",
               radius: ["58%", "78%"],
               center: ["50%", "50%"],
@@ -415,7 +420,7 @@ export default function Overview() {
             {t("overview.chartResourceTitle", { count: history.length })}
           </SectionTitle>
           {history.length > 1 ? (
-            <EChart option={cpuMemOption} style={{ height: 230 }} notMerge lazyUpdate />
+            <EChart option={cpuMemOption} style={{ height: 230 }} lazyUpdate />
           ) : (
             <Empty icon={Activity}>{t("overview.samplingEmpty")}</Empty>
           )}
@@ -433,7 +438,7 @@ export default function Overview() {
         <Card className="p-4">
           <SectionTitle>{t("overview.chartCategoryTitle")}</SectionTitle>
           {categories.length > 0 ? (
-            <EChart option={pieOption} style={{ height: 190 }} notMerge lazyUpdate />
+            <EChart option={pieOption} style={{ height: 190 }} lazyUpdate />
           ) : (
             <Empty icon={Cpu}>{t("overview.noProcessData")}</Empty>
           )}
@@ -460,7 +465,7 @@ export default function Overview() {
         <Card className="p-4">
           <SectionTitle>{t("overview.diskTitle")}</SectionTitle>
           {disks.length > 0 ? (
-            <EChart option={diskOption} style={{ height: 190 }} notMerge lazyUpdate />
+            <EChart option={diskOption} style={{ height: 190 }} lazyUpdate />
           ) : (
             <Empty icon={HardDrive}>{t("overview.diskLoading")}</Empty>
           )}
@@ -505,7 +510,7 @@ export default function Overview() {
             </span>
           </SectionTitle>
           {portRanges.some((p) => p.count > 0) ? (
-            <EChart option={portBarOption} style={{ height: 190 }} notMerge lazyUpdate />
+            <EChart option={portBarOption} style={{ height: 190 }} lazyUpdate />
           ) : (
             <Empty icon={Network}>{t("overview.noPorts")}</Empty>
           )}

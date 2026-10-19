@@ -57,12 +57,20 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       # ts-rs 导出是契约快照：Rust 结构体改了但忘记重新导出时，
-      # 前端类型会静默漂移。这里重新生成并检查工作区是否干净。
+      # 前端类型会静默漂移。重新生成后必须**零改动**才算通过。
+      # 用 git status 而不是 git diff：新增的生成文件是未跟踪状态，
+      # git diff 看不到它们，而「新增结构体但忘了提交生成物」正是最常见形态。
       - name: IPC contract drift
         working-directory: src-tauri
+        shell: bash
         run: |
           cargo test --test export_bindings
-          git diff --exit-code ../src/generated
+          if [ -n "$(git status --porcelain -- ../src/generated)" ]; then
+            echo "::error::src/generated 与 Rust 结构体不一致，请运行 cargo test --test export_bindings 并提交生成结果"
+            git status --porcelain -- ../src/generated
+            git diff -- ../src/generated
+            exit 1
+          fi
 
       - name: Install frontend deps
         run: npm ci

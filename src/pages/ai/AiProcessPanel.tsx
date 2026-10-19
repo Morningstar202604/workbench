@@ -63,6 +63,7 @@ export function AiProcessPanel() {
       },
       series: [
         {
+          id: "ai-memory",
           type: "bar",
           data: sorted.map((a) => Math.round(a.memory / 1024 / 1024)),
           barWidth: 14,
@@ -111,7 +112,6 @@ export function AiProcessPanel() {
           <EChart
             option={aiMemChart}
             style={{ height: Math.max(120, ais.length * 36) }}
-            notMerge
             lazyUpdate
           />
         ) : (

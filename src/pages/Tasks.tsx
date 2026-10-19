@@ -125,6 +125,7 @@ export default function Tasks() {
       tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
       series: [
         {
+          id: "priority-pie",
           type: "pie",
           radius: ["44%", "66%"],
           label: { show: false },
@@ -170,12 +171,7 @@ export default function Tasks() {
           </div>
           {data.tasks.length > 0 ? (
             <>
-              <EChart
-                option={priorityPieOption}
-                style={{ height: 130 }}
-                notMerge
-                lazyUpdate
-              />
+              <EChart option={priorityPieOption} style={{ height: 130 }} lazyUpdate />
               <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                 {priorityDist.map((d) => (
                   <span

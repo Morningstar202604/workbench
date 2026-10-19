@@ -33,11 +33,33 @@ export default function Logs() {
     void load();
   }, [load]);
 
-  // 自动刷新（每 3 秒）
+  // 自动刷新（每 3 秒）。窗口隐藏时暂停：读日志文件是纯 IO，
+  // 没人看的时候继续轮询只是白耗磁盘。
   useEffect(() => {
     if (!autoRefresh) return;
-    const id = setInterval(() => void load(), 3000);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (id) return;
+      id = setInterval(() => void load(), 3000);
+    };
+    const stop = () => {
+      if (id) clearInterval(id);
+      id = null;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void load();
+        start();
+      } else {
+        stop();
+      }
+    };
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      stop();
+    };
   }, [autoRefresh, load]);
 
   const handleClear = async () => {

@@ -14,7 +14,6 @@ import { EChart } from "../lib/echarts";
 import { chartGapColor, horizontalBarOption, seriesColors } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { openExternal } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { Badge, Btn, Card, Empty, SectionTitle, StatCard, type Tone } from "../ui";
 import { frameworkDistribution, portDistribution } from "../lib/aggregate";
@@ -36,6 +35,7 @@ export default function Servers() {
     gitBranches,
     fetchGitBranch,
     theme,
+    openTarget,
   } = useStore(
     useShallow((s) => ({
       devs: s.devs,
@@ -46,6 +46,7 @@ export default function Servers() {
       gitBranches: s.gitBranches,
       fetchGitBranch: s.fetchGitBranch,
       theme: s.theme,
+      openTarget: s.openTarget,
     }))
   );
   const [expandedServer, setExpandedServer] = useState<number | null>(null);
@@ -85,6 +86,7 @@ export default function Servers() {
       },
       series: [
         {
+          id: "framework-pie",
           type: "pie",
           radius: ["48%", "70%"],
           center: ["50%", "50%"],
@@ -154,12 +156,7 @@ export default function Servers() {
           <SectionTitle>{t("servers.frameworkDist")}</SectionTitle>
           {frameworkData.length > 0 ? (
             <>
-              <EChart
-                option={frameworkPieOption}
-                style={{ height: 180 }}
-                notMerge
-                lazyUpdate
-              />
+              <EChart option={frameworkPieOption} style={{ height: 180 }} lazyUpdate />
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
                 {frameworkData.map(([name, count], i) => (
                   <span
@@ -183,7 +180,7 @@ export default function Servers() {
         <Card className="p-4">
           <SectionTitle>{t("servers.portDist")}</SectionTitle>
           {listening.length > 0 ? (
-            <EChart option={portBarOption} style={{ height: 180 }} notMerge lazyUpdate />
+            <EChart option={portBarOption} style={{ height: 180 }} lazyUpdate />
           ) : (
             <Empty icon={Network}>{t("servers.portEmpty")}</Empty>
           )}
@@ -243,7 +240,7 @@ export default function Servers() {
                       <Btn
                         className="!px-2 !py-1 !text-xs"
                         title={t("servers.openInBrowser")}
-                        onClick={() => openExternal(`http://localhost:${d.port}`)}
+                        onClick={() => openTarget(`http://localhost:${d.port}`)}
                       >
                         <ExternalLink size={12} />
                       </Btn>
@@ -251,7 +248,7 @@ export default function Servers() {
                         <Btn
                           className="!px-2 !py-1 !text-xs"
                           title={t("servers.openProjectDir")}
-                          onClick={() => d.project_dir && openExternal(d.project_dir)}
+                          onClick={() => d.project_dir && openTarget(d.project_dir)}
                         >
                           <FolderOpen size={12} />
                         </Btn>
@@ -344,7 +341,7 @@ export default function Servers() {
                 </span>
                 <button
                   className="ml-auto text-dim hover:text-accent"
-                  onClick={() => openExternal(`http://localhost:${p.local_port}`)}
+                  onClick={() => openTarget(`http://localhost:${p.local_port}`)}
                   title={t("servers.open")}
                 >
                   <ExternalLink size={11} />
