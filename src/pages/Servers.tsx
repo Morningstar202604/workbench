@@ -16,7 +16,11 @@ import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../lib/i18n";
 import { Badge, Btn, Card, Empty, SectionTitle, StatCard, type Tone } from "../ui";
-import { frameworkDistribution, portDistribution } from "../lib/aggregate";
+import {
+  frameworkDistribution,
+  isPieWorthRendering,
+  portDistribution,
+} from "../lib/aggregate";
 import type { PortEntry } from "../types";
 
 const CONFIDENCE_TONE: Record<string, Tone> = {
@@ -156,7 +160,10 @@ export default function Servers() {
           <SectionTitle>{t("servers.frameworkDist")}</SectionTitle>
           {frameworkData.length > 0 ? (
             <>
-              <EChart option={frameworkPieOption} style={{ height: 180 }} lazyUpdate />
+              {/* 单分类时饼图就是一个满圆（永远 100%），不传达信息，直接列文字 */}
+              {isPieWorthRendering(frameworkData) && (
+                <EChart option={frameworkPieOption} style={{ height: 180 }} lazyUpdate />
+              )}
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
                 {frameworkData.map(([name, count], i) => (
                   <span

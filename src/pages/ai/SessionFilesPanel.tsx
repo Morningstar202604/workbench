@@ -7,7 +7,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useT } from "../../lib/i18n";
 import { Badge, Btn, Card, Empty, Modal, SectionTitle, Table, Td, Tr } from "../../ui";
 import { formatBytes, fromNow } from "../../lib/util";
-import { toolDistribution } from "../../lib/aggregate";
+import { isPieWorthRendering, toolDistribution } from "../../lib/aggregate";
 import type { SessionFilePreview } from "../../types";
 import { InfoChip } from "./AiProcessPanel";
 
@@ -117,7 +117,9 @@ export function SessionFilesPanel() {
           <SectionTitle>{t("ai.toolDist")}</SectionTitle>
           {toolCounts.length > 0 ? (
             <>
-              <EChart option={sessionToolChart} style={{ height: 160 }} lazyUpdate />
+              {isPieWorthRendering(toolCounts) && (
+                <EChart option={sessionToolChart} style={{ height: 160 }} lazyUpdate />
+              )}
               <div className="mt-2 space-y-1.5">
                 {toolCounts.map(([tool, count], i) => (
                   <div key={tool} className="flex items-center gap-2 text-xs">

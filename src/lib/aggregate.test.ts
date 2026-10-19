@@ -4,6 +4,7 @@ import {
   countBy,
   cpuHistogram,
   frameworkDistribution,
+  isPieWorthRendering,
   isProjectRunning,
   memoryHistogram,
   portDistribution,
@@ -161,5 +162,22 @@ describe("totalMessageCount", () => {
 
   it("空列表为 0", () => {
     expect(totalMessageCount([])).toBe(0);
+  });
+});
+
+describe("isPieWorthRendering", () => {
+  // 单分类饼图是一个满圆（永远 100%），不传达任何信息
+  it("少于两个分类时不画饼图", () => {
+    expect(isPieWorthRendering([])).toBe(false);
+    expect(isPieWorthRendering([["Vite", 3]])).toBe(false);
+  });
+
+  it("两个及以上分类时画饼图", () => {
+    expect(
+      isPieWorthRendering([
+        ["Vite", 3],
+        ["Next.js", 1],
+      ])
+    ).toBe(true);
   });
 });

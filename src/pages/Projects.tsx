@@ -19,7 +19,7 @@ import {
   type Tone,
 } from "../ui";
 import { shortPath } from "../lib/util";
-import { isProjectRunning } from "../lib/aggregate";
+import { isPieWorthRendering, isProjectRunning } from "../lib/aggregate";
 import { useT } from "../lib/i18n";
 import type { Project } from "../types";
 
@@ -177,7 +177,15 @@ export default function Projects() {
           <h3 className="mb-2 text-sm font-medium">{t("projects.statusDistTitle")}</h3>
           {data.projects.length > 0 ? (
             <>
-              <EChart option={statusPieOption} style={{ height: 140 }} lazyUpdate />
+              {isPieWorthRendering(
+                (["active", "paused", "archived"] as const).map(
+                  (k) =>
+                    [k, data.projects.filter((p) => p.status === k).length] as [
+                      string,
+                      number,
+                    ]
+                )
+              ) && <EChart option={statusPieOption} style={{ height: 140 }} lazyUpdate />}
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                 {Object.entries(STATUS_MAP).map(([k, v]) => {
                   const count = data.projects.filter((p) => p.status === k).length;

@@ -15,6 +15,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useT } from "../../lib/i18n";
 import { Btn, Card, ConfirmDialog, SectionTitle, Spinner, StatCard } from "../../ui";
 import { formatTokens, formatUsd } from "../../lib/util";
+import { isPieWorthRendering } from "../../lib/aggregate";
 
 /**
  * 成本仪表盘：预算告警、四项统计、预算进度条、趋势/模型分解图。
@@ -244,6 +245,12 @@ export function CostDashboard() {
             {costLoading ? <Spinner /> : <RefreshCw size={14} />}
             {costLoading ? t("ai.scanning") : t("ai.scanCosts")}
           </Btn>
+          {/* 全量扫描是长任务：明确告诉用户可能要等几秒，避免误以为界面卡死 */}
+          {costLoading && (
+            <span className="max-w-[180px] text-[11px] leading-snug text-dim">
+              {t("ai.scanHint")}
+            </span>
+          )}
           <Btn
             onClick={() => setConfirmClear(true)}
             className="!py-1 !text-xs"
@@ -290,7 +297,11 @@ export function CostDashboard() {
           {modelBreakdownChart && (
             <Card className="p-4 lg:col-span-2">
               <SectionTitle>{t("ai.modelBreakdownTitle")}</SectionTitle>
-              <EChart option={modelBreakdownChart} style={{ height: 200 }} lazyUpdate />
+              {isPieWorthRendering(
+                costModelBreakdown.map((r) => [r.model, r.cost] as [string, number])
+              ) && (
+                <EChart option={modelBreakdownChart} style={{ height: 200 }} lazyUpdate />
+              )}
               <div className="mt-2 space-y-1">
                 {costModelBreakdown.slice(0, 5).map((r, i) => (
                   <div key={r.model} className="flex items-center gap-2 text-xs">

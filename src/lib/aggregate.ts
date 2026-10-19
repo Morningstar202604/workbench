@@ -116,6 +116,16 @@ export function toolUsageDistribution(tools: string[]): [string, number][] {
   return countBy(tools, (tool) => tool);
 }
 
+/**
+ * 饼图是否有意义。
+ *
+ * 只有一个分类时饼图是一个满圆，占比永远 100%，不传达任何信息；
+ * 这类情况应该直接显示文字（「全部是 Vite」），而不是画个圆。
+ */
+export function isPieWorthRendering(distribution: [string, number][]): boolean {
+  return distribution.length >= 2;
+}
+
 /** 进程分类关键词。按 token 边界匹配，避免 "go" 命中 "google" 这类子串误判。 */
 const BROWSER_TOKENS = [
   "chrome",

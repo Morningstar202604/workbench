@@ -470,14 +470,20 @@ export const useStore = create<Store>()(
       scanCosts: async () => {
         if (!isTauri()) return;
         set({ costLoading: true });
+        const startedAt = Date.now();
         try {
           const result = await scanSessionCosts();
+          const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
           set({
             costOverview: result.overview,
             costTrend: result.trend,
             costModelBreakdown: result.model_breakdown,
             costLoading: false,
-            toast: t("store.scanned", { count: result.new_records }),
+            // 全量扫描可能要几秒，把耗时一起报出来，用户能区分「慢」和「卡死」
+            toast: t("ai.scannedSummary", {
+              files: result.total_scanned,
+              seconds,
+            }),
           });
           get().checkBudgetAlert();
         } catch (e) {

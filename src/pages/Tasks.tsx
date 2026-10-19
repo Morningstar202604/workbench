@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { BarChart3, Plus, Trash2 } from "lucide-react";
 import { EChart } from "../lib/echarts";
 import { chartGapColor, FIXED_COLORS } from "../lib/chartTheme";
+import { isPieWorthRendering } from "../lib/aggregate";
 import {
   DndContext,
   PointerSensor,
@@ -171,7 +172,11 @@ export default function Tasks() {
           </div>
           {data.tasks.length > 0 ? (
             <>
-              <EChart option={priorityPieOption} style={{ height: 130 }} lazyUpdate />
+              {isPieWorthRendering(
+                priorityDist.map((d) => [d.name, d.value] as [string, number])
+              ) && (
+                <EChart option={priorityPieOption} style={{ height: 130 }} lazyUpdate />
+              )}
               <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                 {priorityDist.map((d) => (
                   <span
