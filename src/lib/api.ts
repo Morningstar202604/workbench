@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { classifyOpenTarget } from "./openTarget";
 import type {
   AiProcess,
   CostOverview,
@@ -84,26 +85,30 @@ export async function saveData(data: WorkbenchData): Promise<void> {
 
 /** 用系统默认方式打开 URL / 目录。
  * URL 走 opener 插件；目录必须经后端 `open_known_path` 白名单校验，
- * 因此 capabilities 里不再给 WebView 直接的 allow-open-path 权限。 */
+ * 因此 capabilities 里不再给 WebView 直接的 allow-open-path 权限。
+ * 目标分类（含 Windows 盘符 vs URL scheme 的区分）在 lib/openTarget。 */
 export async function openExternal(target: string): Promise<void> {
-  const trimmed = target.trim();
-  // 只放行 http/https：数据源虽是本机目录，但信任边界输入不该把
-  // file:// / ms-msdt: 之类会被系统默认处理器接管的 scheme 送进 opener。
-  const isHttpUrl = /^https?:\/\//i.test(trimmed);
-  const isOtherScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed);
-  if (!isTauri()) {
-    if (isHttpUrl) window.open(trimmed, "_blank", "noopener");
-    return;
+  const classified = classifyOpenTarget(target);
+  switch (classified.kind) {
+    case "empty":
+      return;
+    case "http": {
+      if (!isTauri()) {
+        window.open(classified.value, "_blank", "noopener");
+        return;
+      }
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(classified.value);
+      return;
+    }
+    case "unsupported":
+      // 不静默：调用方要能看到原因，而不是点击后毫无反应
+      throw new Error(`不支持的链接协议: ${classified.scheme}`);
+    case "path": {
+      if (!isTauri()) return;
+      await invoke("open_known_path", { path: classified.value });
+    }
   }
-  if (isHttpUrl) {
-    const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(trimmed);
-    return;
-  }
-  if (isOtherScheme) {
-    throw new Error(`不支持的链接协议: ${trimmed.split(":")[0]}`);
-  }
-  await invoke("open_known_path", { path: trimmed });
 }
 
 // ── 系统通知 ──────────────────────────────────────────────
