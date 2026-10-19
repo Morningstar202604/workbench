@@ -112,6 +112,20 @@ export function Btn({
 }
 
 /**
+ * 对话框内可聚焦元素的选择器。集中一份，初始聚焦与 Tab 陷阱共用，
+ * 避免两处漂移（曾经的初始聚焦没有 `:not([disabled])`）。
+ */
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[contenteditable='true']",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+/**
  * 模态框：补上 dialog 语义、焦点圈定与恢复、ESC 关闭。
  * 原先只有裸 div + 点击遮罩，键盘用户打开后 Tab 会跑到背后的页面里，
  * 而删除/清空这类不可逆操作的确认框正是最需要焦点约束的地方。
@@ -139,40 +153,57 @@ export function Modal({
     if (!open) return;
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
     const node = dialogRef.current;
-    const first = node?.querySelector<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
+    // 与 Tab 陷阱共用同一套可聚焦选择器：禁用控件不能拿到初始焦点，
+    // 否则 first?.focus() 静默失败，焦点留在背后的页面上。
+    const first = node?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
     first?.focus();
 
     return () => {
-      restoreFocusRef.current?.focus?.();
+      const target = restoreFocusRef.current;
+      // 触发按钮可能已随列表刷新卸载，focus 前确认它仍在文档里
+      if (target?.isConnected) target.focus();
     };
   }, [open]);
 
-  const onKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onClose();
-        return;
-      }
+  // 焦点圈定必须在 document 级监听：焦点一旦落到对话框外（用户点了不可聚焦
+  // 的正文，activeElement 回到 body），keydown 就不会再经过对话框元素，
+  // 挂在对话框上的 onKeyDown 根本没机会拦截，Tab 会按文档顺序逃到遮罩后面。
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Tab") return;
       const node = dialogRef.current;
       if (!node) return;
       const focusable = Array.from(
-        node.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        )
+        node.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
       );
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      const active = document.activeElement as HTMLElement | null;
+
+      if (!active || !node.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+        return;
+      }
+      if (event.shiftKey && active === first) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && active === last) {
         event.preventDefault();
         first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [open]);
+
+  const onDialogKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
       }
     },
     [onClose]
@@ -190,7 +221,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        onKeyDown={onKeyDown}
+        onKeyDown={onDialogKeyDown}
         className={`w-full rounded-xl border border-line bg-panel shadow-2xl ${wide ? "max-w-2xl" : "max-w-md"}`}
         onClick={(e) => e.stopPropagation()}
       >

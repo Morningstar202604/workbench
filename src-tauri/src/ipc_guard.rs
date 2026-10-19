@@ -7,20 +7,34 @@
 
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::{Mutex, MutexGuard};
 
 /// Windows 路径大小写不敏感、分隔符混用，统一成一个可比较的键。
-/// 同时做词法归一（吃掉 `.` 与 `..`）：否则 `C:/apps/../Windows` 会作为
-/// 独立键被登记，`contains` 再用同样的拼写查询时就绕过了真实目录的约束。
-/// 越过根（或相对路径往上跳）的输入一律归一为空串 —— 空键永远不会被登记/命中。
+///
+/// 责任是把「同一个目录的不同写法」折叠成同一个键，同时**不能**把不同的
+/// 路径空间折叠到一起：
+/// - `.` / `..` 词法归约，越过盘符根的 `..` 视为非法（归一为空串）
+/// - UNC 前缀（`\\server\share`）必须保留双斜杠：丢掉前导 `//` 会让
+///   `\\server\share` 与相对路径 `server/share` 归一成同一个键，
+///   白名单就同时覆盖了两个不同的路径空间
+/// - 单独的盘符（`c:`）不是绝对路径，归一为空串（它会随 CWD 漂移）
 pub fn normalize_path(raw: &str) -> String {
     let unified = raw.trim().replace('\\', "/");
+
+    // UNC（\\server\share）与其扩展前缀（\\?\C:\...）保留双斜杠语义
+    let (prefix, rest) = if let Some(stripped) = unified.strip_prefix("//") {
+        ("//", stripped)
+    } else {
+        ("", unified.as_str())
+    };
+
     let mut out: Vec<&str> = Vec::new();
-    for seg in unified.split('/') {
+    for seg in rest.split('/') {
         match seg {
             "" | "." => continue,
             ".." => {
-                // 盘符前缀（c:）或根的上一层不可弹出：弹出就等于越界
+                // 有效段为空，或只剩盘符前缀（c:）时再弹出就属于越界
                 if out.is_empty() || (out.len() == 1 && out[0].ends_with(':')) {
                     return String::new();
                 }
@@ -29,7 +43,17 @@ pub fn normalize_path(raw: &str) -> String {
             s => out.push(s),
         }
     }
-    out.join("/").to_ascii_lowercase()
+    if out.is_empty() {
+        return String::new();
+    }
+
+    // 只有盘符没有后续段（"c:"）：不是绝对路径，拒绝
+    if prefix.is_empty() && out.len() == 1 && out[0].ends_with(':') {
+        return String::new();
+    }
+
+    let joined = out.join("/").to_ascii_lowercase();
+    format!("{prefix}{joined}")
 }
 
 fn lock<T>(slot: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -37,8 +61,8 @@ fn lock<T>(slot: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 /// 后端确认过的目录集合（必须真实存在才登记）。
-#[derive(Default)]
-pub struct KnownDirs(Mutex<HashSet<String>>);
+#[derive(Default, Clone)]
+pub struct KnownDirs(Arc<Mutex<HashSet<String>>>);
 
 impl KnownDirs {
     /// 登记后端自己观察到的目录（进程命令行解析出的项目根等）。
@@ -51,6 +75,19 @@ impl KnownDirs {
                 guard.insert(key);
             }
         }
+    }
+
+    /// 在阻塞线程里做存在性校验后登记，供 async IPC 命令使用。
+    ///
+    /// 为什么必须异步：`Path::is_dir()` 会触达文件系统，指向断开的 UNC
+    /// 或离线映射盘时要等 SMB 超时（数秒到数十秒）。而 `save_data` 由前端
+    /// 300ms 防抖在每次编辑任务/项目后触发，同步执行等于每次都可能冻住主线程。
+    pub async fn record_validated_blocking(&self, dirs: Vec<String>) -> Result<usize, String> {
+        // State 的解引用不能移动，克隆内部 Arc 共享同一份集合
+        let handle = self.clone();
+        tauri::async_runtime::spawn_blocking(move || handle.record_validated(dirs))
+            .await
+            .map_err(|e| format!("任务执行失败: {e}"))
     }
 
     /// 登记前端提交的目录（用户手填的项目路径、以及 data.json 回灌）。
@@ -141,6 +178,27 @@ mod tests {
         assert_eq!(normalize_path("C:\\..\\Windows"), "");
         assert_eq!(normalize_path("../etc/passwd"), "");
         assert_eq!(normalize_path(""), "");
+        // 单独盘符不是绝对路径（会随 CWD 漂移）
+        assert_eq!(normalize_path("C:"), "");
+        assert_eq!(normalize_path("c:/"), "");
+    }
+
+    #[test]
+    fn unc_paths_keep_their_prefix_and_never_merge_with_relative_paths() {
+        // 丢掉前导 // 会让 UNC 与相对路径塌陷成同一个键
+        assert_eq!(normalize_path("\\\\server\\share"), "//server/share");
+        assert_eq!(normalize_path("//server/share"), "//server/share");
+        assert_ne!(normalize_path("\\\\server\\share"), normalize_path("server/share"));
+
+        // UNC 与普通盘符路径也不能互通
+        let dirs = KnownDirs::default();
+        dirs.record(["\\\\nas\\proj"]);
+        assert!(dirs.contains("//nas/proj"));
+        assert!(!dirs.contains("nas/proj"), "相对路径不得命中 UNC 条目");
+        assert!(!dirs.contains("C:/nas/proj"));
+
+        // 扩展前缀同样保留
+        assert_eq!(normalize_path("\\\\?\\C:\\proj"), "//?/c:/proj");
     }
 
     #[test]

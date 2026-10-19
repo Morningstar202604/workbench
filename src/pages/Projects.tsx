@@ -361,7 +361,7 @@ export default function Projects() {
         open={!!pendingDelete}
         title={t("projects.deleteTitle")}
         body={t("projects.deleteConfirm", { name: pendingDelete?.name ?? "" })}
-        confirmLabel={t("projects.deleteTitle")}
+        confirmLabel={t("projects.deleteAction")}
         cancelLabel={t("projects.cancel")}
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => {

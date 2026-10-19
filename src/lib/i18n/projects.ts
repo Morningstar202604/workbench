@@ -20,6 +20,7 @@ export const dict = {
     "projects.openDir": "Open directory",
     "projects.edit": "Edit",
     "projects.deleteTitle": "Delete project (tasks are kept but unlinked)",
+    "projects.deleteAction": "Delete",
     "projects.deleteConfirm":
       'Delete project "{name}"? Linked tasks will be kept but unlinked.',
     "projects.tableView": "Table view",
@@ -59,6 +60,7 @@ export const dict = {
     "projects.openDir": "打开目录",
     "projects.edit": "编辑",
     "projects.deleteTitle": "删除项目（任务会保留但解除关联）",
+    "projects.deleteAction": "删除",
     "projects.deleteConfirm": "删除项目「{name}」？关联的任务会保留但解除关联。",
     "projects.tableView": "表格视图",
     "projects.colProject": "项目",
@@ -98,6 +100,7 @@ export const dict = {
     "projects.edit": "編集",
     "projects.deleteTitle":
       "プロジェクトを削除（タスクは保持されますが関連付けが解除されます）",
+    "projects.deleteAction": "削除",
     "projects.deleteConfirm":
       "プロジェクト「{name}」を削除しますか？関連するタスクは保持されますが、関連付けが解除されます。",
     "projects.tableView": "テーブル表示",

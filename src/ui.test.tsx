@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Cpu } from "lucide-react";
@@ -138,5 +139,65 @@ describe("Modal", () => {
     );
     await userEvent.click(screen.getByText("内容"));
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  // 回归：焦点陷阱原先只在焦点恰好位于首/尾元素时拦截。用户在对话框里
+  // 点一下不可聚焦的正文，activeElement 会回到 body，下一次 Tab 就按文档
+  // 顺序跑到遮罩背后的页面上（aria-modal 不产生任何浏览器级约束）。
+  it("焦点在对话框外时，Tab 会被收回对话框内", async () => {
+    render(
+      <>
+        <button type="button">外部按钮</button>
+        <Modal
+          open
+          title="确认"
+          onClose={() => {}}
+          footer={
+            <>
+              <button type="button">取消</button>
+              <button type="button">确认</button>
+            </>
+          }
+        >
+          正文
+        </Modal>
+      </>
+    );
+
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "取消" }));
+
+    // 模拟「点了不可聚焦的正文」：焦点回到 body
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "取消" }));
+    expect(document.activeElement).not.toBe(
+      screen.getByRole("button", { name: "外部按钮" })
+    );
+  });
+
+  it("关闭后焦点回到触发按钮", async () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            打开
+          </button>
+          <Modal open={open} title="t" onClose={() => setOpen(false)}>
+            内容
+          </Modal>
+        </>
+      );
+    }
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: "打开" });
+    trigger.focus();
+    await userEvent.click(trigger);
+    expect(screen.getByText("内容")).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+    expect(document.activeElement).toBe(trigger);
   });
 });

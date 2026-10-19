@@ -483,6 +483,9 @@ export const useStore = create<Store>()(
        * 原先失败也返回 void，设置页无条件 setDirty(false)，用户会以为已持久化。
        */
       updateCostSettings: async (s) => {
+        // 演示模式没有后端。这里返回 false 而不是抛错：调用方保持「未保存」状态，
+        // 用户输入不会丢，也不会看到 "reading 'invoke'" 这类原始 TypeError。
+        if (!isTauri()) return false;
         try {
           await saveCostSettings(s);
         } catch (e) {
