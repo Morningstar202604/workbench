@@ -24,7 +24,7 @@ fn lock() -> MutexGuard<'static, ()> {
 
 // ── 成本配置（预算 / 自定价 / 告警阈值）─────────────────────
 
-#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, ts_rs::TS)]
 pub struct CostSettings {
     /// 日预算（USD），0 表示不设限
     pub daily_budget: f64,
@@ -189,12 +189,14 @@ fn save_cost_data(app: &AppHandle, data: &CostData) -> Result<(), String> {
     json_store::write_json_atomic(&cost_data_path(app)?, data)
 }
 
-/// 在锁内做「读-改-写」；闭包返回 Ok(false) 表示无变更，可跳过落盘。
-fn mutate<T>(app: &AppHandle, f: impl FnOnce(&mut CostData) -> T) -> Result<T, String> {
+/// 在锁内做「读-改-写」；闭包返回 `false` 表示无变更，跳过落盘。
+fn mutate<T>(app: &AppHandle, f: impl FnOnce(&mut CostData) -> (T, bool)) -> Result<T, String> {
     let _guard = lock();
     let mut data = load_cost_data(app)?;
-    let out = f(&mut data);
-    save_cost_data(app, &data)?;
+    let (out, changed) = f(&mut data);
+    if changed {
+        save_cost_data(app, &data)?;
+    }
     Ok(out)
 }
 
@@ -202,6 +204,40 @@ fn mutate<T>(app: &AppHandle, f: impl FnOnce(&mut CostData) -> T) -> Result<T, S
 fn view<T>(app: &AppHandle, f: impl FnOnce(&CostData) -> T) -> Result<T, String> {
     let _guard = lock();
     Ok(f(&load_cost_data(app)?))
+}
+
+/// 一次扫描的完整结果：导入 + 三个聚合视图。
+pub struct ScanOutcome {
+    pub net_new: usize,
+    pub overview: CostOverview,
+    pub trend: Vec<CostTrendRow>,
+    pub breakdown: Vec<ModelBreakdownRow>,
+}
+
+/// 扫描落库 + 聚合，全程只加一次锁、只读写一次文件。
+///
+/// 原先 commands.rs 里依次调用 existing_keys / import_records / build_overview /
+/// build_trend / build_model_breakdown，每一轮都在锁内全量读 JSON、全量序列化、
+/// fsync 一次（记录上万条时 5 次 fsync + 5 次全文件解析）。这些操作本该是
+/// 一次事务：扫描结果与聚合视图必须是同一份快照，否则中途失败会留下
+/// 「记录已写入、视图还是旧的」的中间态。
+pub fn import_and_aggregate(
+    app: &AppHandle,
+    records: &[CostRecord],
+    trend_days: usize,
+) -> Result<ScanOutcome, String> {
+    let _guard = lock();
+    let mut data = load_cost_data(app)?;
+    let net_new = apply_import(&mut data, records);
+    if !records.is_empty() {
+        save_cost_data(app, &data)?;
+    }
+    Ok(ScanOutcome {
+        net_new,
+        overview: overview_of(&data),
+        trend: trend_of(&data, trend_days),
+        breakdown: model_breakdown_of(&data),
+    })
 }
 
 /// 已入库文件的 (path, mtime, size) 快照，供扫描跳过未变化文件。
@@ -220,7 +256,11 @@ pub fn get_cost_settings(app: &AppHandle) -> Result<CostSettings, String> {
 }
 
 pub fn save_cost_settings(app: &AppHandle, settings: CostSettings) -> Result<(), String> {
-    mutate(app, |data| data.settings = settings)
+    mutate(app, |data| {
+        let changed = data.settings != settings;
+        data.settings = settings;
+        ((), changed)
+    })
 }
 
 /// 导入：按 file_path **整组替换**。
@@ -230,7 +270,10 @@ pub fn import_records(app: &AppHandle, new_records: &[CostRecord]) -> Result<usi
     if new_records.is_empty() {
         return Ok(0);
     }
-    mutate(app, |data| apply_import(data, new_records))
+    mutate(app, |data| {
+        let net = apply_import(data, new_records);
+        (net, true)
+    })
 }
 
 /// 纯函数：整组替换 + 返回净增量。单独抽出来是为了可脱离 AppHandle 测试。
@@ -250,7 +293,11 @@ fn apply_import(data: &mut CostData, new_records: &[CostRecord]) -> usize {
 }
 
 pub fn clear_records(app: &AppHandle) -> Result<(), String> {
-    mutate(app, |data| data.records.clear())
+    mutate(app, |data| {
+        let changed = !data.records.is_empty();
+        data.records.clear();
+        ((), changed)
+    })
 }
 
 pub fn build_overview(app: &AppHandle) -> Result<CostOverview, String> {

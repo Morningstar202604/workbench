@@ -1,7 +1,25 @@
 //! 进程快照：sysinfo 双次采样拿 CPU%，阻塞调用放在 spawn_blocking 里，不卡 UI 线程。
 
 use serde::Serialize;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use sysinfo::{Pid, ProcessesToUpdate, System};
+
+/// 一次前端刷新会并发请求「进程 / 端口 / 开发服务器 / AI 进程」四个命令，
+/// 每个都要一份进程快照。原先各自 `System::new_all()` + 220ms 双采样，
+/// 同一时刻就是四次全量进程树扫描（CPU 开销 ×4，且四次结果可能互相错位）。
+/// 这里做短 TTL 复用：同一刷新周期内共享同一份快照。
+const SNAPSHOT_TTL: Duration = Duration::from_millis(400);
+
+struct SnapshotCache {
+    taken_at: Option<Instant>,
+    procs: Vec<ProcInfo>,
+}
+
+static SNAPSHOT: Mutex<SnapshotCache> = Mutex::new(SnapshotCache {
+    taken_at: None,
+    procs: Vec::new(),
+});
 
 #[derive(Serialize, Clone, Debug, ts_rs::TS)]
 pub struct ProcInfo {
@@ -38,7 +56,35 @@ fn status_label(status: &sysinfo::ProcessStatus) -> String {
 }
 
 /// 阻塞式进程快照（含 CPU 两次刷新，约 220ms）。
+/// 结果在 `SNAPSHOT_TTL` 内复用，避免一次刷新内四次全量扫描。
 pub fn snapshot_processes() -> Vec<ProcInfo> {
+    let mut cache = SNAPSHOT
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(taken_at) = cache.taken_at {
+        if taken_at.elapsed() < SNAPSHOT_TTL {
+            return cache.procs.clone();
+        }
+    }
+    // 持锁采样：并发调用者会排队复用同一份结果，不会各自再扫一遍
+    let procs = collect_processes();
+    cache.procs = procs.clone();
+    cache.taken_at = Some(Instant::now());
+    procs
+}
+
+/// 强制重新采样（终止进程后需要立刻看到真实结果，不能读 400ms 内的旧快照）。
+pub fn snapshot_processes_fresh() -> Vec<ProcInfo> {
+    let mut cache = SNAPSHOT
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let procs = collect_processes();
+    cache.procs = procs.clone();
+    cache.taken_at = Some(Instant::now());
+    procs
+}
+
+fn collect_processes() -> Vec<ProcInfo> {
     let mut sys = System::new_all();
     sys.refresh_processes(ProcessesToUpdate::All, true);
     std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);

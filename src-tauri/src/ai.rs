@@ -339,10 +339,13 @@ pub fn collect_all_session_files(home: &Path) -> Vec<SessionFile> {
     files
 }
 
-/// 最近 10 条（UI 预览用）。
+/// UI 预览只取最近 N 条（成本计量走 collect_all_session_files 全量，不受此限制）。
+pub const PREVIEW_LIMIT: usize = 10;
+
+/// 最近 N 条（UI 预览用）。
 pub fn scan_session_files(home: &Path) -> Vec<SessionFile> {
     let mut files = collect_all_session_files(home);
-    files.truncate(10);
+    files.truncate(PREVIEW_LIMIT);
     files
 }
 
