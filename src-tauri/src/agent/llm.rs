@@ -140,26 +140,36 @@ pub enum FailureKind {
     Permanent,
 }
 
-/// 把错误文本归类。网关的「排队中」「无可用渠道」都算 transient。
-pub fn classify_failure(err: &str) -> FailureKind {
-    let lower = err.to_ascii_lowercase();
-    let transient_markers = [
-        "timeout",
-        "timed out",
-        "connection",
-        "429",
-        "500",
-        "502",
-        "503",
-        "504",
+/// 把 HTTP 状态码归类。这是**主要**判据，比匹配错误文本可靠得多：
+/// reqwest 的 Display 只给 "error sending request for url (...)"，
+/// 不含 timeout/connection 之类的词，纯文本匹配会把真实超时误判为永久失败，
+/// 让故障切换在生产上根本不触发。
+pub fn classify_status(status: u16) -> FailureKind {
+    match status {
+        408 | 425 | 429 => FailureKind::Transient,
+        500..=599 => FailureKind::Transient,
+        _ => FailureKind::Permanent,
+    }
+}
+
+/// 网络层失败（没拿到 HTTP 响应）：连接失败与超时都是可重试的，
+/// 其余（TLS 证书错误、URL 非法）换家也没用。
+pub fn classify_transport(is_timeout: bool, is_connect: bool, err_text: &str) -> FailureKind {
+    if is_timeout || is_connect {
+        return FailureKind::Transient;
+    }
+    // 兜底：网关业务错误里常见的「排队/无渠道」类文案
+    let lower = err_text.to_ascii_lowercase();
+    let markers = [
         "no available channel",
         "无可用渠道",
         "rate limit",
         "overloaded",
-        "busy",
+        "队列已满",
         "请稍后",
+        "retry later",
     ];
-    if transient_markers.iter().any(|m| lower.contains(m)) {
+    if markers.iter().any(|m| lower.contains(m)) {
         FailureKind::Transient
     } else {
         FailureKind::Permanent
@@ -363,37 +373,57 @@ mod tests {
         assert_eq!(reply.tool_calls[0].function.name, "list_processes");
     }
 
-    /// 换家的判据必须对着**真实网关错误文本**验证：
-    /// 这些字符串都是从 hcnsec / agnes 实际响应里抄下来的。
+    /// 换家的判据必须是**结构化**的。
+    /// 回归：旧实现匹配错误文本，而 reqwest 的真实超时文案是
+    /// "error sending request for url (...)" —— 不含 timeout/connection，
+    /// 于是真实超时被判成永久失败，故障切换在生产上永远不触发。
     #[test]
-    fn classifies_real_gateway_errors() {
-        // 排队 / 无渠道 / 限流 → 应该换下一个
-        for transient in [
-            "请求模型服务失败: operation timed out",
-            "模型服务返回错误: No available channel for model gpt-4o-mini under group auto",
-            "模型服务返回错误: 分组 default 下模型 x 无可用渠道（distributor）",
-            "HTTP 503: upstream overloaded",
-            "HTTP 429: rate limit exceeded",
-        ] {
+    fn http_status_drives_failover() {
+        // 可重试
+        for code in [408, 425, 429, 500, 502, 503, 504, 529] {
             assert_eq!(
-                classify_failure(transient),
+                classify_status(code),
                 FailureKind::Transient,
-                "应判为可重试: {transient}"
+                "HTTP {code} 应触发切换"
             );
         }
-        // 鉴权 / 模型名错 → 换也没用
-        for permanent in [
-            "模型服务返回错误: auth error: header param Authorization api_key invalid",
-            "模型服务返回错误: 无效的令牌",
-            "模型服务返回错误: model not found",
-            "HTTP 400: invalid request",
-        ] {
+        // 换也没用：鉴权/权限/模型名/参数
+        for code in [400, 401, 403, 404, 422] {
             assert_eq!(
-                classify_failure(permanent),
+                classify_status(code),
                 FailureKind::Permanent,
-                "应判为不可重试: {permanent}"
+                "HTTP {code} 不应切换"
             );
         }
+    }
+
+    #[test]
+    fn transport_failures_are_structural() {
+        // 真实超时 / 连接失败：reqwest 的 Display 不含关键词，必须靠 is_timeout/is_connect
+        assert_eq!(
+            classify_transport(true, false, "error sending request for url (https://x)"),
+            FailureKind::Transient,
+            "超时必须可重试"
+        );
+        assert_eq!(
+            classify_transport(false, true, "error sending request for url (http://127.0.0.1:9)"),
+            FailureKind::Transient,
+            "连接失败必须可重试"
+        );
+        // 网关排队类业务错误仍然算可重试
+        assert_eq!(
+            classify_transport(false, false, "No available channel for model x"),
+            FailureKind::Transient
+        );
+        assert_eq!(
+            classify_transport(false, false, "分组 default 下模型 x 无可用渠道"),
+            FailureKind::Transient
+        );
+        // TLS / URL 错误等：换家无意义
+        assert_eq!(
+            classify_transport(false, false, "invalid certificate"),
+            FailureKind::Permanent
+        );
     }
 
     #[test]

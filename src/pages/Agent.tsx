@@ -65,7 +65,7 @@ export default function Agent() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
-  const pending = useRef<PendingApproval[]>([]);
+  const [pending, setPending] = useState<PendingApproval[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 运行计时：让用户看到「还在跑」而不是界面卡死
@@ -141,16 +141,18 @@ export default function Agent() {
     setTick(0);
     try {
       const result = await agentRun(buildMessages(nextTurns));
-      // 收集需要审批的步骤（callId 需从 step 里取：后端把 call_id 放在 ToolResult，
-      // 而 AgentStep 不带 call_id，因此用「工具名 + 参数」与工具清单对照提示）
-      pending.current = result.steps
-        .filter((s) => s.needs_approval && s.call_id)
-        .map((s) => ({
-          // 用后端给的协议 id：通行证与这次调用一一对应，不能自行拼接
-          callId: s.call_id,
-          tool: s.tool,
-          arguments: s.arguments,
-        }));
+      // 收集需要审批的步骤：AgentStep 带后端生成的 call_id，
+      // 审批时原样回传，与后端登记的待批调用一一对应。
+      setPending(
+        result.steps
+          .filter((s) => s.needs_approval && s.call_id)
+          .map((s) => ({
+            // 用后端给的协议 id：通行证与这次调用一一对应，不能自行拼接
+            callId: s.call_id,
+            tool: s.tool,
+            arguments: s.arguments,
+          }))
+      );
       setTurns((prev) => [
         ...prev,
         {
@@ -170,13 +172,33 @@ export default function Agent() {
   const approve = useCallback(
     async (approval: PendingApproval) => {
       try {
-        await agentApproveTool(approval.callId);
-        setToast(t("agent.approvedHint"));
+        // 后端执行**这一条已登记的调用**并返回结果，不再让模型重发
+        const result = await agentApproveTool(approval.callId);
+        setTurns((prev) => {
+          const last = prev[prev.length - 1];
+          const step: AgentStep = {
+            kind: "tool",
+            call_id: result.call_id,
+            tool: result.tool,
+            arguments: approval.arguments,
+            content: result.ok ? result.content : result.error,
+            ok: result.ok,
+            needs_approval: false,
+            elapsed_ms: 0n,
+          };
+          if (last && last.role === "assistant") {
+            return [
+              ...prev.slice(0, -1),
+              { ...last, steps: [...(last.steps ?? []), step] },
+            ];
+          }
+          return [...prev, { role: "assistant", text: "", steps: [step] }];
+        });
+        setToast(result.ok ? t("agent.approvedHint") : result.error);
       } catch (e) {
         setToast(String(e));
       }
-      pending.current = pending.current.filter((p) => p.callId !== approval.callId);
-      setTurns((prev) => [...prev]);
+      setPending((prev) => prev.filter((p) => p.callId !== approval.callId));
     },
     [setToast, t]
   );
@@ -187,8 +209,7 @@ export default function Agent() {
     } catch {
       /* 拒绝失败不影响 UI */
     }
-    pending.current = pending.current.filter((p) => p.callId !== approval.callId);
-    setTurns((prev) => [...prev]);
+    setPending((prev) => prev.filter((p) => p.callId !== approval.callId));
   }, []);
 
   const grouped = useMemo(() => {
@@ -240,16 +261,23 @@ export default function Agent() {
         </div>
 
         {/* 待审批提示 */}
-        {pending.current.length > 0 && (
+        {pending.length > 0 && (
           <div className="border-t border-warn/40 bg-warn/10 px-4 py-2 text-xs text-warn">
             <div className="flex items-center gap-1.5 font-medium">
               <ShieldAlert size={13} />
-              {t("agent.pendingApproval", { count: pending.current.length })}
+              {t("agent.pendingApproval", { count: pending.length })}
             </div>
-            <div className="mt-1 flex flex-wrap gap-2">
-              {pending.current.map((p) => (
-                <span key={p.callId} className="flex items-center gap-1">
+            <div className="mt-1 flex flex-col gap-1.5">
+              {pending.map((p) => (
+                <span key={p.callId} className="flex items-center gap-2">
                   <code className="rounded bg-bg px-1.5 py-0.5">{p.tool}</code>
+                  {/* 危险工具必须让用户看到具体目标（pid/路径），否则是盲批 */}
+                  <code
+                    className="max-w-[420px] truncate rounded bg-bg px-1.5 py-0.5 text-[11px]"
+                    title={p.arguments}
+                  >
+                    {p.arguments}
+                  </code>
                   <Btn
                     variant="primary"
                     className="!px-2 !py-0.5 !text-[10px]"

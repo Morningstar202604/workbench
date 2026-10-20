@@ -61,3 +61,30 @@ pub fn save_to_disk(app: &AppHandle, data: &WorkbenchData) -> Result<(), String>
     json_store::write_json_atomic(&data_file_path(app)?, data)
 }
 
+/// 数据文件锁。
+///
+/// 为什么必须加：前端用 300ms 防抖整文件保存（`saveData`），而 Agent 工具
+/// （`create_task`）会在另一个线程做「读-改-写」。没有锁时后写者会用自己的
+/// 旧快照盖掉前者刚写入的内容 —— json_store 的原子写只保证"不会写出半截
+/// 文件"，不保证读-改-写是原子的。
+static DATA_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn lock() -> std::sync::MutexGuard<'static, ()> {
+    DATA_LOCK.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// 在锁内做「读-改-写」，返回被修改后的数据。
+/// `f` 返回 true 表示有变更，需要落盘。
+pub fn mutate<R>(
+    app: &AppHandle,
+    f: impl FnOnce(&mut WorkbenchData) -> (R, bool),
+) -> Result<R, String> {
+    let _guard = lock();
+    let mut data = load_from_disk(app)?;
+    let (out, changed) = f(&mut data);
+    if changed {
+        save_to_disk(app, &data)?;
+    }
+    Ok(out)
+}
+

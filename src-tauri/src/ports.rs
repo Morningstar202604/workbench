@@ -68,10 +68,13 @@ pub fn parse_ss(output: &str) -> Vec<PortEntry> {
             continue;
         };
         let (remote_addr, _) = split_host_port(tokens[5]).unwrap_or((tokens[5].to_string(), 0));
+        // 状态词必须与 netstat 方言统一：netstat 给 "LISTENING"，ss 给 "LISTEN"。
+        // 消费方（Servers 页、list_dev_servers、agent 工具）只认一种，
+        // 不统一就会在某个平台上整片丢掉监听端口。
         let state = if protocol == "UDP" {
             "UDP".to_string()
         } else {
-            tokens[1].to_ascii_uppercase()
+            normalize_state(tokens[1])
         };
         let pid = tokens
             .iter()
@@ -150,12 +153,37 @@ pub fn parse_netstat(output: &str) -> Vec<PortEntry> {
             local_port,
             remote_addr,
             state: state
-                .map(|s| s.to_ascii_uppercase())
+                .map(normalize_state)
                 .unwrap_or_else(|| "UDP".to_string()),
             pid,
         });
     }
     out
+}
+
+/// 把不同方言的 TCP 状态统一成一个词表。
+/// netstat: LISTENING / ESTABLISHED / TIME_WAIT…
+/// ss:      LISTEN / ESTAB / TIME-WAIT…
+pub fn normalize_state(raw: &str) -> String {
+    let upper = raw.trim().to_ascii_uppercase();
+    match upper.as_str() {
+        "LISTEN" => "LISTENING".to_string(),
+        "ESTAB" => "ESTABLISHED".to_string(),
+        "TIME-WAIT" => "TIME_WAIT".to_string(),
+        "FIN-WAIT-1" => "FIN_WAIT_1".to_string(),
+        "FIN-WAIT-2" => "FIN_WAIT_2".to_string(),
+        "CLOSE-WAIT" => "CLOSE_WAIT".to_string(),
+        "LAST-ACK" => "LAST_ACK".to_string(),
+        "SYN-SENT" => "SYN_SENT".to_string(),
+        "SYN-RECV" => "SYN_RECV".to_string(),
+        _ => upper,
+    }
+}
+
+/// 是否处于监听状态。三处消费点共用这一判据，避免再出现
+/// 「一边过滤 LISTEN、一边过滤 LISTENING」的平台性整片丢弃。
+pub fn is_listening(state: &str) -> bool {
+    state.eq_ignore_ascii_case("LISTENING") || state.eq_ignore_ascii_case("UDP")
 }
 
 /// 拆 `[::1]:5173` / `0.0.0.0:5173` / `:::5173` / `*:*` → (addr, port)
@@ -255,12 +283,12 @@ udp   UNCONN 0      0        127.0.0.53:53         0.0.0.0:*    users:((\"system
 
         let vite = entries.iter().find(|e| e.local_port == 5173).unwrap();
         assert_eq!(vite.protocol, "TCP");
-        assert_eq!(vite.state, "LISTEN");
+        assert_eq!(vite.state, "LISTENING", "ss 的 LISTEN 必须统一成 LISTENING");
         assert_eq!(vite.pid, 2145);
 
         // 非 root 时没有 users: 段 → pid 退化为 0，但端口仍要显示
         let dns = entries.iter().find(|e| e.local_port == 53 && e.pid == 0).unwrap();
-        assert_eq!(dns.state, "LISTEN");
+        assert_eq!(dns.state, "LISTENING");
 
         // [::] 要能正确拆出地址与端口
         let v6 = entries.iter().find(|e| e.local_port == 8000).unwrap();

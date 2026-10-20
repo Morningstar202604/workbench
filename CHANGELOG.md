@@ -12,15 +12,21 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   servers, AI sessions and cost, then act (create tasks, rescan costs, open a
   project directory, terminate a process). Every tool call is shown with its
   raw arguments so the user can audit it.
-  - Mutating tools require a **per-call approval** that can only be granted by a
-    real click; the approval gate lives in the backend, not the UI.
+  - Mutating tools require a **per-call approval**. The backend stores the
+    pending call (tool name + arguments) and executes that exact call once
+    approved, so what the user approves is what runs. Approvals expire after
+    5 minutes and cannot be replayed. The gate constrains the *model*; it is
+    not a defense against a compromised WebView, which can already call
+    `terminate_process` directly.
   - **Automatic failover**: primary service queued, timed out or reporting "no
     available channel" → the assistant switches to the configured fallbacks.
   - API keys are kept in process memory only — never written to disk, logs or
     config files.
-- **Linux support** — port collection via `ss -tulpn` (with `netstat` fallback),
-  platform-aware protected-process lists, case-sensitive path handling on
-  POSIX, and `deb` / `AppImage` packaging targets.
+- **Linux support** — port collection via `ss -tulpn` (with `netstat`
+  fallback), unified listen-state vocabulary across both dialects,
+  platform-aware protected-process lists, case-sensitive path handling and
+  POSIX absolute paths on POSIX, plus `deb` / `AppImage` packaging targets.
+  A Linux CI job now compiles and tests the backend on ubuntu-latest.
 - **Responsive shell** — grouped, collapsible sidebar; on narrow windows it
   becomes a drawer. Layout adapts across desktop / tablet / phone widths.
 - New **Cost ledger** page (cost moved out of the AI sessions page) and

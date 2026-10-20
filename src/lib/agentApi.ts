@@ -4,6 +4,7 @@ import type {
   ChatMessage,
   ProviderConfig,
   ProviderView,
+  ToolResult,
   ToolSpec,
 } from "../types";
 
@@ -26,9 +27,14 @@ export async function agentListTools(): Promise<ToolSpec[]> {
   return invoke<ToolSpec[]>("agent_list_tools");
 }
 
-/** 用户批准一次待审批的工具调用（一次性通行证）。 */
-export async function agentApproveTool(callId: string): Promise<void> {
-  await invoke("agent_approve_tool", { callId });
+/**
+ * 批准并执行一次待审批的调用。
+ *
+ * 后端执行的是**已登记的那一条**（工具名 + 参数都在后端），
+ * 而不是让前端再跑一轮模型 —— 重跑会生成新的 call_id，批准就永远对不上。
+ */
+export async function agentApproveTool(callId: string): Promise<ToolResult> {
+  return invoke<ToolResult>("agent_approve_tool", { callId });
 }
 
 export async function agentRejectTool(callId: string): Promise<void> {

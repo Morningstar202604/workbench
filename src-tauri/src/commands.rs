@@ -95,8 +95,7 @@ pub async fn list_dev_servers(
 
         let mut servers = Vec::new();
         for entry in ports.iter().filter(|e| e.protocol == "TCP") {
-            let is_listening = entry.state.eq_ignore_ascii_case("LISTENING");
-            if !is_listening || entry.local_port == 0 {
+            if !ports::is_listening(&entry.state) || entry.local_port == 0 {
                 continue;
             }
             let proc = match pid_index.get(&entry.pid) {
@@ -473,7 +472,12 @@ pub async fn save_data(
     let paths: Vec<String> = data.projects.iter().map(|p| p.path.clone()).collect();
     let accepted = dirs.record_validated_blocking(paths).await?;
     log::debug!("save_data 登记 {accepted} 个项目目录");
-    data::save_to_disk(&app, &data)
+    // 与 Agent 的 create_task 共用一把锁：前端防抖保存是整文件替换，
+    // 不加锁会盖掉另一个线程刚做的读-改-写。
+    let app2 = app.clone();
+    tauri::async_runtime::spawn_blocking(move || data::save_to_disk(&app2, &data))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 // ── 日志读取 ──────────────────────────────────────────────

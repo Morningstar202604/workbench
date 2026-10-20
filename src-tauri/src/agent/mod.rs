@@ -26,8 +26,6 @@ use tools::{Approvals, ToolRisk};
 pub const MAX_STEPS: usize = 8;
 /// 单次对话的墙钟上限。
 pub const MAX_TOTAL_SECONDS: u64 = 120;
-/// 单次 HTTP 请求超时。
-const HTTP_TIMEOUT_SECONDS: u64 = 45;
 
 /// 运行时状态：当前 provider 配置（含密钥，仅内存）+ 审批登记。
 #[derive(Default)]
@@ -107,15 +105,6 @@ pub struct AgentRunResult {
     pub completion_tokens: u32,
 }
 
-fn http_client() -> Result<reqwest::blocking::Client, String> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(HTTP_TIMEOUT_SECONDS))
-        // 与 ai.rs 一致：不跟随重定向，避免被本机/远端服务带到别处
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|e| format!("HTTP 客户端创建失败: {e}"))
-}
-
 /// 依次尝试候选提供商。
 ///
 /// 换家的判据（`classify_failure`）：超时、5xx、429、网关排队、无可用渠道 →
@@ -123,15 +112,19 @@ fn http_client() -> Result<reqwest::blocking::Client, String> {
 /// 的配额浪费在一串注定失败的请求上。
 fn post_chat_with_failover(
     cfg: &ProviderConfig,
+    budget_secs: u64,
     build: impl Fn(&str) -> serde_json::Value,
 ) -> Result<(ChatReply, String), String> {
     let all = llm::candidate_order(cfg);
     let mut last_err = String::new();
     let mut tried = Vec::new();
+    let n = all.len().max(1) as u64;
+    // 每个候选用「剩余预算 / 候选数」，保证 N 个备用不会把总时长拖成 N×45s
+    let per_candidate = (budget_secs / n).max(1);
     for (i, (base_url, model, api_key)) in all.iter().enumerate() {
         tried.push(format!("{}({})", model, if i == 0 { "primary" } else { "fallback" }));
         let body = build(model);
-        match post_chat(base_url, api_key, &body) {
+        match post_chat(base_url, api_key, &body, per_candidate) {
             Ok(reply) => {
                 if i > 0 {
                     log::warn!("主模型不可用，已切换到备用 {model}");
@@ -139,10 +132,14 @@ fn post_chat_with_failover(
                 return Ok((reply, model.clone()));
             }
             Err(e) => {
-                log::warn!("模型 {model} 请求失败: {e}");
-                last_err = e.clone();
-                if llm::classify_failure(&e) == llm::FailureKind::Permanent {
-                    return Err(format!("{e}（已尝试: {}）", tried.join(", ")));
+                log::warn!("模型 {model} 请求失败: {}", e.message);
+                last_err = e.message.clone();
+                if e.kind == llm::FailureKind::Permanent {
+                    return Err(format!(
+                        "{}（已尝试: {}）",
+                        e.message,
+                        tried.join(", ")
+                    ));
                 }
             }
         }
@@ -153,30 +150,68 @@ fn post_chat_with_failover(
     ))
 }
 
-fn post_chat(base_url: &str, api_key: &str, body: &serde_json::Value) -> Result<ChatReply, String> {
+/// 一次请求的失败，带上是哪种失败 —— 让上层决定「换家」还是「直接放弃」。
+struct ChatError {
+    message: String,
+    kind: llm::FailureKind,
+}
+
+fn post_chat(
+    base_url: &str,
+    api_key: &str,
+    body: &serde_json::Value,
+    timeout_secs: u64,
+) -> Result<ChatReply, ChatError> {
     let url = endpoint(base_url);
     if url.is_empty() {
-        return Err("尚未配置模型服务地址".to_string());
+        return Err(ChatError {
+            message: "尚未配置模型服务地址".to_string(),
+            kind: llm::FailureKind::Permanent,
+        });
     }
-    let resp = http_client()?
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(timeout_secs.max(1)))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|m| ChatError {
+            message: format!("HTTP 客户端创建失败: {m}"),
+            kind: llm::FailureKind::Permanent,
+        })?;
+    let resp = client
         .post(&url)
         .header("Authorization", format!("Bearer {api_key}"))
         .header("Content-Type", "application/json")
         .json(body)
         .send()
-        .map_err(|e| format!("请求模型服务失败: {e}"))?;
+        .map_err(|e| {
+            // 用 reqwest 的结构化判据，而不是匹配错误文本：
+            // 真实超时的 Display 只有 "error sending request for url (...)"。
+            ChatError {
+                kind: llm::classify_transport(e.is_timeout(), e.is_connect(), &e.to_string()),
+                message: format!("请求模型服务失败: {e}"),
+            }
+        })?;
 
     let status = resp.status();
-    let text = resp.text().map_err(|e| format!("读取响应失败: {e}"))?;
-    let value: serde_json::Value = serde_json::from_str(&text)
-        .map_err(|_| format!("响应不是 JSON（HTTP {status}）: {}", truncate(&text, 300)))?;
+    let code = status.as_u16();
+    let text = resp.text().unwrap_or_default();
+    let value: serde_json::Value = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
     if !status.is_success() {
-        return Err(match parse_reply(&value) {
+        let detail = match parse_reply(&value) {
             Err(msg) => msg,
-            Ok(_) => format!("HTTP {status}: {}", truncate(&text, 300)),
+            Ok(_) => format!("HTTP {code}: {}", truncate(&text, 300)),
+        };
+        return Err(ChatError {
+            kind: llm::classify_status(code),
+            message: detail,
         });
     }
-    parse_reply(&value)
+    parse_reply(&value).map_err(|e| ChatError {
+        // 拿到 200 但结构不对：多半是该模型不支持 function calling 或网关串了，
+        // 换一家通常能解决
+        kind: llm::FailureKind::Transient,
+        message: e,
+    })
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -238,15 +273,22 @@ pub fn run(app: &AppHandle, state: &AgentState, mut messages: Vec<ChatMessage>) 
         finish!("busy", "已有一个对话在进行，请等它结束。".to_string());
     };
 
-    // 系统提示放在最前，避免前端伪造一条 system 消息覆盖规则
-    if !matches!(messages.first(), Some(ChatMessage::System { .. })) {
-        messages.insert(
-            0,
-            ChatMessage::System {
-                content: system_prompt(),
-            },
-        );
+    // 无条件把系统提示放在最前。客户端传来的 System 消息一律降级为 User：
+    // 否则前端只要在首条塞一个 System 就能整体接管提示词，
+    // 「后端强制系统提示」这句防御性声明就成了空话。
+    for msg in messages.iter_mut() {
+        if let ChatMessage::System { content } = msg {
+            *msg = ChatMessage::User {
+                content: content.clone(),
+            };
+        }
     }
+    messages.insert(
+        0,
+        ChatMessage::System {
+            content: system_prompt(),
+        },
+    );
 
     let specs = tools::tool_specs();
     let ctx = executor::ToolContext {
@@ -264,7 +306,16 @@ pub fn run(app: &AppHandle, state: &AgentState, mut messages: Vec<ChatMessage>) 
         }
 
         let step_started = Instant::now();
-        let reply = match post_chat_with_failover(&cfg, |model| {
+        // 剩余预算：让 120s 墙钟上限真正生效（否则每轮都能各花 45s×N）
+        let remaining = MAX_TOTAL_SECONDS.saturating_sub(started.elapsed().as_secs());
+        if remaining == 0 {
+            let summary = summarize(&steps);
+            finish!(
+                "timeout",
+                format!("已超时（{} 秒）中止。到目前为：{}", MAX_TOTAL_SECONDS, summary)
+            );
+        }
+        let reply = match post_chat_with_failover(&cfg, remaining, |model| {
             // 每个备选用自己的模型名重建请求体（body 里的 model 字段必须与之一致）
             let mut candidate = cfg.clone();
             candidate.model = model.to_string();
@@ -323,8 +374,14 @@ pub fn run(app: &AppHandle, state: &AgentState, mut messages: Vec<ChatMessage>) 
                 .map(|s| s.risk)
                 .unwrap_or(ToolRisk::Read);
 
-            if awaiting_approval || (result.needs_approval && risk != ToolRisk::Read) {
+            if result.needs_approval && risk != ToolRisk::Read {
                 awaiting_approval = true;
+                // 关键：把「要执行什么」存进后端，审批后直接执行这一条。
+                // 否则前端只能再跑一轮模型，而模型会生成新的 call_id，
+                // 批准就永远对不上（这正是原实现的死结）。
+                state
+                    .approvals
+                    .register_pending(&tc.id, &tc.function.name, &tc.function.arguments);
             }
 
             steps.push(AgentStep {
@@ -470,10 +527,27 @@ use tauri::{Manager, State};
 
 /// 设置（或更新）模型服务。密钥只进内存，不落盘。
 #[tauri::command]
-pub fn agent_set_provider(state: State<'_, AgentState>, config: ProviderConfig) -> Result<(), String> {
+pub fn agent_set_provider(
+    state: State<'_, AgentState>,
+    mut config: ProviderConfig,
+) -> Result<(), String> {
     llm::validate_base_url(&config.base_url)?;
     if config.model.trim().is_empty() {
         return Err("模型名不能为空".to_string());
+    }
+    // 空密钥表示「保留现有密钥」：设置页不回显密钥，用户只改地址/模型时
+    // 提交的空串不能把已配置的密钥抹掉。
+    let existing = state.provider();
+    if config.api_key.trim().is_empty() {
+        config.api_key = existing.api_key;
+    }
+    // 备用服务同理：某条忘记重填密钥时沿用同 base_url 的旧密钥
+    for fb in config.fallbacks.iter_mut() {
+        if fb.api_key.trim().is_empty() {
+            if let Some(prev) = existing.fallbacks.iter().find(|p| p.base_url == fb.base_url) {
+                fb.api_key = prev.api_key.clone();
+            }
+        }
     }
     state.set_provider(config);
     Ok(())
@@ -488,6 +562,15 @@ pub struct ProviderView {
     pub max_tokens: u32,
     /// 是否已配置密钥（不回传密钥本身）
     pub has_key: bool,
+    /// 备用服务（只回传地址与模型名，密钥用 has_key 表示）
+    pub fallbacks: Vec<FallbackView>,
+}
+
+#[derive(serde::Serialize, ts_rs::TS)]
+pub struct FallbackView {
+    pub base_url: String,
+    pub model: String,
+    pub has_key: bool,
 }
 
 #[tauri::command]
@@ -499,6 +582,15 @@ pub fn agent_get_provider(state: State<'_, AgentState>) -> ProviderView {
         model: cfg.model,
         temperature: cfg.temperature,
         max_tokens: cfg.max_tokens,
+        fallbacks: cfg
+            .fallbacks
+            .into_iter()
+            .map(|f| FallbackView {
+                base_url: f.base_url,
+                model: f.model,
+                has_key: !f.api_key.is_empty(),
+            })
+            .collect(),
     }
 }
 
@@ -508,10 +600,32 @@ pub fn agent_list_tools() -> Vec<tools::ToolSpec> {
     tools::tool_specs()
 }
 
-/// 批准一次待审批的工具调用。通行证一次性，执行后即失效。
-#[tauri::command]
-pub fn agent_approve_tool(state: State<'_, AgentState>, call_id: String) {
-    state.approvals.grant(&call_id);
+/// 批准并**执行**一次待审批的调用。
+///
+/// 为什么由后端直接执行而不是让前端再跑一轮模型：
+/// 重新调用模型会生成新的 call_id，用户批准的那次调用永远对不上；
+/// 而且「执行用户看到的那个操作」比「让模型重述一遍」更可审计。
+#[tauri::command(async)]
+pub async fn agent_approve_tool(
+    app: AppHandle,
+    call_id: String,
+) -> Result<tools::ToolResult, String> {
+    let app2 = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let st = app2.state::<AgentState>();
+        let Some(pending) = st.approvals.take_pending(&call_id) else {
+            return Err("该调用已失效或已被处理".to_string());
+        };
+        // 发放通行证后立即执行这一条已登记的调用
+        st.approvals.grant(&pending.call_id);
+        let ctx = executor::ToolContext {
+            app: &app2,
+            approvals: &st.approvals,
+        };
+        Ok(ctx.execute(&pending.call_id, &pending.tool, &pending.arguments))
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 拒绝一次待审批的工具调用。

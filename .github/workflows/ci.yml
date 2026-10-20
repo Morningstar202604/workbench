@@ -30,8 +30,38 @@ jobs:
       - name: Build
         run: npm run build
 
+  # Linux 后端：平台差异（端口采集、进程保护、路径归一）必须在这里被真正跑到。
+  # 之前只有 Windows runner，导致「Linux 白名单恒为空」「LISTEN/LISTENING 不一致」
+  # 这类问题无法被发现。
+  backend-linux:
+    name: Backend (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev             patchelf libssl-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Tests
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
   backend:
-    name: Backend (test / clippy / IPC contract)
+    name: Backend (Windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

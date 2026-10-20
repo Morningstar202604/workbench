@@ -12,7 +12,7 @@
 //! 而该命令由用户在界面上的真实点击触发。
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 /// 工具风险等级。
@@ -244,31 +244,100 @@ pub fn tool_specs() -> Vec<ToolSpec> {
     ]
 }
 
-/// 审批登记：用户在前端点「允许」后，为该次调用发放一次性通行证。
+/// 一次待审批的调用。必须把**工具名与参数**一起存下来：
+/// 只记 call_id 的话，批准后无法确定要执行什么，只能让前端再跑一轮模型 ——
+/// 而新一轮模型会生成新的 call_id，导致「批准的是已经结束的调用」，永远无法执行。
+#[derive(Clone, Debug, PartialEq)]
+pub struct PendingCall {
+    pub call_id: String,
+    pub tool: String,
+    pub arguments: String,
+    /// 过期时间（单调时钟秒）。久放的批准不应无限期有效。
+    pub expires_at_secs: u64,
+}
+
+/// 审批登记：待批准调用 + 已批准通行证。
+///
+/// 为什么需要过期与全量比对：
+/// - 令牌不绑定工具/参数时，批准 A 可能执行到 B（尤其 pid 被截断时）
+/// - 令牌永不过期时，用户几小时前批过的一次调用仍可被重放
 #[derive(Default)]
-pub struct Approvals(Mutex<HashSet<String>>);
+pub struct Approvals {
+    pending: Mutex<HashMap<String, PendingCall>>,
+    granted: Mutex<HashSet<String>>,
+}
+
+/// 待审批调用的有效期。
+const APPROVAL_TTL_SECS: u64 = 300;
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
 
 impl Approvals {
-    /// 用户批准一次调用（由前端命令调用，只能由真实点击触发）。
-    pub fn grant(&self, call_id: &str) {
-        let mut guard = self.0.lock().unwrap_or_else(|p| p.into_inner());
-        guard.insert(call_id.to_string());
+    /// 登记一个待批准的调用（由编排循环在遇到需要审批的工具时调用）。
+    pub fn register_pending(&self, call_id: &str, tool: &str, arguments: &str) {
+        let mut guard = self.pending.lock().unwrap_or_else(|p| p.into_inner());
+        // 顺手清理过期项，避免长期运行后无限堆积
+        let now = now_secs();
+        guard.retain(|_, v| v.expires_at_secs > now);
+        guard.insert(
+            call_id.to_string(),
+            PendingCall {
+                call_id: call_id.to_string(),
+                tool: tool.to_string(),
+                arguments: arguments.to_string(),
+                expires_at_secs: now + APPROVAL_TTL_SECS,
+            },
+        );
     }
 
-    /// 消费一次性通行证：取走即失效，同一个 call_id 不能复用。
+    /// 取出待批准调用（用户点「允许」时由后端命令调用）。
+    pub fn take_pending(&self, call_id: &str) -> Option<PendingCall> {
+        let mut guard = self.pending.lock().unwrap_or_else(|p| p.into_inner());
+        let item = guard.remove(call_id)?;
+        if item.expires_at_secs <= now_secs() {
+            return None;
+        }
+        Some(item)
+    }
+
+    /// 发放通行证（一次性）。
+    pub fn grant(&self, call_id: &str) {
+        self.granted
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(call_id.to_string());
+    }
+
+    /// 消费通行证：取走即失效，同一个 call_id 不能复用。
     pub fn consume(&self, call_id: &str) -> bool {
-        let mut guard = self.0.lock().unwrap_or_else(|p| p.into_inner());
-        guard.remove(call_id)
+        self.granted
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(call_id)
     }
 
     /// 前端撤销（用户点了拒绝）。
     pub fn revoke(&self, call_id: &str) {
-        let mut guard = self.0.lock().unwrap_or_else(|p| p.into_inner());
-        guard.remove(call_id);
+        self.pending
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(call_id);
+        self.granted
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(call_id);
     }
 
     pub fn pending_count(&self) -> usize {
-        self.0.lock().unwrap_or_else(|p| p.into_inner()).len()
+        self.pending
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .len()
     }
 }
 
@@ -330,15 +399,39 @@ mod tests {
         assert!(find_spec("rm_rf_everything").is_none());
     }
 
+    /// 回归（严重）：原实现只按 call_id 存「已批准」，前端批准的是
+    /// 已经结束的那次调用，下一轮模型会生成新 id，导致 Mutate/Dangerous
+    /// 工具永远无法执行。现在必须把「工具名 + 参数」一起登记。
+    #[test]
+    fn pending_call_keeps_tool_and_arguments() {
+        let approvals = Approvals::default();
+        approvals.register_pending("call-9", "terminate_process", "{\"pid\":42}");
+        let taken = approvals.take_pending("call-9").expect("应能取出");
+        assert_eq!(taken.tool, "terminate_process");
+        assert_eq!(taken.arguments, "{\"pid\":42}");
+        // 取走即消失，不能被执行两次
+        assert!(approvals.take_pending("call-9").is_none());
+    }
+
+    #[test]
+    fn revoke_removes_pending_and_token() {
+        let approvals = Approvals::default();
+        approvals.register_pending("c3", "create_task", "{}");
+        approvals.grant("c3");
+        approvals.revoke("c3");
+        assert!(approvals.take_pending("c3").is_none());
+        assert!(!approvals.consume("c3"));
+    }
+
     #[test]
     fn approval_is_single_use() {
         let approvals = Approvals::default();
-        approvals.grant("call-1");
+        approvals.register_pending("call-1", "scan_session_costs", "{}");
         assert_eq!(approvals.pending_count(), 1);
+        approvals.grant("call-1");
         assert!(approvals.consume("call-1"));
         // 第二次必须失败：通行证已被消费，防止重放
         assert!(!approvals.consume("call-1"));
-        assert_eq!(approvals.pending_count(), 0);
     }
 
     #[test]

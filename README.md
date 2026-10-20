@@ -13,7 +13,7 @@
 
 A local-first, privacy-preserving desktop workbench for your machine: processes,
 ports, dev servers, and AI coding-session token costs — all visible in one place.
-All data stays on your device. Dark & light themes. UI available in **English,
+Data stays on your device by default. Dark & light themes. UI available in **English,
 简体中文 and 日本語**.
 
 **Platforms:** Windows 10/11 (NSIS) and Linux (deb / AppImage). Port collection
@@ -147,8 +147,8 @@ data can never leak into the repo.
 
 | Item | Requirement |
 |------|-------------|
-| OS | Windows 10 / 11 (x64) — the only verified platform |
-| Runtime | WebView2 Runtime (preinstalled on Windows 11; recent Windows 10 usually has it) |
+| OS | Windows 10 / 11 (x64); Linux (deb / AppImage) |
+| Runtime | Windows needs WebView2 (preinstalled on Windows 11); Linux needs WebKitGTK 4.1 |
 | Disk | ~35 MB installed; portable single file ~15 MB |
 | Privileges | No admin required; killing a process needs same-or-higher privileges |
 | Network | None required. The only optional probe is the local opencode service when you open the AI sessions page |
@@ -337,8 +337,13 @@ Done and planned. Vote or propose new ideas in the Issues.
 
 ## Known limitations
 
-- Windows-only verified: port collection shells out to `cmd /c netstat -ano`;
-  the POSIX branch in `ports.rs` is currently never exercised
+- Port collection runs `netstat -ano` on Windows and `ss -tulpn` on Linux
+  (falling back to `netstat`). Linux paths are covered by CI on ubuntu-latest,
+  but the packaged deb/AppImage have not yet been smoke-tested on a real
+  desktop distribution
+- The AI assistant sends tool results (process command lines, project paths,
+  task titles) to the model service **you configure**. If command lines may
+  contain secrets, treat that provider as part of your trust boundary
 - Frontend interaction paths rely on manual verification: vitest covers util /
   store / shared components / error boundary, but the 8 pages have no E2E tests
 - The cost ledger is a single `cost_data.json` (writes are serialized); very

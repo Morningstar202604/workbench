@@ -8,9 +8,19 @@
 //! 4. **输出截断**：防止一次全量进程列表把模型上下文撑爆。
 
 use serde_json::Value;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use super::tools::{find_spec, truncate_output, Approvals, ToolResult, ToolRisk};
+
+/// 短随机后缀：同秒内连续建多个任务也不会撞 id。
+fn uuid_like() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    format!("{nanos:09x}")
+}
 
 /// 工具执行上下文。
 pub struct ToolContext<'a> {
@@ -125,7 +135,9 @@ impl ToolContext<'_> {
             .unwrap_or(true);
         let mut ports = crate::ports::collect()?;
         if listening_only {
-            ports.retain(|p| p.state.eq_ignore_ascii_case("LISTEN") || p.protocol == "UDP");
+            // 判据集中在 ports::is_listening：直接写 "LISTEN" 会在 Windows 上
+            // 把全部 TCP 监听端口丢掉（netstat 给的是 LISTENING）
+            ports.retain(|p| crate::ports::is_listening(&p.state));
         }
         ports.sort_by_key(|p| p.local_port);
         serde_json::to_string_pretty(&ports).map_err(|e| e.to_string())
@@ -137,9 +149,10 @@ impl ToolContext<'_> {
         let index: std::collections::HashMap<u32, _> =
             procs.into_iter().map(|p| (p.pid, p)).collect();
         let mut out = Vec::new();
-        for entry in ports.iter().filter(|e| {
-            e.protocol == "TCP" && e.state.eq_ignore_ascii_case("LISTENING")
-        }) {
+        for entry in ports
+            .iter()
+            .filter(|e| e.protocol == "TCP" && crate::ports::is_listening(&e.state))
+        {
             let Some(proc) = index.get(&entry.pid) else {
                 continue;
             };
@@ -236,21 +249,27 @@ impl ToolContext<'_> {
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .ok_or_else(|| "title 不能为空".to_string())?;
-        let mut data = crate::data::load_from_disk(self.app)?;
+        // 服务端校验枚举：schema 只是给模型看的提示，模型完全可以传别值
+        let status = args
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("todo");
+        if !["todo", "doing", "done"].contains(&status) {
+            return Err(format!("status 非法: {status}"));
+        }
+        let priority = args
+            .get("priority")
+            .and_then(|v| v.as_str())
+            .unwrap_or("normal");
+        if !["low", "normal", "high"].contains(&priority) {
+            return Err(format!("priority 非法: {priority}"));
+        }
         let now = chrono::Utc::now().timestamp() as u64;
         let task = crate::data::Task {
-            id: format!("t-{now}-{}", data.tasks.len()),
+            id: format!("t-{now}-{}", uuid_like()),
             title: title.to_string(),
-            status: args
-                .get("status")
-                .and_then(|v| v.as_str())
-                .unwrap_or("todo")
-                .to_string(),
-            priority: args
-                .get("priority")
-                .and_then(|v| v.as_str())
-                .unwrap_or("normal")
-                .to_string(),
+            status: status.to_string(),
+            priority: priority.to_string(),
             due: args.get("due").and_then(|v| v.as_str()).map(String::from),
             project_id: args
                 .get("project_id")
@@ -260,9 +279,12 @@ impl ToolContext<'_> {
             created_at: now,
             updated_at: now,
         };
-        data.tasks.insert(0, task.clone());
-        crate::data::save_to_disk(self.app, &data)?;
-        Ok(format!("已创建任务「{}」（id={}）", task.title, task.id))
+        // 走 data::mutate：与前端保存共用一把锁，避免丢更新
+        let created = crate::data::mutate(self.app, |data| {
+            data.tasks.insert(0, task.clone());
+            (task.clone(), true)
+        })?;
+        Ok(format!("已创建任务「{}」（id={}）", created.title, created.id))
     }
 
     fn scan_costs(&self) -> Result<String, String> {
@@ -303,16 +325,30 @@ impl ToolContext<'_> {
         if project.path.trim().is_empty() {
             return Err("该项目没有绑定目录".to_string());
         }
+        // 与 open_known_path 同一套校验：project.path 是用户自由输入，
+        // 而 open_path 交给系统默认处理器 —— 指向 .exe/.lnk/.url 等于执行它。
+        // 因此必须：在白名单内 + 确实是目录。
+        let dirs = self.app.state::<crate::ipc_guard::KnownDirs>();
+        if !dirs.contains(&project.path) {
+            return Err("该目录不在允许列表内（未经过展示或校验）".to_string());
+        }
+        if !std::path::Path::new(&project.path).is_dir() {
+            return Err("目标不是目录".to_string());
+        }
         tauri_plugin_opener::open_path(&project.path, None::<&str>)
             .map_err(|e| format!("打开失败: {e}"))?;
         Ok(format!("已用系统文件管理器打开 {}", project.path))
     }
 
     fn terminate_process(&self, args: &Value) -> Result<String, String> {
-        let pid = args
+        let raw_pid = args
             .get("pid")
             .and_then(|v| v.as_u64())
-            .ok_or_else(|| "缺少 pid".to_string())? as u32;
+            .ok_or_else(|| "缺少 pid".to_string())?;
+        // 不能用 `as u32` 截断：4294977297 会变成 10001，
+        // 用户批准的是 A，实际被杀的是 B。
+        let pid = u32::try_from(raw_pid)
+            .map_err(|_| format!("pid {raw_pid} 超出有效范围"))?;
         let reason = args.get("reason").and_then(|v| v.as_str()).unwrap_or("");
         log::warn!("Agent 请求终止 PID={pid}，理由: {reason}");
         crate::procs::terminate_process(pid)?;

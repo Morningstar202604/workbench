@@ -26,10 +26,18 @@ pub fn normalize_path(raw: &str) -> String {
     let (prefix, rest) = if let Some(stripped) = unified.strip_prefix("//") {
         ("//", stripped)
     } else if unified.starts_with('/') {
-        // 单斜杠开头（/foo）在 Windows 上表示「当前盘根相对」，与相对路径
-        // foo 语义不同；归一后若丢掉前导斜杠，两者会撞成同一个键。
-        // 这类路径不是绝对路径，直接拒绝。
-        return String::new();
+        // 单斜杠开头在 Windows 上是「当前盘根相对」（与相对路径 foo 不同，
+        // 归一后若丢掉前导斜杠会撞键），因此拒绝；但在 POSIX 上 `/home/me`
+        // 就是标准绝对路径 —— 若也拒绝，Linux 上白名单会恒为空，
+        // 「打开目录 / git 分支」全部失效。所以这条只对 Windows 生效。
+        #[cfg(windows)]
+        {
+            return String::new();
+        }
+        #[cfg(not(windows))]
+        {
+            ("/", &unified[1..])
+        }
     } else {
         ("", unified.as_str())
     };
@@ -181,6 +189,38 @@ mod tests {
         assert!(dirs.contains("C:/apps"));
     }
 
+    /// 回归（严重）：POSIX 上每个绝对路径都以单斜杠开头。
+    /// 若把 Windows 的「单斜杠=盘根相对」拒绝规则套到 Linux，
+    /// 白名单会恒为空，「打开目录 / git 分支」全部失效。
+    #[cfg(not(windows))]
+    #[test]
+    fn posix_absolute_paths_are_accepted() {
+        assert_eq!(normalize_path("/home/me/proj"), "/home/me/proj");
+        assert_eq!(normalize_path("/home/me/proj/"), "/home/me/proj");
+        assert_eq!(normalize_path("/home/me/../me/proj"), "/home/me/proj");
+
+        let dirs = KnownDirs::default();
+        dirs.record(["/home/me/proj"]);
+        assert!(dirs.contains("/home/me/proj"));
+        assert!(dirs.contains("/home/me/./proj"));
+        assert!(!dirs.contains("/home/me/proj2"), "前缀不得命中");
+    }
+
+    /// POSIX 是大小写敏感：/home/Me 与 /home/me 是两个目录，不能折叠。
+    #[cfg(not(windows))]
+    #[test]
+    fn posix_paths_stay_case_sensitive() {
+        assert_ne!(normalize_path("/home/Me"), normalize_path("/home/me"));
+    }
+
+    /// Windows 上单斜杠开头的 `/foo` 是「当前盘根相对」，必须拒绝。
+    #[cfg(windows)]
+    #[test]
+    fn windows_rejects_root_relative_single_slash() {
+        assert_eq!(normalize_path("/foo"), "");
+        assert_eq!(normalize_path("/Users/me"), "");
+    }
+
     #[test]
     fn normalize_collapses_dot_segments_and_escapes_to_empty() {
         // 「..」先被词法吃掉，才谈「是否等于已登记目录」
@@ -194,12 +234,14 @@ mod tests {
         // 单独盘符不是绝对路径（会随 CWD 漂移）
         assert_eq!(normalize_path("C:"), "");
         assert_eq!(normalize_path("c:/"), "");
-        // 单斜杠开头是「当前盘根相对」，不能与相对路径折叠
-        assert_eq!(normalize_path("/foo"), "");
-        assert_eq!(normalize_path("/Users/me"), "");
+        #[cfg(windows)]
+        {
+            // 单斜杠开头是「当前盘根相对」，不能与相对路径折叠
+            assert_eq!(normalize_path("/foo"), "");
+            assert_eq!(normalize_path("/Users/me"), "");
+            assert_ne!(normalize_path("/foo"), normalize_path("foo"));
+        }
         assert_eq!(normalize_path("/"), "");
-        // 它们与相对路径必须区分开
-        assert_ne!(normalize_path("/foo"), normalize_path("foo"));
     }
 
     #[test]
