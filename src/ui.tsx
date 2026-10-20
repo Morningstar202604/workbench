@@ -349,9 +349,14 @@ export function StatCard({
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accentsoft">
           <Icon size={15} className={color} />
         </span>
-        <span className="text-xs text-dim">{label}</span>
+        <span className="min-w-0 text-xs text-dim">{label}</span>
       </div>
-      <div className={`mt-2 text-3xl font-bold tabular-nums ${color}`}>
+      {/* 数值字号随屏幕收缩：390px 下两列卡片只有 ~160px 宽，
+          text-3xl 的 "17.66M" 会溢出卡片边界。 */}
+      <div
+        className={`mt-2 truncate text-2xl font-bold tabular-nums sm:text-3xl ${color}`}
+        title={String(numeric ? shown : value)}
+      >
         {numeric ? shown : value}
       </div>
       {hint && (

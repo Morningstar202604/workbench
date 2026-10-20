@@ -178,7 +178,9 @@ export function CostDashboard() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      {/* 窄屏把按钮换到单独一行：并排时按钮吃掉宽度，
+          四张统计卡被压到 ~160px，"17.66M" 只能拆行。 */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             icon={DollarSign}
@@ -240,7 +242,7 @@ export function CostDashboard() {
             }
           />
         </div>
-        <div className="ml-3 flex shrink-0 flex-col gap-2">
+        <div className="flex shrink-0 gap-2 lg:ml-3 lg:flex-col">
           <Btn onClick={scanCosts} disabled={costLoading} title={t("ai.scanCostsTitle")}>
             {costLoading ? <Spinner /> : <RefreshCw size={14} />}
             {costLoading ? t("ai.scanning") : t("ai.scanCosts")}

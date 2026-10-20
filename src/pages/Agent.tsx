@@ -375,6 +375,7 @@ export default function Agent() {
           <textarea
             className={`${inputCls} max-h-32 min-h-[38px] resize-y`}
             rows={1}
+            title={t("agent.inputHint")}
             placeholder={t("agent.inputPlaceholder")}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -408,6 +409,13 @@ export default function Agent() {
           {t("agent.capabilities", { count: tools.length })}
         </summary>
         <div className="mt-3 space-y-3">
+          {/* 浏览器预览下没有 IPC，工具清单恒为空：要说明原因，
+              否则「0 个工具」看起来像功能坏了。 */}
+          {tools.length === 0 && (
+            <p className="text-[11px] text-dim">
+              {isTauri() ? t("agent.toolsLoading") : t("agent.toolsDesktopOnly")}
+            </p>
+          )}
           {grouped.map(([risk, list]) => (
             <div key={risk}>
               <div className="mb-1 text-[11px] uppercase tracking-wide text-dim">
