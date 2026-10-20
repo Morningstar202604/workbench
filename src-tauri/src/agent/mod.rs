@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use llm::{build_body, endpoint, parse_reply, ChatMessage, ChatReply, ProviderConfig, ToolCallWire};
+use llm::{build_body, endpoint, parse_reply, ChatMessage, ChatReply, ProviderConfig};
 use tools::{Approvals, ToolRisk};
 
 /// 单次对话的最大工具调用轮数。
@@ -34,6 +34,9 @@ pub struct AgentState {
     pub approvals: Approvals,
     /// 运行中标记：同一时刻只允许一个对话，避免两次循环互相污染上下文
     running: Mutex<bool>,
+    /// 取消标志：前端点「停止」时置位，循环在每个检查点退出。
+    /// 只用 AtomicBool 而不是 channel：检查点足够密（每轮 + 每次工具前）。
+    cancelled: std::sync::atomic::AtomicBool,
 }
 
 impl AgentState {
@@ -55,7 +58,19 @@ impl AgentState {
             return None;
         }
         *guard = true;
+        self.cancelled
+            .store(false, std::sync::atomic::Ordering::SeqCst);
         Some(RunGuard { state: self })
+    }
+
+    /// 请求取消当前对话。即使没有在跑，置位也无害（下次 begin_run 会清掉）。
+    pub fn cancel(&self) {
+        self.cancelled
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancelled.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -89,7 +104,9 @@ pub struct AgentStep {
     pub content: String,
     pub ok: bool,
     pub needs_approval: bool,
-    /// 该步骤耗时（毫秒）
+    /// 该步骤耗时（毫秒）。u64 会被 ts-rs 生成为 bigint，
+    /// 而 IPC 实际传的是 number —— 必须显式标注，否则前端类型在说谎。
+    #[ts(type = "number")]
     pub elapsed_ms: u64,
 }
 
@@ -100,6 +117,7 @@ pub struct AgentRunResult {
     /// 最终给用户的回答（可能是模型总结，也可能是中止说明）
     pub answer: String,
     pub stopped_reason: String,
+    #[ts(type = "number")]
     pub elapsed_ms: u64,
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
@@ -297,6 +315,10 @@ pub fn run(app: &AppHandle, state: &AgentState, mut messages: Vec<ChatMessage>) 
     };
 
     for step_index in 0..MAX_STEPS {
+        if state.is_cancelled() {
+            let summary = summarize(&steps);
+            finish!("cancelled", format!("已被用户停止。到目前为：{summary}"));
+        }
         if started.elapsed() > Duration::from_secs(MAX_TOTAL_SECONDS) {
             let summary = summarize(&steps);
             finish!(
@@ -368,6 +390,10 @@ pub fn run(app: &AppHandle, state: &AgentState, mut messages: Vec<ChatMessage>) 
 
         let mut awaiting_approval = false;
         for tc in &reply.tool_calls {
+            if state.is_cancelled() {
+                let summary = summarize(&steps);
+                finish!("cancelled", format!("已被用户停止。到目前为：{summary}"));
+            }
             let tool_started = Instant::now();
             let result = ctx.execute(&tc.id, &tc.function.name, &tc.function.arguments);
             let risk = tools::find_spec(&tc.function.name)
@@ -441,11 +467,6 @@ fn summarize(steps: &[AgentStep]) -> String {
     } else {
         format!("已成功调用 {}", tools.join("、"))
     }
-}
-
-/// 供前端在审批后重放「被批准的那一次调用」。
-pub fn approved_call_names(calls: &[ToolCallWire]) -> Vec<String> {
-    calls.iter().map(|c| c.function.name.clone()).collect()
 }
 
 #[cfg(test)]
@@ -626,6 +647,12 @@ pub async fn agent_approve_tool(
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+/// 请求停止当前对话。循环会在下一个检查点退出。
+#[tauri::command]
+pub fn agent_cancel(state: State<'_, AgentState>) {
+    state.cancel();
 }
 
 /// 拒绝一次待审批的工具调用。

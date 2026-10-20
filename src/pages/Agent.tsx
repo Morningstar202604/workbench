@@ -8,16 +8,18 @@ import {
   Send,
   Settings2,
   ShieldAlert,
+  Square,
   Trash2,
   Wrench,
   X,
 } from "lucide-react";
-import { useStore } from "../lib/store";
+import { useStore, type AgentChatTurn, type AgentPending } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../lib/i18n";
 import { Badge, Btn, Card, Empty, Field, Modal, inputCls } from "../ui";
 import {
   agentApproveTool,
+  agentCancel,
   agentGetProvider,
   agentListTools,
   agentRejectTool,
@@ -37,35 +39,45 @@ import type { AgentStep, ChatMessage, ProviderView, ToolSpec } from "../types";
  * - 密钥只进 Rust 内存，本页不回显、不持久化。
  */
 
-interface ChatTurn {
-  role: "user" | "assistant";
-  text: string;
-  steps?: AgentStep[];
-  stopped?: string;
-}
+/** 与 store 中的 AgentChatTurn 同形，便于直接读写。 */
+type ChatTurn = AgentChatTurn;
 
-interface PendingApproval {
-  callId: string;
-  tool: string;
-  arguments: string;
-}
+type PendingApproval = AgentPending;
 
 export default function Agent() {
   const t = useT();
-  const setToast = useStore(useShallow((s) => s.setToast));
+  const { setToast, turns, setTurns, pending, setPending, clearChat } = useStore(
+    useShallow((s) => ({
+      setToast: s.setToast,
+      turns: s.agentTurns,
+      setTurns: s.setAgentTurns,
+      pending: s.agentPending,
+      setPending: s.setAgentPending,
+      clearChat: s.clearAgentChat,
+    }))
+  );
 
-  const [provider, setProvider] = useState<ProviderView | null>(null);
+  // 给一个空壳而不是 null：浏览器预览模式下 IPC 不存在，provider 永远是 null，
+  // 设置弹窗会渲染成空白；加载完成前同理。
+  const [provider, setProvider] = useState<ProviderView>({
+    base_url: "",
+    model: "",
+    temperature: 0.2,
+    max_tokens: 2048,
+    has_key: false,
+    fallbacks: [],
+  });
   const [apiKey, setApiKey] = useState("");
   const [fallbacks, setFallbacks] = useState<
     { base_url: string; model: string; api_key: string }[]
   >([]);
   const [showSettings, setShowSettings] = useState(false);
   const [tools, setTools] = useState<ToolSpec[]>([]);
-  const [turns, setTurns] = useState<ChatTurn[]>([]);
+
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
-  const [pending, setPending] = useState<PendingApproval[]>([]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 运行计时：让用户看到「还在跑」而不是界面卡死
@@ -79,7 +91,17 @@ export default function Agent() {
   useEffect(() => {
     if (!isTauri()) return;
     void agentGetProvider()
-      .then(setProvider)
+      .then((view) => {
+        setProvider(view);
+        // 已配置的备用服务回填到编辑态（密钥留空表示沿用）
+        setFallbacks(
+          view.fallbacks.map((f) => ({
+            base_url: f.base_url,
+            model: f.model,
+            api_key: "",
+          }))
+        );
+      })
       .catch(() => {});
     void agentListTools()
       .then(setTools)
@@ -90,7 +112,7 @@ export default function Agent() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [turns, busy]);
 
-  const configured = !!provider && provider.base_url.trim() !== "" && provider.has_key;
+  const configured = provider.base_url.trim() !== "" && provider.has_key;
 
   const saveProvider = useCallback(async () => {
     if (!provider) return;
@@ -114,18 +136,48 @@ export default function Agent() {
     }
   }, [provider, apiKey, fallbacks, setToast, t]);
 
-  /** 把对话历史转成协议消息（只保留纯文本轮次，工具轨迹由后端重新产生）。 */
-  const buildMessages = useCallback(
-    (turnsToSend: ChatTurn[]): ChatMessage[] =>
-      turnsToSend
-        .filter((turn) => turn.text.trim() !== "")
-        .map((turn) =>
-          turn.role === "user"
-            ? ({ role: "user", content: turn.text } as ChatMessage)
-            : ({ role: "assistant", content: turn.text, tool_calls: null } as ChatMessage)
-        ),
-    []
-  );
+  /**
+   * 把对话历史转成协议消息。
+   *
+   * 工具轨迹必须一起回传：用户批准一次 Mutate 工具后往往接着说「继续」，
+   * 若只发纯文本，模型对新一轮毫无记忆（不知道刚查过什么、批准了什么），
+   * 就会把同一件事重做一遍。这里按协议顺序重建
+   * `assistant(tool_calls)` → `tool(tool_call_id, content)`。
+   */
+  const buildMessages = useCallback((turnsToSend: ChatTurn[]): ChatMessage[] => {
+    const out: ChatMessage[] = [];
+    for (const turn of turnsToSend) {
+      if (turn.role === "user") {
+        if (turn.text.trim()) out.push({ role: "user", content: turn.text });
+        continue;
+      }
+      const toolSteps = (turn.steps ?? []).filter((s) => s.kind === "tool" && s.call_id);
+      if (toolSteps.length > 0) {
+        out.push({
+          role: "assistant",
+          content: turn.text || null,
+          tool_calls: toolSteps.map((s) => ({
+            id: s.call_id,
+            type: "function",
+            function: { name: s.tool, arguments: s.arguments || "{}" },
+          })),
+        });
+        for (const s of toolSteps) {
+          out.push({
+            role: "tool",
+            tool_call_id: s.call_id,
+            content: s.ok ? s.content : `ERROR: ${s.content}`,
+          });
+        }
+        // 纯工具轮次若没有文字总结，就不再追加一条空 assistant
+        if (!turn.text.trim()) continue;
+      }
+      if (turn.text.trim()) {
+        out.push({ role: "assistant", content: turn.text, tool_calls: null });
+      }
+    }
+    return out;
+  }, []);
 
   const send = useCallback(async () => {
     const text = input.trim();
@@ -167,7 +219,7 @@ export default function Agent() {
     } finally {
       setBusy(false);
     }
-  }, [input, busy, configured, turns, buildMessages]);
+  }, [input, busy, configured, turns, buildMessages, setTurns, setPending]);
 
   const approve = useCallback(
     async (approval: PendingApproval) => {
@@ -184,7 +236,7 @@ export default function Agent() {
             content: result.ok ? result.content : result.error,
             ok: result.ok,
             needs_approval: false,
-            elapsed_ms: 0n,
+            elapsed_ms: 0,
           };
           if (last && last.role === "assistant") {
             return [
@@ -200,7 +252,7 @@ export default function Agent() {
       }
       setPending((prev) => prev.filter((p) => p.callId !== approval.callId));
     },
-    [setToast, t]
+    [setToast, t, setTurns, setPending]
   );
 
   const reject = useCallback(async (approval: PendingApproval) => {
@@ -210,7 +262,7 @@ export default function Agent() {
       /* 拒绝失败不影响 UI */
     }
     setPending((prev) => prev.filter((p) => p.callId !== approval.callId));
-  }, []);
+  }, [setPending]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, ToolSpec[]>();
@@ -229,7 +281,7 @@ export default function Agent() {
         <Bot size={16} className="text-accent" />
         <span className="text-sm font-medium">{t("agent.title")}</span>
         {configured ? (
-          <Badge tone="ok">{provider?.model}</Badge>
+          <Badge tone="ok">{provider.model || t("agent.notConfigured")}</Badge>
         ) : (
           <Badge tone="warn">{t("agent.notConfigured")}</Badge>
         )}
@@ -239,7 +291,19 @@ export default function Agent() {
             {t("agent.running", { seconds: elapsed })}
           </span>
         )}
-        <Btn className="ml-auto !py-1 !text-xs" onClick={() => setShowSettings(true)}>
+        {turns.length > 0 && (
+          <Btn
+            className="ml-auto !py-1 !text-xs"
+            title={t("agent.clearChat")}
+            onClick={() => clearChat()}
+          >
+            <Trash2 size={12} />
+          </Btn>
+        )}
+        <Btn
+          className={`${turns.length > 0 ? "" : "ml-auto"} !py-1 !text-xs`}
+          onClick={() => setShowSettings(true)}
+        >
           <Settings2 size={12} /> {t("agent.configure")}
         </Btn>
       </div>
@@ -314,13 +378,19 @@ export default function Agent() {
               }
             }}
           />
-          <Btn
-            variant="primary"
-            onClick={() => void send()}
-            disabled={busy || !input.trim()}
-          >
-            <Send size={14} />
-          </Btn>
+          {busy ? (
+            <Btn
+              variant="danger"
+              onClick={() => void agentCancel()}
+              title={t("agent.stop")}
+            >
+              <Square size={14} />
+            </Btn>
+          ) : (
+            <Btn variant="primary" onClick={() => void send()} disabled={!input.trim()}>
+              <Send size={14} />
+            </Btn>
+          )}
         </div>
       </Card>
 
@@ -366,101 +436,97 @@ export default function Agent() {
           </>
         }
       >
-        {provider && (
-          <>
-            <Field label={t("agent.baseUrl")}>
-              <input
-                className={inputCls}
-                value={provider.base_url}
-                placeholder="https://api.example.com/v1"
-                onChange={(e) => setProvider({ ...provider, base_url: e.target.value })}
-              />
-            </Field>
-            <Field label={t("agent.model")}>
-              <input
-                className={inputCls}
-                value={provider.model}
-                placeholder="gpt-4o-mini"
-                onChange={(e) => setProvider({ ...provider, model: e.target.value })}
-              />
-            </Field>
-            <Field label={t("agent.apiKey")}>
-              <input
-                className={inputCls}
-                type="password"
-                value={apiKey}
-                placeholder={provider.has_key ? t("agent.keyKeepHint") : "sk-…"}
-                onChange={(e) => setApiKey(e.target.value)}
-                autoComplete="off"
-              />
-            </Field>
-            <p className="text-[11px] leading-relaxed text-dim">{t("agent.keyNotice")}</p>
+        <>
+          <Field label={t("agent.baseUrl")}>
+            <input
+              className={inputCls}
+              value={provider.base_url}
+              placeholder="https://api.example.com/v1"
+              onChange={(e) => setProvider({ ...provider, base_url: e.target.value })}
+            />
+          </Field>
+          <Field label={t("agent.model")}>
+            <input
+              className={inputCls}
+              value={provider.model}
+              placeholder="gpt-4o-mini"
+              onChange={(e) => setProvider({ ...provider, model: e.target.value })}
+            />
+          </Field>
+          <Field label={t("agent.apiKey")}>
+            <input
+              className={inputCls}
+              type="password"
+              value={apiKey}
+              placeholder={provider.has_key ? t("agent.keyKeepHint") : "sk-…"}
+              onChange={(e) => setApiKey(e.target.value)}
+              autoComplete="off"
+            />
+          </Field>
+          <p className="text-[11px] leading-relaxed text-dim">{t("agent.keyNotice")}</p>
 
-            {/* 备用服务：主服务排队 / 超时 / 无可用渠道时自动切换 */}
-            <div className="mt-3 border-t border-line pt-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-medium text-dim">
-                  {t("agent.fallbacks")}
-                </span>
-                <Btn
-                  className="!px-2 !py-0.5 !text-[11px]"
-                  onClick={() =>
-                    setFallbacks([...fallbacks, { base_url: "", model: "", api_key: "" }])
-                  }
-                >
-                  <Plus size={12} /> {t("agent.addFallback")}
-                </Btn>
-              </div>
-              {fallbacks.length === 0 && (
-                <p className="text-[11px] text-dim">{t("agent.fallbackHint")}</p>
-              )}
-              {fallbacks.map((fb, i) => (
-                <div key={i} className="mb-2 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-                  <input
-                    className={inputCls}
-                    placeholder={t("agent.baseUrl")}
-                    value={fb.base_url}
-                    onChange={(e) => {
-                      const next = [...fallbacks];
-                      next[i] = { ...fb, base_url: e.target.value };
-                      setFallbacks(next);
-                    }}
-                  />
-                  <input
-                    className={inputCls}
-                    placeholder={t("agent.model")}
-                    value={fb.model}
-                    onChange={(e) => {
-                      const next = [...fallbacks];
-                      next[i] = { ...fb, model: e.target.value };
-                      setFallbacks(next);
-                    }}
-                  />
-                  <div className="flex gap-1">
-                    <input
-                      className={inputCls}
-                      type="password"
-                      placeholder={t("agent.apiKey")}
-                      value={fb.api_key}
-                      onChange={(e) => {
-                        const next = [...fallbacks];
-                        next[i] = { ...fb, api_key: e.target.value };
-                        setFallbacks(next);
-                      }}
-                    />
-                    <Btn
-                      variant="danger"
-                      className="!px-2 !py-1"
-                      onClick={() => setFallbacks(fallbacks.filter((_, j) => j !== i))}
-                    >
-                      <Trash2 size={12} />
-                    </Btn>
-                  </div>
-                </div>
-              ))}
+          {/* 备用服务：主服务排队 / 超时 / 无可用渠道时自动切换 */}
+          <div className="mt-3 border-t border-line pt-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-medium text-dim">{t("agent.fallbacks")}</span>
+              <Btn
+                className="!px-2 !py-0.5 !text-[11px]"
+                onClick={() =>
+                  setFallbacks([...fallbacks, { base_url: "", model: "", api_key: "" }])
+                }
+              >
+                <Plus size={12} /> {t("agent.addFallback")}
+              </Btn>
             </div>
-          </>
-        )}
+            {fallbacks.length === 0 && (
+              <p className="text-[11px] text-dim">{t("agent.fallbackHint")}</p>
+            )}
+            {fallbacks.map((fb, i) => (
+              <div key={i} className="mb-2 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                <input
+                  className={inputCls}
+                  placeholder={t("agent.baseUrl")}
+                  value={fb.base_url}
+                  onChange={(e) => {
+                    const next = [...fallbacks];
+                    next[i] = { ...fb, base_url: e.target.value };
+                    setFallbacks(next);
+                  }}
+                />
+                <input
+                  className={inputCls}
+                  placeholder={t("agent.model")}
+                  value={fb.model}
+                  onChange={(e) => {
+                    const next = [...fallbacks];
+                    next[i] = { ...fb, model: e.target.value };
+                    setFallbacks(next);
+                  }}
+                />
+                <div className="flex gap-1">
+                  <input
+                    className={inputCls}
+                    type="password"
+                    placeholder={t("agent.apiKey")}
+                    value={fb.api_key}
+                    onChange={(e) => {
+                      const next = [...fallbacks];
+                      next[i] = { ...fb, api_key: e.target.value };
+                      setFallbacks(next);
+                    }}
+                  />
+                  <Btn
+                    variant="danger"
+                    className="!px-2 !py-1"
+                    onClick={() => setFallbacks(fallbacks.filter((_, j) => j !== i))}
+                  >
+                    <Trash2 size={12} />
+                  </Btn>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       </Modal>
     </div>
   );

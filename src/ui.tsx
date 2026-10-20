@@ -213,7 +213,8 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+      // 手机上 p-6 只留 272px 给内容，太挤；窄屏用更小的外边距
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-6"
       onClick={onClose}
     >
       <div
@@ -222,7 +223,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         onKeyDown={onDialogKeyDown}
-        className={`w-full rounded-xl border border-line bg-panel shadow-2xl ${wide ? "max-w-2xl" : "max-w-md"}`}
+        className={`max-h-[90vh] w-full overflow-y-auto rounded-xl border border-line bg-panel shadow-2xl ${wide ? "max-w-2xl" : "max-w-md"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div

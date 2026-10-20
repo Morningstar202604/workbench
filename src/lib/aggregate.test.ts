@@ -174,6 +174,25 @@ describe("isPieWorthRendering", () => {
     expect(isPieWorthRendering([["Vite", 3]])).toBe(false);
   });
 
+  it("分类够但值全为 0 时不画（例如成本全是未定价的 $0）", () => {
+    expect(
+      isPieWorthRendering([
+        ["claude-sonnet-4-5", 0],
+        ["gpt-4o", 0],
+        ["unknown", 0],
+      ])
+    ).toBe(false);
+  });
+
+  it("只有一个分类非零时也不画", () => {
+    expect(
+      isPieWorthRendering([
+        ["Vite", 5],
+        ["Next.js", 0],
+      ])
+    ).toBe(false);
+  });
+
   it("两个及以上分类时画饼图", () => {
     expect(
       isPieWorthRendering([

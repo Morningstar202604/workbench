@@ -123,7 +123,11 @@ export function toolUsageDistribution(tools: string[]): [string, number][] {
  * 这类情况应该直接显示文字（「全部是 Vite」），而不是画个圆。
  */
 export function isPieWorthRendering(distribution: [string, number][]): boolean {
-  return distribution.length >= 2;
+  // 必须同时满足「有至少两个非零分类」：只有分类数够但值全为 0 时
+  // （例如成本全是未定价的 $0），ECharts 会画出一个等分的圆，
+  // 看起来像在展示数据，实际什么都没说。
+  const nonZero = distribution.filter(([, value]) => value > 0);
+  return nonZero.length >= 2;
 }
 
 /** 进程分类关键词。按 token 边界匹配，避免 "go" 命中 "google" 这类子串误判。 */

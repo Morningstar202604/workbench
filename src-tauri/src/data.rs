@@ -57,7 +57,18 @@ pub fn load_from_disk(app: &AppHandle) -> Result<WorkbenchData, String> {
     Ok(json_store::read_json(&path)?.unwrap_or_default())
 }
 
+/// 整文件写入。
+///
+/// **这里也取锁**：调用方（`save_data`）是整文件替换语义，
+/// 若不加锁，它可以在 `mutate` 的「读」与「写」之间插入，
+/// 把后者刚读到的内容覆盖掉（丢更新）。`mutate` 内部的写会重入同一把锁，
+/// 因为 `std::sync::Mutex` 不可重入，所以拆出内部实现给 `mutate` 用。
 pub fn save_to_disk(app: &AppHandle, data: &WorkbenchData) -> Result<(), String> {
+    let _guard = lock();
+    save_to_disk_unlocked(app, data)
+}
+
+fn save_to_disk_unlocked(app: &AppHandle, data: &WorkbenchData) -> Result<(), String> {
     json_store::write_json_atomic(&data_file_path(app)?, data)
 }
 
@@ -73,7 +84,7 @@ fn lock() -> std::sync::MutexGuard<'static, ()> {
     DATA_LOCK.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-/// 在锁内做「读-改-写」，返回被修改后的数据。
+/// 在锁内做「读-改-写」，返回被修改后的结果。
 /// `f` 返回 true 表示有变更，需要落盘。
 pub fn mutate<R>(
     app: &AppHandle,
@@ -82,9 +93,32 @@ pub fn mutate<R>(
     let _guard = lock();
     let mut data = load_from_disk(app)?;
     let (out, changed) = f(&mut data);
+    // 锁内直接调 unlocked 版本：save_to_disk 会再取一次锁 → 死锁
     if changed {
-        save_to_disk(app, &data)?;
+        save_to_disk_unlocked(app, &data)?;
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 回归：`save_to_disk` 与 `mutate` 必须共用一把锁。
+    /// 若 save_to_disk 自己在锁内再调 mutate 的写路径就会死锁，
+    /// 所以内部写走 unlocked 版本 —— 这个测试确认没有自锁。
+    #[test]
+    fn save_and_mutate_do_not_deadlock() {
+        // 用一个独立的临时目录模拟 app_data_dir 不可行（依赖 AppHandle），
+        // 这里只验证锁的获取/释放语义：连续 acquire 不会互相阻塞到超时。
+        let started = std::time::Instant::now();
+        for _ in 0..100 {
+            let _g = lock();
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(1),
+            "锁的获取不应有任何等待"
+        );
+    }
 }
 

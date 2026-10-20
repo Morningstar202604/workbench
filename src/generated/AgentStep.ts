@@ -22,6 +22,7 @@ arguments: string,
  */
 content: string, ok: boolean, needs_approval: boolean, 
 /**
- * 该步骤耗时（毫秒）
+ * 该步骤耗时（毫秒）。u64 会被 ts-rs 生成为 bigint，
+ * 而 IPC 实际传的是 number —— 必须显式标注，否则前端类型在说谎。
  */
-elapsed_ms: bigint, };
+elapsed_ms: number, };

@@ -147,6 +147,7 @@ pub fn run() {
             agent::agent_list_tools,
             agent::agent_approve_tool,
             agent::agent_reject_tool,
+            agent::agent_cancel,
             agent::agent_run,
         ])
         .run(tauri::generate_context!())

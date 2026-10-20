@@ -8,7 +8,7 @@
 //! 4. **输出截断**：防止一次全量进程列表把模型上下文撑爆。
 
 use serde_json::Value;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use super::tools::{find_spec, truncate_output, Approvals, ToolResult, ToolRisk};
 
@@ -284,6 +284,9 @@ impl ToolContext<'_> {
             data.tasks.insert(0, task.clone());
             (task.clone(), true)
         })?;
+        // 通知前端重新加载：Agent 直接写的是磁盘，前端 store 里还是旧快照，
+        // 不发事件的话用户切到任务页看不到刚创建的任务。
+        let _ = self.app.emit("workbench://data-changed", ());
         Ok(format!("已创建任务「{}」（id={}）", created.title, created.id))
     }
 
@@ -302,7 +305,9 @@ impl ToolContext<'_> {
             })
             .collect();
         let existing = crate::cost_store::existing_keys(self.app)?;
-        let table = crate::pricing::PricingTable::default();
+        // 必须复用与 UI 扫描同一条定价链路（含 pricing_overrides.json），
+        // 否则 Agent 扫出的金额与成本页不一致 —— 同一个账本出现两个结果。
+        let table = crate::commands::build_pricing_table(self.app);
         let records = crate::session_meter::scan_sessions_to_records(&entries, &table, &existing);
         let outcome = crate::cost_store::import_and_aggregate(self.app, &records, 14)?;
         Ok(format!(

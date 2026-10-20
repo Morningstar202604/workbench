@@ -43,6 +43,7 @@ export default function App() {
     refreshMs,
     loadAll,
     refreshRuntime,
+    reloadData,
     loading,
     lastRefreshAt,
     killTarget,
@@ -61,6 +62,7 @@ export default function App() {
       refreshMs: s.refreshMs,
       loadAll: s.loadAll,
       refreshRuntime: s.refreshRuntime,
+      reloadData: s.reloadData,
       loading: s.loading,
       lastRefreshAt: s.lastRefreshAt,
       killTarget: s.killTarget,
@@ -78,6 +80,31 @@ export default function App() {
     // 依赖保持为空是刻意的（只在挂载时跑一次），因此显式声明稳定引用。
     void loadAll();
   }, [loadAll]);
+
+  // Agent 通过工具修改 data.json 后会广播 event；把磁盘状态拉回内存，
+  // 否则用户切到任务/项目页看到的还是旧快照。
+  useEffect(() => {
+    if (!isTauri()) return;
+    // 竞态：listen() 是异步的，若组件在 Promise 落地前就卸载，
+    // 直接写 unlisten 会漏解绑，监听器永久泄漏（切换页面反复触发）。
+    // 用「已取消」标志在回调里补一次解绑。
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen("workbench://data-changed", () => void reloadData()))
+      .then((fn) => {
+        if (disposed) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [reloadData]);
 
   useEffect(() => {
     if (!isTauri()) return; // 演示模式没有后端，不建定时器
@@ -170,7 +197,7 @@ export default function App() {
               type="button"
               className="ml-auto rounded p-1 text-dim hover:text-text"
               onClick={() => setDrawerOpen(false)}
-              aria-label={t("agent.reject")}
+              aria-label={t("app.close")}
             >
               <X size={16} />
             </button>
@@ -248,7 +275,9 @@ export default function App() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
-          className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-panel/80 px-5 backdrop-blur"
+          className={`flex h-12 shrink-0 items-center gap-2 border-b border-line bg-panel/80 backdrop-blur ${
+            bp === "compact" ? "px-3" : "px-5"
+          }`}
           data-tauri-drag-region
         >
           {bp === "compact" && (
@@ -311,7 +340,10 @@ export default function App() {
           </div>
         </header>
 
-        <main key={view} className="flex-1 overflow-auto p-5 animate-in">
+        <main
+          key={view}
+          className={`flex-1 overflow-auto animate-in ${bp === "compact" ? "p-3" : "p-5"}`}
+        >
           <Suspense
             fallback={
               <div className="flex h-64 items-center justify-center gap-3 text-sm text-dim">

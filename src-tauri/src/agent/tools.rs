@@ -39,15 +39,6 @@ pub struct ToolSpec {
     pub parameters: serde_json::Value,
 }
 
-/// 一次工具调用请求（来自模型）。
-#[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
-pub struct ToolCall {
-    pub id: String,
-    pub name: String,
-    /// 模型返回的参数字符串（通常是 JSON）
-    pub arguments: String,
-}
-
 /// 工具执行结果，回灌给模型。
 #[derive(Serialize, Deserialize, Clone, Debug, ts_rs::TS)]
 pub struct ToolResult {
@@ -346,11 +337,31 @@ pub fn find_spec(name: &str) -> Option<ToolSpec> {
     tool_specs().into_iter().find(|s| s.name == name)
 }
 
-/// 截断工具输出，保护模型上下文。
+/// 截断工具输出。
+///
+/// 直接按字符切会把 JSON 切成不完整片段，模型读到半截 `[{...` 会以为工具坏了，
+/// 进而反复重试。这里对 JSON 数组做**结构化截断**：保留前 N 条并明确告知
+/// 总数；非 JSON 退化为带标记的文本截断。
 pub fn truncate_output(s: &str) -> String {
     if s.chars().count() <= MAX_TOOL_OUTPUT_CHARS {
         return s.to_string();
     }
+
+    // 进程/端口/任务列表都是 JSON 数组，按条截断保持结构完整
+    if let Ok(serde_json::Value::Array(items)) = serde_json::from_str::<serde_json::Value>(s) {
+        let total = items.len();
+        let mut keep = total / 2;
+        while keep > 0 {
+            if let Ok(text) = serde_json::to_string(&items[..keep]) {
+                if text.chars().count() <= MAX_TOOL_OUTPUT_CHARS {
+                    return format!("{text}\n…[truncated: showing {keep} of {total} items]");
+                }
+            }
+            keep /= 2;
+        }
+        return format!("…[output too large: {total} items, each too big to include]");
+    }
+
     let kept: String = s.chars().take(MAX_TOOL_OUTPUT_CHARS).collect();
     format!("{kept}\n…[truncated at {MAX_TOOL_OUTPUT_CHARS} chars]")
 }
@@ -451,5 +462,25 @@ mod tests {
 
         let short = "ok";
         assert_eq!(truncate_output(short), "ok");
+    }
+
+    /// 回归：按字符硬切会把 JSON 数组切成不完整片段，
+    /// 模型读到半截 JSON 会误判工具异常并反复重试。
+    #[test]
+    fn json_array_truncation_stays_valid_json() {
+        let items: Vec<serde_json::Value> = (0..2000)
+            .map(|i| serde_json::json!({"pid": i, "name": format!("proc-{i}")}))
+            .collect();
+        let text = serde_json::to_string(&items).unwrap();
+        assert!(text.chars().count() > MAX_TOOL_OUTPUT_CHARS);
+
+        let out = truncate_output(&text);
+        // 声明部分必须仍然是合法 JSON
+        let payload = out.lines().next().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(payload).expect("截断后应仍是合法 JSON");
+        let arr = parsed.as_array().unwrap();
+        assert!(!arr.is_empty(), "至少保留一条");
+        assert!(arr.len() < 2000, "必须真的截断了");
+        assert!(out.contains("showing"), "要告诉模型截断了多少");
     }
 }

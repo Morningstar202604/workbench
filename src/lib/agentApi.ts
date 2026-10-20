@@ -41,6 +41,11 @@ export async function agentRejectTool(callId: string): Promise<void> {
   await invoke("agent_reject_tool", { callId });
 }
 
+/** 请求停止当前对话（后端在下一个检查点退出）。 */
+export async function agentCancel(): Promise<void> {
+  await invoke("agent_cancel");
+}
+
 /** 执行一轮对话（可能包含多次工具调用）。 */
 export async function agentRun(messages: ChatMessage[]): Promise<AgentRunResult> {
   return invoke<AgentRunResult>("agent_run", { messages });

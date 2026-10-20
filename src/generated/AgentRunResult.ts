@@ -8,4 +8,4 @@ export type AgentRunResult = { steps: Array<AgentStep>,
 /**
  * 最终给用户的回答（可能是模型总结，也可能是中止说明）
  */
-answer: string, stopped_reason: string, elapsed_ms: bigint, prompt_tokens: number, completion_tokens: number, };
+answer: string, stopped_reason: string, elapsed_ms: number, prompt_tokens: number, completion_tokens: number, };

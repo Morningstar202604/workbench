@@ -41,6 +41,7 @@ import {
   demoSysinfo,
 } from "../lib/demo";
 import type {
+  AgentStep,
   AiProcess,
   CostOverview,
   CostSettings,
@@ -96,6 +97,26 @@ interface RuntimeState {
   costSettings: CostSettings;
   costLoading: boolean;
   costNotified: boolean; // 是否已发过预算告警通知（避免重复打扰）
+  // ── 助手对话 ──
+  // 放在 store 而不是页面组件里：页面切换会卸载组件（App 用 key={view}），
+  // 组件内 state 会整段丢失，用户切到别的页再回来对话就没了。
+  agentTurns: AgentChatTurn[];
+  agentPending: AgentPending[];
+}
+
+/** 助手对话的一轮。 */
+export interface AgentChatTurn {
+  role: "user" | "assistant";
+  text: string;
+  steps?: AgentStep[];
+  stopped?: string;
+}
+
+/** 等待用户批准的工具调用。 */
+export interface AgentPending {
+  callId: string;
+  tool: string;
+  arguments: string;
 }
 
 interface Store extends UiState, RuntimeState {
@@ -109,6 +130,7 @@ interface Store extends UiState, RuntimeState {
   clearToast: () => void;
   setKillTarget: (p: ProcInfo | null) => void;
   loadAll: () => Promise<void>;
+  reloadData: () => Promise<void>;
   refreshRuntime: () => Promise<void>;
   refreshAi: () => Promise<void>;
   loadSessionDetail: (port: number, id: string) => Promise<void>;
@@ -130,6 +152,14 @@ interface Store extends UiState, RuntimeState {
   updateCostSettings: (s: CostSettings) => Promise<boolean>;
   clearCosts: () => Promise<void>;
   checkBudgetAlert: () => void;
+  // ── 助手对话 ──
+  setAgentTurns: (
+    next: AgentChatTurn[] | ((prev: AgentChatTurn[]) => AgentChatTurn[])
+  ) => void;
+  setAgentPending: (
+    next: AgentPending[] | ((prev: AgentPending[]) => AgentPending[])
+  ) => void;
+  clearAgentChat: () => void;
 }
 
 const emptyData: WorkbenchData = { projects: [], tasks: [] };
@@ -180,6 +210,8 @@ export const useStore = create<Store>()(
       },
       costLoading: false,
       costNotified: false,
+      agentTurns: [],
+      agentPending: [],
       data: emptyData,
       toast: "",
       killTarget: null,
@@ -234,6 +266,20 @@ export const useStore = create<Store>()(
         }
         get().refreshRuntime();
         get().refreshAi();
+      },
+
+      /**
+       * 只重载项目/任务数据（不重新采集进程端口）。
+       * Agent 通过工具改了 data.json 后会广播事件，这里负责把磁盘状态拉回内存。
+       */
+      reloadData: async () => {
+        if (!isTauri()) return;
+        try {
+          const data = await loadData();
+          set({ data: { ...emptyData, ...data } });
+        } catch (e) {
+          set({ toast: t("store.loadFailed", { err: String(e) }) });
+        }
       },
 
       refreshRuntime: async () => {
@@ -553,12 +599,26 @@ export const useStore = create<Store>()(
             costTrend: [],
             costModelBreakdown: [],
             costNotified: false,
+            agentTurns: [],
+            agentPending: [],
             toast: t("store.cleared"),
           });
         } catch (e) {
           set({ toast: t("store.clearFailed", { err: String(e) }) });
         }
       },
+
+      // 支持函数式更新：多处异步回调（发送、批准、拒绝）会并发改同一份列表，
+      // 用「读当前值再写」会丢更新。
+      setAgentTurns: (next) =>
+        set((s) => ({
+          agentTurns: typeof next === "function" ? next(s.agentTurns) : next,
+        })),
+      setAgentPending: (next) =>
+        set((s) => ({
+          agentPending: typeof next === "function" ? next(s.agentPending) : next,
+        })),
+      clearAgentChat: () => set({ agentTurns: [], agentPending: [] }),
 
       checkBudgetAlert: () => {
         const o = get().costOverview;

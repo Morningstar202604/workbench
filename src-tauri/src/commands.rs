@@ -605,7 +605,7 @@ pub struct ScanCostResult {
 /// 构造当前定价表 = 内置快照 + 用户覆盖文件 pricing_overrides.json。
 /// 覆盖文件是可选增强：损坏时降级为内置表并告警，不能让整个成本扫描失败
 /// （data.json 才是用户核心数据，那里才该「保全后上抛」）。
-fn build_pricing_table(app: &AppHandle) -> PricingTable {
+pub fn build_pricing_table(app: &AppHandle) -> PricingTable {
     let mut table = PricingTable::default();
     let path = match cost_store::cost_data_path_overrides(app) {
         Ok(p) => p,
