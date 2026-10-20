@@ -12,10 +12,21 @@ pub mod pricing;
 pub mod procs;
 pub mod session_meter;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+/// 托盘是否创建成功。
+///
+/// 这个标志决定「关闭窗口」的语义：
+/// - 有托盘 → 隐藏到托盘，用户能再点开（桌面应用的常见行为）
+/// - 无托盘 → 必须真正退出，否则窗口再也调不出来，用户只能杀进程
+///
+/// Linux 上托盘依赖 StatusNotifier/AppIndicator，GNOME 默认、Wayland
+/// 以及没装 appindicator 支持的环境里创建会失败，这不是边缘情况。
+static TRAY_AVAILABLE: AtomicBool = AtomicBool::new(false);
 
 /// 显示/隐藏主窗口（托盘点击、全局快捷键共用）。
 fn toggle_window(app: &AppHandle) {
@@ -33,6 +44,21 @@ fn toggle_window(app: &AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 单实例：双击两次图标只会有一个进程。
+        // 没有它时两个实例各自持有进程内的数据锁，data.json 的
+        // 「读-改-写」会互相覆盖（丢更新），全局快捷键也会抢同一个热键
+        // （第二个实例注册失败）。
+        // 注意：Linux 上该插件依赖 D-Bus 会话总线。没有会话总线时
+        // （纯 Xvfb、部分容器）它会静默失效，两个实例都能起来 ——
+        // 真实桌面环境总有会话总线，所以这是可接受的降级。
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            log::info!("检测到第二个实例，聚焦已有窗口");
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
@@ -48,70 +74,117 @@ pub fn run() {
             app.manage(agent::AgentState::default());
 
             // ── 全局快捷键 Ctrl+Shift+W 切换窗口可见性（被占用时降级为警告，不阻断启动）──
-            if let Err(e) = app
-                .handle()
-                .global_shortcut()
-                .on_shortcut("CmdOrCtrl+Shift+W", move |handle, _, _| {
+            if let Err(e) = app.handle().global_shortcut().on_shortcut(
+                "CmdOrCtrl+Shift+W",
+                move |handle, _, _| {
                     toggle_window(handle);
-                })
-            {
+                },
+            ) {
                 log::warn!("全局快捷键 CmdOrCtrl+Shift+W 注册失败（窗口隐藏后需从托盘恢复）: {e}");
-            }
-
-            // ── 最小化到托盘：拦截关闭事件，改为隐藏 ──
-            if let Some(window) = app.get_webview_window("main") {
-                let handle2 = app.handle().clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        if let Some(win) = handle2.get_webview_window("main") {
-                            let _ = win.hide();
-                        }
-                        api.prevent_close();
-                    }
-                });
             }
 
             // ── 托盘：左键切换显示，菜单提供「退出」彻底结束进程 ──
             // 托盘文案在系统 UI 里长期可见，用双语标注而不是只写中文：
             // 界面主语言可在三语间切换，但托盘菜单在创建时就固定了，
             // 折中方案是让两种主要语言同时出现。
-            let toggle_item = MenuItem::with_id(
-                app,
-                "toggle",
-                "显示 / 隐藏窗口 · Show / Hide",
-                true,
-                None::<&str>,
-            )?;
-            let quit_item =
-                MenuItem::with_id(app, "quit", "退出工作台 · Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&toggle_item, &quit_item])?;
-            let _tray = TrayIconBuilder::with_id("workbench-tray")
-                .tooltip("Workbench")
-                // 用 PNG 而不是 ico：Linux 的托盘实现只认位图，
-                // include_image 跨平台解析到 icons/32x32.png
-                .icon(tauri::include_image!("icons/32x32.png"))
-                .menu(&menu)
-                // Linux 上托盘菜单默认需要左键弹出（很多桌面环境没有右键习惯）
-                .show_menu_on_left_click(cfg!(target_os = "linux"))
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        toggle_window(tray.app_handle());
+            // 菜单构建同样可能失败；失败时整块托盘降级，而不是 `?` 让启动崩掉。
+            let menu_built =
+                (|| -> Result<(MenuItem<tauri::Wry>, MenuItem<tauri::Wry>), String> {
+                    let toggle = MenuItem::with_id(
+                        app,
+                        "toggle",
+                        "显示 / 隐藏窗口 · Show / Hide",
+                        true,
+                        None::<&str>,
+                    )
+                    .map_err(|e| e.to_string())?;
+                    let quit =
+                        MenuItem::with_id(app, "quit", "退出工作台 · Quit", true, None::<&str>)
+                            .map_err(|e| e.to_string())?;
+                    Ok((toggle, quit))
+                })();
+
+            // 托盘创建失败不能阻断启动：很多 Linux 桌面（GNOME 默认、
+            // Wayland 会话、未装 appindicator 的发行版）没有可用的托盘，
+            // 而「因为没有托盘就启动不了」是非常糟糕的失败方式。
+            //
+            // WORKBENCH_NO_TRAY=1 可显式禁用托盘，用于：
+            // 1) 在无托盘桌面上避免无谓的 D-Bus 探测
+            // 2) 测试「无托盘时关闭即退出」的降级路径
+            let tray_disabled = std::env::var("WORKBENCH_NO_TRAY")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+            let tray_result = if tray_disabled {
+                log::info!("WORKBENCH_NO_TRAY 已设置，跳过托盘创建");
+                Err("已通过环境变量禁用".to_string())
+            } else {
+                (|| {
+                    let (toggle_item, quit_item) = menu_built?;
+                    let menu = Menu::with_items(app, &[&toggle_item, &quit_item])
+                        .map_err(|e| e.to_string())?;
+                    TrayIconBuilder::with_id("workbench-tray")
+                        .tooltip("Workbench")
+                        // 用 PNG 而不是 ico：Linux 的托盘实现只认位图，
+                        // include_image 跨平台解析到 icons/32x32.png
+                        .icon(tauri::include_image!("icons/32x32.png"))
+                        .menu(&menu)
+                        // Linux 上托盘菜单默认需要左键弹出（很多桌面环境没有右键习惯）
+                        .show_menu_on_left_click(cfg!(target_os = "linux"))
+                        .on_tray_icon_event(|tray, event| {
+                            if let TrayIconEvent::Click {
+                                button: MouseButton::Left,
+                                button_state: MouseButtonState::Up,
+                                ..
+                            } = event
+                            {
+                                toggle_window(tray.app_handle());
+                            }
+                        })
+                        .on_menu_event(|app, event| match event.id.as_ref() {
+                            "toggle" => toggle_window(app),
+                            "quit" => {
+                                log::info!("托盘菜单退出");
+                                app.exit(0);
+                            }
+                            _ => {}
+                        })
+                        .build(app)
+                        .map_err(|e| e.to_string())
+                })()
+            };
+
+            match tray_result {
+                Ok(_tray) => {
+                    TRAY_AVAILABLE.store(true, Ordering::SeqCst);
+                    log::info!("系统托盘已创建");
+                }
+                Err(e) => {
+                    // 降级：没有托盘时关闭窗口就是退出，避免应用变成无法关闭的后台进程
+                    log::warn!("系统托盘不可用（{e}）。关闭窗口将直接退出应用，而不是隐藏到托盘。");
+                }
+            }
+
+            // ── 关闭窗口：有托盘则隐藏，无托盘则退出 ──
+            // 注册必须在托盘创建之后：否则 TRAY_AVAILABLE 还是初值 false，
+            // 「关闭即退出」会误作用于有托盘的桌面。
+
+            if let Some(window) = app.get_webview_window("main") {
+                let handle2 = app.handle().clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        if TRAY_AVAILABLE.load(Ordering::SeqCst) {
+                            if let Some(win) = handle2.get_webview_window("main") {
+                                let _ = win.hide();
+                            }
+                            api.prevent_close();
+                        } else {
+                            // 没有托盘：正常退出，否则用户无法再唤回窗口
+                            log::info!("无托盘可用，关闭窗口即退出");
+                            handle2.exit(0);
+                        }
                     }
-                })
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "toggle" => toggle_window(app),
-                    "quit" => {
-                        log::info!("托盘菜单退出");
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .build(app)?;
+                });
+            }
 
             Ok(())
         })

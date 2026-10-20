@@ -326,7 +326,7 @@ export default function Settings() {
                 <div className="mb-2 text-xs font-medium text-dim">
                   {t("settings.statusTitle")}
                 </div>
-                <div className="grid grid-cols-3 gap-3 text-xs">
+                <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
                   <div>
                     <div className="text-dim">{t("settings.recordCount")}</div>
                     <div className="font-mono font-medium">

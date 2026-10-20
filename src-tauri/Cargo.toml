@@ -3,7 +3,7 @@ name = "workbench"
 version = "0.1.1"
 description = "Workbench - local-first desktop workbench (Tauri 2 + React 19)"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.90"  # Tauri 2 生态实际要求；1.77 从未被验证过
 
 [lib]
 name = "workbench_lib"
@@ -37,6 +37,9 @@ version = "2"
 version = "2"
 
 [dependencies.tauri-plugin-window-state]
+version = "2"
+
+[dependencies.tauri-plugin-single-instance]
 version = "2"
 
 [build-dependencies]

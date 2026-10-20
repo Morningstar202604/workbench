@@ -130,7 +130,7 @@ export default function Servers() {
   return (
     <div className="flex flex-col gap-4">
       {/* ── 摘要条 ── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard
           icon={Server}
           label={t("servers.stats.devServers")}

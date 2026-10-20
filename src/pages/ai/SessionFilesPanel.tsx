@@ -147,7 +147,7 @@ export function SessionFilesPanel() {
       >
         {previewFile && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3 text-xs">
+            <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
               <InfoChip
                 icon={Hash}
                 label={t("ai.messageCount")}

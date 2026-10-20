@@ -209,7 +209,7 @@ export default function Processes() {
 
       {/* ── 搜索栏 ── */}
       <Card className="flex flex-wrap items-center gap-3 p-3">
-        <div className="relative min-w-[220px] flex-1">
+        <div className="relative min-w-[160px] flex-1 sm:min-w-[220px]">
           <Search
             size={14}
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-dim"
