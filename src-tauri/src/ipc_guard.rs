@@ -159,11 +159,7 @@ pub fn is_absolute_path(raw: &str) -> bool {
     }
     // Windows 盘符绝对路径：X:/... 或 X:\...
     let bytes = unified.as_bytes();
-    if bytes.len() >= 3
-        && bytes[0].is_ascii_alphabetic()
-        && bytes[1] == b':'
-        && bytes[2] == b'/'
-    {
+    if bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/' {
         return true;
     }
     false
@@ -268,7 +264,10 @@ mod tests {
         // 丢掉前导 // 会让 UNC 与相对路径塌陷成同一个键
         assert_eq!(normalize_path("\\\\server\\share"), "//server/share");
         assert_eq!(normalize_path("//server/share"), "//server/share");
-        assert_ne!(normalize_path("\\\\server\\share"), normalize_path("server/share"));
+        assert_ne!(
+            normalize_path("\\\\server\\share"),
+            normalize_path("server/share")
+        );
 
         // UNC 与普通盘符路径也不能互通
         let dirs = KnownDirs::default();
@@ -299,7 +298,10 @@ mod tests {
         // 真实存在的绝对目录才放行
         let real = std::env::temp_dir().join(format!("wb-guard-real-{}", std::process::id()));
         std::fs::create_dir_all(&real).unwrap();
-        assert_eq!(dirs.record_validated([real.to_string_lossy().to_string()]), 1);
+        assert_eq!(
+            dirs.record_validated([real.to_string_lossy().to_string()]),
+            1
+        );
         assert!(dirs.contains(&real.to_string_lossy()));
         std::fs::remove_dir_all(&real).ok();
     }

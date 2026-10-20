@@ -152,8 +152,12 @@ pub fn fetch_opencode_sessions(port: u16) -> Result<Vec<OpencodeSession>, String
             .to_string();
         let (created, updated) = match item.get("time") {
             Some(t) => (
-                t.get("created").and_then(|v| v.as_i64()).unwrap_or_default(),
-                t.get("updated").and_then(|v| v.as_i64()).unwrap_or_default(),
+                t.get("created")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or_default(),
+                t.get("updated")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or_default(),
             ),
             None => (0, 0),
         };
@@ -174,7 +178,11 @@ pub fn fetch_opencode_sessions(port: u16) -> Result<Vec<OpencodeSession>, String
 pub fn fetch_session_detail(port: u16, session_id: &str) -> SessionDetail {
     if !is_safe_session_id(session_id) {
         log::warn!("拒绝非法会话 id（长度 {}）", session_id.len());
-        return detail_error(session_id, "(非法会话 id)", "会话 id 含不允许的字符".to_string());
+        return detail_error(
+            session_id,
+            "(非法会话 id)",
+            "会话 id 含不允许的字符".to_string(),
+        );
     }
     if !(1..=65535).contains(&port) {
         return detail_error(session_id, "(非法端口)", "端口不在允许范围".to_string());
@@ -192,7 +200,13 @@ pub fn fetch_session_detail(port: u16, session_id: &str) -> SessionDetail {
 
     let resp = match resp {
         Ok(r) if r.status().is_success() => r,
-        Ok(r) => return detail_error(session_id, "(获取失败)", format!("HTTP {}", r.status().as_u16())),
+        Ok(r) => {
+            return detail_error(
+                session_id,
+                "(获取失败)",
+                format!("HTTP {}", r.status().as_u16()),
+            )
+        }
         Err(e) => return detail_error(session_id, "(获取失败)", e.to_string()),
     };
 
@@ -222,7 +236,9 @@ pub fn fetch_session_detail(port: u16, session_id: &str) -> SessionDetail {
                             .iter()
                             .filter_map(|p| {
                                 if p.get("type").and_then(|t| t.as_str()) == Some("text") {
-                                    p.get("text").and_then(|t| t.as_str()).map(|s| s.to_string())
+                                    p.get("text")
+                                        .and_then(|t| t.as_str())
+                                        .map(|s| s.to_string())
                                 } else {
                                     None
                                 }
@@ -237,33 +253,27 @@ pub fn fetch_session_detail(port: u16, session_id: &str) -> SessionDetail {
             .unwrap_or_default()
     };
 
-    let first_message = messages
-        .first()
-        .map(extract_text)
-        .unwrap_or_default();
-    let last_message = messages
-        .last()
-        .map(extract_text)
-        .unwrap_or_default();
+    let first_message = messages.first().map(extract_text).unwrap_or_default();
+    let last_message = messages.last().map(extract_text).unwrap_or_default();
 
     // 提取使用的工具（不去重：前端按次数做分布统计）
     let tools_used: Vec<String> = messages
         .iter()
         .filter_map(|m| {
-            m.get("content")
-                .and_then(|c| c.as_array())
-                .map(|parts| {
-                    parts
-                        .iter()
-                        .filter_map(|p| {
-                            if p.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
-                                p.get("name").and_then(|n| n.as_str()).map(|s| s.to_string())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                })
+            m.get("content").and_then(|c| c.as_array()).map(|parts| {
+                parts
+                    .iter()
+                    .filter_map(|p| {
+                        if p.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
+                            p.get("name")
+                                .and_then(|n| n.as_str())
+                                .map(|s| s.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
         })
         .flatten()
         .collect();
@@ -274,7 +284,10 @@ pub fn fetch_session_detail(port: u16, session_id: &str) -> SessionDetail {
             .or_else(|| v.get("timestamp"))
             .and_then(|t| t.as_i64())
     };
-    let duration_seconds = match (messages.first().and_then(get_ts), messages.last().and_then(get_ts)) {
+    let duration_seconds = match (
+        messages.first().and_then(get_ts),
+        messages.last().and_then(get_ts),
+    ) {
         (Some(start), Some(end)) => (end - start) / 1000,
         _ => 0,
     };
@@ -412,7 +425,8 @@ fn parse_jsonl_preview(path: &str) -> (usize, String, String) {
             // 顶层 type + content
             if let Some(t) = v.get("type").and_then(|t| t.as_str()) {
                 if t == "summary" {
-                    return v.get("summary")
+                    return v
+                        .get("summary")
                         .and_then(|s| s.as_str())
                         .map(|s| s.to_string())
                         .unwrap_or_default();
@@ -438,7 +452,9 @@ fn extract_content_text(content: &serde_json::Value) -> String {
         arr.iter()
             .filter_map(|p| {
                 if p.get("type").and_then(|t| t.as_str()) == Some("text") {
-                    p.get("text").and_then(|t| t.as_str()).map(|s| s.to_string())
+                    p.get("text")
+                        .and_then(|t| t.as_str())
+                        .map(|s| s.to_string())
                 } else {
                     None
                 }
@@ -508,18 +524,30 @@ mod tests {
             ),
             Some("opencode")
         );
-        assert_eq!(find_ai_keyword("chrome.exe", "chrome --type=renderer", ""), None);
+        assert_eq!(
+            find_ai_keyword("chrome.exe", "chrome --type=renderer", ""),
+            None
+        );
         assert_eq!(find_ai_keyword("code.exe", "code", ""), None);
     }
 
     #[test]
     fn token_boundary_avoids_substring_false_positives() {
         // "amp" / "roo" / "zed" 不应被子串（sample / classroom / lazy）命中
-        assert_eq!(find_ai_keyword("sample.exe", "sample --run", "c:\\ramp\\bin"), None);
-        assert_eq!(find_ai_keyword("classroom.exe", "open classroom app", ""), None);
+        assert_eq!(
+            find_ai_keyword("sample.exe", "sample --run", "c:\\ramp\\bin"),
+            None
+        );
+        assert_eq!(
+            find_ai_keyword("classroom.exe", "open classroom app", ""),
+            None
+        );
         // 真正的词边界命中
         assert_eq!(find_ai_keyword("amp.exe", "amp", ""), Some("amp"));
-        assert_eq!(find_ai_keyword("node.exe", "npx claude-code run", ""), Some("claude"));
+        assert_eq!(
+            find_ai_keyword("node.exe", "npx claude-code run", ""),
+            Some("claude")
+        );
     }
 
     #[test]
@@ -561,8 +589,10 @@ mod tests {
     fn parses_jsonl_preview() {
         let tmp = std::env::temp_dir().join("wb-test-session.jsonl");
         let mut f = std::fs::File::create(&tmp).unwrap();
-        let line1 = r#"{"type":"user","message":{"content":[{"type":"text","text":"Hello world"}]}}"#;
-        let line2 = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Hi there!"}]}}"#;
+        let line1 =
+            r#"{"type":"user","message":{"content":[{"type":"text","text":"Hello world"}]}}"#;
+        let line2 =
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Hi there!"}]}}"#;
         writeln!(f, "{}", line1).unwrap();
         writeln!(f, "{}", line2).unwrap();
         let (count, first, last) = parse_jsonl_preview(tmp.to_str().unwrap());

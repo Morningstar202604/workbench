@@ -116,7 +116,12 @@ pub fn parse_netstat(output: &str) -> Vec<PortEntry> {
             let local = tokens[3];
             let foreign = tokens.get(4).copied().unwrap_or("");
             if protocol == "TCP" {
-                (local, foreign, tokens.get(5).copied(), tokens.get(6).copied())
+                (
+                    local,
+                    foreign,
+                    tokens.get(5).copied(),
+                    tokens.get(6).copied(),
+                )
             } else {
                 (local, foreign, None, tokens.get(5).copied())
             }
@@ -127,7 +132,12 @@ pub fn parse_netstat(output: &str) -> Vec<PortEntry> {
             };
             let foreign = tokens.get(2).copied().unwrap_or("");
             if protocol == "TCP" {
-                (local, foreign, tokens.get(3).copied(), tokens.get(4).copied())
+                (
+                    local,
+                    foreign,
+                    tokens.get(3).copied(),
+                    tokens.get(4).copied(),
+                )
             } else {
                 (local, foreign, None, tokens.get(3).copied())
             }
@@ -192,7 +202,10 @@ pub fn split_host_port(s: &str) -> Option<(String, u16)> {
     let idx = trimmed.rfind(':')?;
     let (addr_part, port_part) = (&trimmed[..idx], &trimmed[idx + 1..]);
     if port_part == "*" {
-        return Some((addr_part.trim_matches(|c| c == '[' || c == ']').to_string(), 0));
+        return Some((
+            addr_part.trim_matches(|c| c == '[' || c == ']').to_string(),
+            0,
+        ));
     }
     let port: u16 = port_part.parse().ok()?;
     let addr = addr_part
@@ -287,7 +300,10 @@ udp   UNCONN 0      0        127.0.0.53:53         0.0.0.0:*    users:((\"system
         assert_eq!(vite.pid, 2145);
 
         // 非 root 时没有 users: 段 → pid 退化为 0，但端口仍要显示
-        let dns = entries.iter().find(|e| e.local_port == 53 && e.pid == 0).unwrap();
+        let dns = entries
+            .iter()
+            .find(|e| e.local_port == 53 && e.pid == 0)
+            .unwrap();
         assert_eq!(dns.state, "LISTENING");
 
         // [::] 要能正确拆出地址与端口

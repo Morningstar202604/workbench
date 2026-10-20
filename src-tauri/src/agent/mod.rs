@@ -81,11 +81,7 @@ struct RunGuard<'a> {
 
 impl Drop for RunGuard<'_> {
     fn drop(&mut self) {
-        *self
-            .state
-            .running
-            .lock()
-            .unwrap_or_else(|p| p.into_inner()) = false;
+        *self.state.running.lock().unwrap_or_else(|p| p.into_inner()) = false;
     }
 }
 
@@ -140,7 +136,11 @@ fn post_chat_with_failover(
     // 每个候选用「剩余预算 / 候选数」，保证 N 个备用不会把总时长拖成 N×45s
     let per_candidate = (budget_secs / n).max(1);
     for (i, (base_url, model, api_key)) in all.iter().enumerate() {
-        tried.push(format!("{}({})", model, if i == 0 { "primary" } else { "fallback" }));
+        tried.push(format!(
+            "{}({})",
+            model,
+            if i == 0 { "primary" } else { "fallback" }
+        ));
         let body = build(model);
         match post_chat(base_url, api_key, &body, per_candidate) {
             Ok(reply) => {
@@ -153,11 +153,7 @@ fn post_chat_with_failover(
                 log::warn!("模型 {model} 请求失败: {}", e.message);
                 last_err = e.message.clone();
                 if e.kind == llm::FailureKind::Permanent {
-                    return Err(format!(
-                        "{}（已尝试: {}）",
-                        e.message,
-                        tried.join(", ")
-                    ));
+                    return Err(format!("{}（已尝试: {}）", e.message, tried.join(", ")));
                 }
             }
         }
@@ -281,7 +277,10 @@ pub fn run(app: &AppHandle, state: &AgentState, mut messages: Vec<ChatMessage>) 
 
     let cfg = state.provider();
     if cfg.base_url.trim().is_empty() || cfg.model.trim().is_empty() {
-        finish!("not_configured", "尚未配置模型服务，请先在设置里填写地址与模型名。".to_string());
+        finish!(
+            "not_configured",
+            "尚未配置模型服务，请先在设置里填写地址与模型名。".to_string()
+        );
     }
     if let Err(e) = llm::validate_base_url(&cfg.base_url) {
         finish!("bad_config", e);
@@ -323,7 +322,10 @@ pub fn run(app: &AppHandle, state: &AgentState, mut messages: Vec<ChatMessage>) 
             let summary = summarize(&steps);
             finish!(
                 "timeout",
-                format!("已超时（{} 秒）中止。到目前为：{}", MAX_TOTAL_SECONDS, summary)
+                format!(
+                    "已超时（{} 秒）中止。到目前为：{}",
+                    MAX_TOTAL_SECONDS, summary
+                )
             );
         }
 
@@ -334,7 +336,10 @@ pub fn run(app: &AppHandle, state: &AgentState, mut messages: Vec<ChatMessage>) 
             let summary = summarize(&steps);
             finish!(
                 "timeout",
-                format!("已超时（{} 秒）中止。到目前为：{}", MAX_TOTAL_SECONDS, summary)
+                format!(
+                    "已超时（{} 秒）中止。到目前为：{}",
+                    MAX_TOTAL_SECONDS, summary
+                )
             );
         }
         let reply = match post_chat_with_failover(&cfg, remaining, |model| {
@@ -455,7 +460,10 @@ pub fn run(app: &AppHandle, state: &AgentState, mut messages: Vec<ChatMessage>) 
             let summary = summarize(&steps);
             finish!(
                 "max_steps",
-                format!("已达到 {} 轮工具调用上限并停止。已获得的结论：{}", MAX_STEPS, summary)
+                format!(
+                    "已达到 {} 轮工具调用上限并停止。已获得的结论：{}",
+                    MAX_STEPS, summary
+                )
             );
         }
     }
@@ -573,7 +581,11 @@ pub fn agent_set_provider(
     // 备用服务同理：某条忘记重填密钥时沿用同 base_url 的旧密钥
     for fb in config.fallbacks.iter_mut() {
         if fb.api_key.trim().is_empty() {
-            if let Some(prev) = existing.fallbacks.iter().find(|p| p.base_url == fb.base_url) {
+            if let Some(prev) = existing
+                .fallbacks
+                .iter()
+                .find(|p| p.base_url == fb.base_url)
+            {
                 fb.api_key = prev.api_key.clone();
             }
         }

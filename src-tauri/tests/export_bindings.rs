@@ -11,7 +11,9 @@ use workbench_lib::agent::llm::{
 };
 use workbench_lib::agent::tools::{ToolResult, ToolRisk, ToolSpec};
 use workbench_lib::agent::{AgentRunResult, AgentStep, ProviderView};
-use workbench_lib::ai::{AiProcess, OpencodeSession, SessionDetail, SessionFile, SessionFilePreview};
+use workbench_lib::ai::{
+    AiProcess, OpencodeSession, SessionDetail, SessionFile, SessionFilePreview,
+};
 use workbench_lib::commands::{DiskInfo, OpencodeSessionsResult, ScanCostResult, SystemInfo};
 use workbench_lib::cost_store::{CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow};
 use workbench_lib::data::{Project, Task, WorkbenchData};

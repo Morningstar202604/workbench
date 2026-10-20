@@ -236,8 +236,8 @@ impl ToolContext<'_> {
         let tasks: Vec<_> = data
             .tasks
             .into_iter()
-            .filter(|t| status.map_or(true, |s| t.status == s))
-            .filter(|t| project_id.map_or(true, |p| t.project_id.as_deref() == Some(p)))
+            .filter(|t| status.is_none_or(|s| t.status == s))
+            .filter(|t| project_id.is_none_or(|p| t.project_id.as_deref() == Some(p)))
             .collect();
         serde_json::to_string_pretty(&tasks).map_err(|e| e.to_string())
     }
@@ -287,7 +287,10 @@ impl ToolContext<'_> {
         // 通知前端重新加载：Agent 直接写的是磁盘，前端 store 里还是旧快照，
         // 不发事件的话用户切到任务页看不到刚创建的任务。
         let _ = self.app.emit("workbench://data-changed", ());
-        Ok(format!("已创建任务「{}」（id={}）", created.title, created.id))
+        Ok(format!(
+            "已创建任务「{}」（id={}）",
+            created.title, created.id
+        ))
     }
 
     fn scan_costs(&self) -> Result<String, String> {
@@ -352,8 +355,7 @@ impl ToolContext<'_> {
             .ok_or_else(|| "缺少 pid".to_string())?;
         // 不能用 `as u32` 截断：4294977297 会变成 10001，
         // 用户批准的是 A，实际被杀的是 B。
-        let pid = u32::try_from(raw_pid)
-            .map_err(|_| format!("pid {raw_pid} 超出有效范围"))?;
+        let pid = u32::try_from(raw_pid).map_err(|_| format!("pid {raw_pid} 超出有效范围"))?;
         let reason = args.get("reason").and_then(|v| v.as_str()).unwrap_or("");
         log::warn!("Agent 请求终止 PID={pid}，理由: {reason}");
         crate::procs::terminate_process(pid)?;

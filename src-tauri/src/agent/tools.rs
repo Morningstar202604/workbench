@@ -138,8 +138,7 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         },
         ToolSpec {
             name: "cost_trend".into(),
-            description: "Daily AI cost and token trend for the last N days."
-                .into(),
+            description: "Daily AI cost and token trend for the last N days.".into(),
             risk: ToolRisk::Read,
             parameters: serde_json::json!({
                 "type": "object",
@@ -151,8 +150,7 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         },
         ToolSpec {
             name: "system_info".into(),
-            description: "Host name, OS, logical core count, total memory and uptime."
-                .into(),
+            description: "Host name, OS, logical core count, total memory and uptime.".into(),
             risk: ToolRisk::Read,
             parameters: serde_json::json!({"type": "object", "properties": {}, "required": []}),
         },
@@ -180,8 +178,7 @@ pub fn tool_specs() -> Vec<ToolSpec> {
         },
         ToolSpec {
             name: "create_task".into(),
-            description: "Create a task on the workbench board. Requires user approval."
-                .into(),
+            description: "Create a task on the workbench board. Requires user approval.".into(),
             risk: ToolRisk::Mutate,
             parameters: serde_json::json!({
                 "type": "object",
@@ -340,10 +337,7 @@ impl Approvals {
     }
 
     pub fn pending_count(&self) -> usize {
-        self.pending
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .len()
+        self.pending.lock().unwrap_or_else(|p| p.into_inner()).len()
     }
 }
 
@@ -505,7 +499,8 @@ mod tests {
         let out = truncate_output(&text);
         // 声明部分必须仍然是合法 JSON
         let payload = out.lines().next().unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(payload).expect("截断后应仍是合法 JSON");
+        let parsed: serde_json::Value =
+            serde_json::from_str(payload).expect("截断后应仍是合法 JSON");
         let arr = parsed.as_array().unwrap();
         assert!(!arr.is_empty(), "至少保留一条");
         assert!(arr.len() < 2000, "必须真的截断了");

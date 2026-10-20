@@ -77,7 +77,7 @@ pub fn extract_usage(path: &str, mtime_day: &str) -> Vec<ModelUsage> {
             .and_then(line_day)
             .or_else(|| latest_day.clone())
             .unwrap_or_else(|| mtime_day.to_string());
-        if latest_day.as_deref().map_or(true, |prev| day.as_str() > prev) {
+        if latest_day.as_deref().is_none_or(|prev| day.as_str() > prev) {
             latest_day = Some(day.clone());
         }
         *chars_by_day.entry(day.clone()).or_insert(0) += line.chars().count();
@@ -210,7 +210,11 @@ fn line_day(v: &serde_json::Value) -> Option<String> {
     let ts = v.get("timestamp").or_else(|| v.get("time"))?;
     if let Some(s) = ts.as_str() {
         if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
-            return Some(dt.with_timezone(&chrono::Local).format("%Y-%m-%d").to_string());
+            return Some(
+                dt.with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d")
+                    .to_string(),
+            );
         }
         if let Ok(naive) = s.parse::<i64>() {
             return to_day(normalize_epoch(naive));
@@ -221,7 +225,9 @@ fn line_day(v: &serde_json::Value) -> Option<String> {
         return to_day(normalize_epoch(n));
     }
     // opencode 风格：time: { created: <ms> }
-    ts.get("created").and_then(|c| c.as_i64()).and_then(|n| to_day(normalize_epoch(n)))
+    ts.get("created")
+        .and_then(|c| c.as_i64())
+        .and_then(|n| to_day(normalize_epoch(n)))
 }
 
 /// 秒 / 毫秒时间戳统一为秒。
@@ -265,8 +271,7 @@ fn usage_from_value(v: &serde_json::Value) -> Option<Usage> {
     let input = pick(["input_tokens", "inputTokens", "prompt_tokens"]);
     let output = pick(["output_tokens", "outputTokens", "completion_tokens"]);
     let cache_read = usage_token_u64(usage.get("cache_read_input_tokens")).unwrap_or(0);
-    let cache_creation =
-        usage_token_u64(usage.get("cache_creation_input_tokens")).unwrap_or(0);
+    let cache_creation = usage_token_u64(usage.get("cache_creation_input_tokens")).unwrap_or(0);
     Some(Usage {
         input,
         output,
@@ -341,7 +346,9 @@ pub fn scan_sessions_to_records(
 fn unix_to_day(unix_secs: u64) -> String {
     let dt = chrono::DateTime::from_timestamp(unix_secs as i64, 0)
         .unwrap_or(chrono::DateTime::UNIX_EPOCH);
-    dt.with_timezone(&chrono::Local).format("%Y-%m-%d").to_string()
+    dt.with_timezone(&chrono::Local)
+        .format("%Y-%m-%d")
+        .to_string()
 }
 
 fn round3(v: f64) -> f64 {
@@ -410,7 +417,8 @@ mod tests {
     #[test]
     fn cache_only_line_is_not_dropped() {
         // 纯缓存写入行：input/output 为 0 但 cache_creation 非 0，这是真实计费事件
-        let json = r#"{"usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":8000}}"#;
+        let json =
+            r#"{"usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":8000}}"#;
         let v: serde_json::Value = serde_json::from_str(json).unwrap();
         let usage = usage_from_value(&v).expect("应识别为有效 usage");
         assert!(!usage.is_empty());
@@ -455,13 +463,16 @@ mod tests {
             modified: 1_767_000_000,
             size: 1,
         }];
-        let records =
-            scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
+        let records = scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].model, "claude-sonnet-4-5");
         assert_eq!(records[0].cost_source, "measured", "真实格式必须能定价");
         // sonnet-4-5 输入 $3/MTok → 100 万 input = $3
-        assert!((records[0].cost_total - 3.0).abs() < 0.01, "got {}", records[0].cost_total);
+        assert!(
+            (records[0].cost_total - 3.0).abs() < 0.01,
+            "got {}",
+            records[0].cost_total
+        );
         fs::remove_file(&tmp).ok();
     }
 
@@ -509,14 +520,27 @@ mod tests {
             modified: 1_767_000_000,
             size: 1,
         }];
-        let records =
-            scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
+        let records = scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
         assert_eq!(records.len(), 2);
-        let opus = records.iter().find(|r| r.model == "claude-opus-4-1").unwrap();
-        let haiku = records.iter().find(|r| r.model == "claude-haiku-4-5").unwrap();
+        let opus = records
+            .iter()
+            .find(|r| r.model == "claude-opus-4-1")
+            .unwrap();
+        let haiku = records
+            .iter()
+            .find(|r| r.model == "claude-haiku-4-5")
+            .unwrap();
         // opus 输入 $15/MTok，haiku $1/MTok
-        assert!((opus.cost_total - 15.0).abs() < 0.01, "opus got {}", opus.cost_total);
-        assert!((haiku.cost_total - 1.0).abs() < 0.01, "haiku got {}", haiku.cost_total);
+        assert!(
+            (opus.cost_total - 15.0).abs() < 0.01,
+            "opus got {}",
+            opus.cost_total
+        );
+        assert!(
+            (haiku.cost_total - 1.0).abs() < 0.01,
+            "haiku got {}",
+            haiku.cost_total
+        );
         fs::remove_file(&tmp).ok();
     }
 
@@ -534,8 +558,7 @@ mod tests {
             modified: 1_767_000_000,
             size: 10,
         }];
-        let records =
-            scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
+        let records = scan_sessions_to_records(&entries, &PricingTable::default(), &HashMap::new());
         assert!(records.is_empty(), "不可读文件不应产出记录");
     }
 
@@ -625,7 +648,11 @@ mod tests {
         // input 1000 全额计价，不被 cache 9000 吃掉
         assert_eq!(records[0].input_tokens, 1000);
         assert_eq!(records[0].cache_read_tokens, 9000);
-        assert!(records[0].cost_input > 0.003, "got {}", records[0].cost_input);
+        assert!(
+            records[0].cost_input > 0.003,
+            "got {}",
+            records[0].cost_input
+        );
         fs::remove_file(&tmp).ok();
     }
 

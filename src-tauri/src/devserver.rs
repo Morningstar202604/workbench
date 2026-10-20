@@ -52,7 +52,10 @@ const FRAMEWORK_RULES: &[(&str, &str, &str)] = &[
 
 /// 判断一个监听端口背后的进程是否是开发服务器。
 /// 返回 (框架名, 置信度)；不是则 None。
-pub fn classify_dev_server(cmd_lower: &str, exe_name_lower: &str) -> Option<(&'static str, String)> {
+pub fn classify_dev_server(
+    cmd_lower: &str,
+    exe_name_lower: &str,
+) -> Option<(&'static str, String)> {
     let haystack = format!("{cmd_lower} {exe_name_lower}");
     for (needle, label, confidence) in FRAMEWORK_RULES {
         if haystack.contains(needle) {
@@ -129,11 +132,8 @@ mod tests {
         let (f, _) = classify_dev_server("next-server (v15.0.0)", "node.exe").unwrap();
         assert_eq!(f, "Next.js");
 
-        let (f, _) = classify_dev_server(
-            "python -m uvicorn main:app --port 8000",
-            "python.exe",
-        )
-        .unwrap();
+        let (f, _) =
+            classify_dev_server("python -m uvicorn main:app --port 8000", "python.exe").unwrap();
         assert_eq!(f, "uvicorn (FastAPI/Starlette)");
     }
 

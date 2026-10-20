@@ -219,7 +219,10 @@ mod tests {
             !out.contains('\u{FFFD}'),
             "尾部读取不应产生替换字符，got: {out}"
         );
-        assert!(out.lines().all(|l| l.starts_with("[2026-01-01")), "每行都应是完整行");
+        assert!(
+            out.lines().all(|l| l.starts_with("[2026-01-01")),
+            "每行都应是完整行"
+        );
         assert_eq!(out.lines().count(), 20);
         fs::remove_file(&path).ok();
     }

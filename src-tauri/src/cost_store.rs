@@ -19,7 +19,9 @@ use crate::json_store;
 static COST_LOCK: Mutex<()> = Mutex::new(());
 
 fn lock() -> MutexGuard<'static, ()> {
-    COST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    COST_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 // ── 成本配置（预算 / 自定价 / 告警阈值）─────────────────────
@@ -280,7 +282,8 @@ pub fn import_records(app: &AppHandle, new_records: &[CostRecord]) -> Result<usi
 fn apply_import(data: &mut CostData, new_records: &[CostRecord]) -> usize {
     let touched_paths: HashSet<String> = new_records.iter().map(|r| r.file_path.clone()).collect();
     let old_len = data.records.len();
-    data.records.retain(|r| !touched_paths.contains(&r.file_path));
+    data.records
+        .retain(|r| !touched_paths.contains(&r.file_path));
     let replaced = old_len - data.records.len();
     data.records.extend(new_records.iter().cloned());
 
@@ -489,22 +492,47 @@ mod tests {
 
     #[test]
     fn reimport_same_file_replaces_group_instead_of_accumulating() {
-        let mut data = data_with(vec![record("/s/a.jsonl", "2026-10-01", "measured", "claude-sonnet-4-5", 0.5)]);
+        let mut data = data_with(vec![record(
+            "/s/a.jsonl",
+            "2026-10-01",
+            "measured",
+            "claude-sonnet-4-5",
+            0.5,
+        )]);
         // 同一文件增长后重扫：旧的两条按日记录应被这一组的新记录整组替换
         let second = vec![
-            record("/s/a.jsonl", "2026-10-01", "measured", "claude-sonnet-4-5", 0.6),
-            record("/s/a.jsonl", "2026-10-02", "measured", "claude-sonnet-4-5", 0.4),
+            record(
+                "/s/a.jsonl",
+                "2026-10-01",
+                "measured",
+                "claude-sonnet-4-5",
+                0.6,
+            ),
+            record(
+                "/s/a.jsonl",
+                "2026-10-02",
+                "measured",
+                "claude-sonnet-4-5",
+                0.4,
+            ),
         ];
         let net = apply_import(&mut data, &second);
 
         assert_eq!(data.records.len(), 2, "不应残留旧快照");
         assert_eq!(net, 1, "净新增 = 2 - 1");
         assert_eq!(
-            data.records.iter().find(|r| r.day == "2026-10-01").unwrap().cost_total,
+            data.records
+                .iter()
+                .find(|r| r.day == "2026-10-01")
+                .unwrap()
+                .cost_total,
             0.6,
             "应保留最新一次扫描的值"
         );
-        assert!(data.records.iter().all(|r| r.day != "2026-10-01" || r.cost_total > 0.5));
+        assert!(data
+            .records
+            .iter()
+            .all(|r| r.day != "2026-10-01" || r.cost_total > 0.5));
     }
 
     #[test]
@@ -528,8 +556,14 @@ mod tests {
         let filtered = overview_of(&off);
 
         assert!((on.total_cost - 10.0).abs() < 1e-9);
-        assert!((filtered.total_cost - 1.0).abs() < 1e-9, "估算行不应计入金额");
-        assert_eq!(filtered.estimated_count, 1, "计数仍应可见，用于提示数据质量");
+        assert!(
+            (filtered.total_cost - 1.0).abs() < 1e-9,
+            "估算行不应计入金额"
+        );
+        assert_eq!(
+            filtered.estimated_count, 1,
+            "计数仍应可见，用于提示数据质量"
+        );
         assert_eq!(filtered.record_count, 1);
         // 趋势与模型分解同样受开关影响
         assert_eq!(trend_of(&off, 14)[0].record_count, 1);
@@ -570,7 +604,9 @@ mod tests {
             record("/s/x.jsonl", "2026-05-01", "measured", "cheap", 0.1),
             record("/s/y.jsonl", "2026-05-01", "measured", "expensive", 3.0),
         ]);
-        mixed.records.push(record("/s/z.jsonl", "2026-05-02", "measured", "mid", 1.5));
+        mixed
+            .records
+            .push(record("/s/z.jsonl", "2026-05-02", "measured", "mid", 1.5));
         let models = model_breakdown_of(&mixed);
         assert_eq!(
             models.iter().map(|m| m.model.as_str()).collect::<Vec<_>>(),

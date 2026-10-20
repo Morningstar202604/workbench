@@ -3,9 +3,7 @@
 use tauri::AppHandle;
 
 use crate::ai::{self, AiProcess, OpencodeSession, SessionDetail, SessionFilePreview};
-use crate::cost_store::{
-    self, CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow,
-};
+use crate::cost_store::{self, CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow};
 use crate::data::{self, WorkbenchData};
 use crate::devserver::{self, DevServer};
 use crate::ipc_guard::{AllowedPorts, KnownDirs};
@@ -87,9 +85,7 @@ pub async fn list_ports() -> Result<Vec<PortEntry>, String> {
 
 /// 开发服务器 = LISTENING 的 TCP 端口 + 命令行命中框架规则的进程。
 #[tauri::command(async)]
-pub async fn list_dev_servers(
-    dirs: tauri::State<'_, KnownDirs>,
-) -> Result<Vec<DevServer>, String> {
+pub async fn list_dev_servers(dirs: tauri::State<'_, KnownDirs>) -> Result<Vec<DevServer>, String> {
     let servers = tauri::async_runtime::spawn_blocking(|| -> Result<Vec<DevServer>, String> {
         let ports = cached_port_entries()?;
         let procs = procs::snapshot_processes();
@@ -114,11 +110,8 @@ pub async fn list_dev_servers(
             if let Some((framework, confidence)) = classified {
                 // 用结构化 argv 而不是把 cmd_line 按空格重切：含空格的路径
                 // 会被切碎，推出一个不存在的相对目录并被登记进白名单。
-                let project_dir = devserver::guess_project_dir(
-                    &proc.argv,
-                    &proc.exe_path,
-                    &proc.cwd,
-                );
+                let project_dir =
+                    devserver::guess_project_dir(&proc.argv, &proc.exe_path, &proc.cwd);
                 servers.push(DevServer {
                     port: entry.local_port,
                     protocol: entry.protocol.clone(),
@@ -258,11 +251,10 @@ pub async fn opencode_session_detail(
         log::warn!("拒绝未探测过的端口上的会话详情请求: {port}");
         return Err("端口不在允许列表内，请刷新会话列表".to_string());
     }
-    let detail = tauri::async_runtime::spawn_blocking(move || {
-        ai::fetch_session_detail(port, &session_id)
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?;
+    let detail =
+        tauri::async_runtime::spawn_blocking(move || ai::fetch_session_detail(port, &session_id))
+            .await
+            .map_err(|e| format!("任务执行失败: {e}"))?;
     Ok(detail)
 }
 
@@ -412,10 +404,7 @@ pub async fn disk_info() -> Result<Vec<DiskInfo>, String> {
                 continue;
             }
             let available = d.available_space();
-            let label = d
-                .name()
-                .to_string_lossy()
-                .into_owned();
+            let label = d.name().to_string_lossy().into_owned();
             if label.is_empty() {
                 let mp = d.mount_point();
                 if mp == std::path::Path::new("/") {
@@ -577,10 +566,7 @@ pub async fn get_cost_settings_cmd(app: AppHandle) -> Result<CostSettings, Strin
 }
 
 #[tauri::command(async)]
-pub async fn save_cost_settings_cmd(
-    app: AppHandle,
-    settings: CostSettings,
-) -> Result<(), String> {
+pub async fn save_cost_settings_cmd(app: AppHandle, settings: CostSettings) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || cost_store::save_cost_settings(&app, settings))
         .await
         .map_err(|e| format!("任务执行失败: {e}"))?

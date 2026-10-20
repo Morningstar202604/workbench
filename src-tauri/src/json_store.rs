@@ -80,7 +80,10 @@ fn preserve_corrupt(path: &Path) -> Option<PathBuf> {
         return Some(target);
     }
     if fs::copy(path, &target).is_ok() {
-        log::error!("数据文件损坏，已复制保全为 {}（原文件仍在，勿直接保存）", target.display());
+        log::error!(
+            "数据文件损坏，已复制保全为 {}（原文件仍在，勿直接保存）",
+            target.display()
+        );
         return Some(target);
     }
     log::error!("数据文件损坏且无法保全: {}", path.display());

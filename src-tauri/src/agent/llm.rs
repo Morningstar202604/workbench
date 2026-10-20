@@ -123,7 +123,9 @@ pub fn validate_base_url(base_url: &str) -> Result<(), String> {
     if !(lower.starts_with("https://") || lower.starts_with("http://")) {
         return Err("base_url 必须以 http:// 或 https:// 开头".to_string());
     }
-    if lower.starts_with("http://") && !lower.contains("://localhost") && !lower.contains("://127.0.0.1")
+    if lower.starts_with("http://")
+        && !lower.contains("://localhost")
+        && !lower.contains("://127.0.0.1")
     {
         // 允许本机明文（Ollama/LM Studio），但提示远程用 http 会让密钥裸奔
         log::warn!("base_url 使用明文 http，若为远程地址请改用 https: {base_url}");
@@ -406,7 +408,11 @@ mod tests {
             "超时必须可重试"
         );
         assert_eq!(
-            classify_transport(false, true, "error sending request for url (http://127.0.0.1:9)"),
+            classify_transport(
+                false,
+                true,
+                "error sending request for url (http://127.0.0.1:9)"
+            ),
             FailureKind::Transient,
             "连接失败必须可重试"
         );
@@ -440,8 +446,14 @@ mod tests {
             ..Default::default()
         };
         let json = serde_json::to_string(&cfg).unwrap();
-        assert!(!json.contains("SECRET_PRIMARY"), "主密钥不得出现在序列化结果里");
-        assert!(!json.contains("SECRET_FALLBACK"), "备用密钥不得出现在序列化结果里");
+        assert!(
+            !json.contains("SECRET_PRIMARY"),
+            "主密钥不得出现在序列化结果里"
+        );
+        assert!(
+            !json.contains("SECRET_FALLBACK"),
+            "备用密钥不得出现在序列化结果里"
+        );
         assert!(json.contains("https://b/v1"), "非敏感字段应保留");
     }
 
