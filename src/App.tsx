@@ -1,5 +1,15 @@
-import { Suspense, useEffect } from "react";
-import { Moon, Pin, PinOff, RefreshCw, Sun } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import {
+  Menu,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pin,
+  PinOff,
+  RefreshCw,
+  Sun,
+  X,
+} from "lucide-react";
 import { useStore } from "./lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { invoke } from "@tauri-apps/api/core";
@@ -7,7 +17,9 @@ import { isTauri } from "./lib/api";
 import { APP_VERSION, localeFor, useLang, useT } from "./lib/i18n";
 import logoUrl from "./assets/logo.png";
 import { Btn, Modal, Spinner } from "./ui";
-import { PAGE_COMPONENTS, PAGES } from "./pages/registry";
+import { PAGE_COMPONENTS, PAGE_GROUPS, groupOf, pagesByGroup } from "./pages/registry";
+import { useBreakpoint } from "./lib/useBreakpoint";
+import type { ViewKey } from "./pages/registry";
 
 /** 当前视图的页面组件。注册表由 pages/registry 统一维护。 */
 function CurrentPage({ view }: { view: keyof typeof PAGE_COMPONENTS }) {
@@ -18,6 +30,11 @@ function CurrentPage({ view }: { view: keyof typeof PAGE_COMPONENTS }) {
 export default function App() {
   const t = useT();
   const lang = useLang();
+  const bp = useBreakpoint();
+  // 侧边栏折叠（桌面/平板）与抽屉（窄屏）是两套状态：
+  // 折叠是用户偏好，抽屉是临时交互，混用一个布尔会在跨断点时表现错乱。
+  const [collapsed, setCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const {
     view,
     setView,
@@ -109,46 +126,123 @@ export default function App() {
 
   return (
     <div className="flex h-full overflow-hidden bg-bg text-text">
-      <aside className="flex w-48 shrink-0 flex-col border-r border-line bg-panel">
-        <div className="flex items-center gap-2 px-4 py-4">
+      {/* 窄屏遮罩：抽屉打开时点击关闭 */}
+      {bp === "compact" && drawerOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={[
+          "z-40 flex shrink-0 flex-col border-r border-line bg-panel transition-[width,transform] duration-200",
+          // 窄屏：变成从左侧滑出的抽屉，默认收起
+          bp === "compact"
+            ? `fixed inset-y-0 left-0 w-60 ${drawerOpen ? "translate-x-0" : "-translate-x-full"}`
+            : collapsed
+              ? "w-14"
+              : "w-52",
+        ].join(" ")}
+      >
+        <div
+          className={`flex items-center gap-2 px-3 py-4 ${collapsed && bp !== "compact" ? "justify-center" : ""}`}
+        >
           <img
             src={logoUrl}
             alt="Workbench logo"
-            className="h-8 w-8 rounded-lg"
+            className="h-8 w-8 shrink-0 rounded-lg"
             draggable={false}
           />
-          <div>
-            <div className="text-sm font-bold leading-tight">{t("app.brand")}</div>
-            <div className="text-[10px] leading-tight text-dim">{t("app.brandSub")}</div>
-          </div>
+          {(!collapsed || bp === "compact") && (
+            <div className="min-w-0">
+              <div className="truncate text-sm font-bold leading-tight">
+                {t("app.brand")}
+              </div>
+              <div className="truncate text-[10px] leading-tight text-dim">
+                {t("app.brandSub")}
+              </div>
+            </div>
+          )}
+          {bp === "compact" && (
+            <button
+              type="button"
+              className="ml-auto rounded p-1 text-dim hover:text-text"
+              onClick={() => setDrawerOpen(false)}
+              aria-label={t("agent.reject")}
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
-        <nav className="flex flex-col gap-0.5 px-2">
-          {PAGES.map(({ key, icon: Icon }) => {
+
+        <nav className="flex-1 overflow-y-auto px-2 pb-2">
+          {pagesByGroup().map(({ group, pages }) => {
+            const isActiveGroup = groupOf(view) === group;
+            const showItems = !collapsed || bp === "compact" || isActiveGroup;
             return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setView(key)}
-                className={`relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                  view === key
-                    ? "bg-accentsoft font-semibold text-accent"
-                    : "text-dim hover:bg-panel2 hover:text-text"
-                }`}
-              >
-                {view === key && (
-                  <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent" />
+              <div key={group} className="mb-1">
+                {(!collapsed || bp === "compact") && (
+                  <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-dim/70">
+                    {t(PAGE_GROUPS.find((g) => g.key === group)?.label ?? group)}
+                  </div>
                 )}
-                <Icon size={16} />
-                {t(`app.nav.${key}`)}
-              </button>
+                {showItems &&
+                  pages.map(({ key, icon: Icon }) => {
+                    const active = view === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        title={t(`app.nav.${key}`)}
+                        onClick={() => {
+                          setView(key as ViewKey);
+                          setDrawerOpen(false);
+                        }}
+                        className={`relative flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                          active
+                            ? "bg-accentsoft font-semibold text-accent"
+                            : "text-dim hover:bg-panel2 hover:text-text"
+                        } ${collapsed && bp !== "compact" ? "justify-center px-0" : ""}`}
+                      >
+                        {active && (
+                          <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent" />
+                        )}
+                        <Icon size={16} className="shrink-0" />
+                        {(!collapsed || bp === "compact") && (
+                          <span className="truncate">{t(`app.nav.${key}`)}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+              </div>
             );
           })}
         </nav>
-        <div className="mt-auto px-3 py-3 text-[10px] leading-relaxed text-dim">
-          <div>{tauri ? t("app.mode.desktop") : t("app.mode.browser")}</div>
-          <div className="mt-0.5 opacity-60">
-            {t("app.versionLine", { version: APP_VERSION })}
-          </div>
+
+        {/* 折叠开关（仅桌面/平板） */}
+        {bp !== "compact" && (
+          <button
+            type="button"
+            onClick={() => setCollapsed(!collapsed)}
+            className="flex items-center gap-2 border-t border-line px-3 py-2 text-xs text-dim hover:text-text"
+            title={collapsed ? t("app.nav.expand") : t("app.nav.collapse")}
+          >
+            {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+            {!collapsed && <span className="truncate">{t("app.nav.collapse")}</span>}
+          </button>
+        )}
+
+        <div className="px-3 py-2 text-[10px] leading-relaxed text-dim">
+          {(!collapsed || bp === "compact") && (
+            <>
+              <div>{tauri ? t("app.mode.desktop") : t("app.mode.browser")}</div>
+              <div className="mt-0.5 opacity-60">
+                {t("app.versionLine", { version: APP_VERSION })}
+              </div>
+            </>
+          )}
         </div>
       </aside>
 
@@ -157,7 +251,16 @@ export default function App() {
           className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-panel/80 px-5 backdrop-blur"
           data-tauri-drag-region
         >
-          <h1 className="text-base font-semibold">{t(`app.title.${view}`)}</h1>
+          {bp === "compact" && (
+            <Btn
+              title={t("app.nav.menu")}
+              onClick={() => setDrawerOpen(true)}
+              className="!px-2 !py-1"
+            >
+              <Menu size={16} />
+            </Btn>
+          )}
+          <h1 className="truncate text-base font-semibold">{t(`app.title.${view}`)}</h1>
           <span
             className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium ${tauri ? "text-ok border-ok/40 bg-ok/10" : "text-warn border-warn/40 bg-warn/10"}`}
           >
@@ -165,7 +268,7 @@ export default function App() {
           </span>
           <div className="ml-auto flex items-center gap-2 text-xs text-dim">
             {loading && <Spinner />}
-            <span>
+            <span className="hidden sm:inline">
               {lastRefreshAt
                 ? t("app.updatedAt", {
                     time: new Date(lastRefreshAt).toLocaleTimeString(localeFor(lang), {

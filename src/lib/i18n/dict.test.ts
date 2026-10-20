@@ -9,6 +9,7 @@ import { dict as projects } from "./projects";
 import { dict as tasks } from "./tasks";
 import { dict as settings } from "./settings";
 import { dict as logs } from "./logs";
+import { dict as agent } from "./agent";
 
 /**
  * 三语词典对齐门禁。
@@ -27,6 +28,7 @@ const MODULES = {
   tasks,
   settings,
   logs,
+  agent,
 };
 
 const LANGS = ["en", "zh", "ja"] as const;

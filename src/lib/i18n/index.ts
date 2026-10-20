@@ -15,6 +15,7 @@ import { dict as projects } from "./projects";
 import { dict as tasks } from "./tasks";
 import { dict as settings } from "./settings";
 import { dict as logs } from "./logs";
+import { dict as agent } from "./agent";
 
 export type Lang = "en" | "zh" | "ja";
 
@@ -34,6 +35,7 @@ const DICTS: Record<Lang, Dict> = {
     ...tasks.en,
     ...settings.en,
     ...logs.en,
+    ...agent.en,
   },
   zh: {
     ...core.zh,
@@ -45,6 +47,7 @@ const DICTS: Record<Lang, Dict> = {
     ...tasks.zh,
     ...settings.zh,
     ...logs.zh,
+    ...agent.zh,
   },
   ja: {
     ...core.ja,
@@ -56,6 +59,7 @@ const DICTS: Record<Lang, Dict> = {
     ...tasks.ja,
     ...settings.ja,
     ...logs.ja,
+    ...agent.ja,
   },
 };
 
