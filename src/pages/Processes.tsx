@@ -142,7 +142,14 @@ export default function Processes() {
             },
           })),
           barWidth: "60%",
-          label: { show: true, position: "top", fontSize: 10 },
+          // 0 值不显示标签：条长为 0 时标签会贴在坐标轴上，
+          // 看起来像散落的字符而不是数据（实测「0」出现在轴线上）。
+          label: {
+            show: true,
+            position: "top",
+            fontSize: 10,
+            formatter: (p: { value: number }) => (p.value > 0 ? String(p.value) : ""),
+          },
         },
       ],
     }),

@@ -22,6 +22,7 @@ import { useShallow } from "zustand/react/shallow";
 import { Badge, Card, Empty, SectionTitle, StatCard, Table, Td, Tr } from "../ui";
 import { formatBytes, formatCpu, formatUptime, dueLabel, shortPath } from "../lib/util";
 import { useT, useLang, localeFor } from "../lib/i18n";
+import { useBreakpoint } from "../lib/useBreakpoint";
 import { categorizeProcesses, portDistribution } from "../lib/aggregate";
 import logoUrl from "../assets/logo.png";
 
@@ -30,6 +31,7 @@ import logoUrl from "../assets/logo.png";
 export default function Overview() {
   const t = useT();
   const lang = useLang();
+  const bp = useBreakpoint();
   const {
     procs,
     ports,
@@ -83,21 +85,33 @@ export default function Overview() {
     const times = history.map((h) =>
       new Date(h.t).toLocaleTimeString(localeFor(lang), { hour12: false }).slice(3)
     );
+    // 窄屏下双轴名（CPU% / GB）与图例挤在同一行会重叠，
+    // 把图例下移并允许换行，轴名保持贴边。
+    const narrow = bp === "compact";
     return {
-      grid: { left: 42, right: 48, top: 28, bottom: 24 },
+      grid: { left: 42, right: narrow ? 36 : 48, top: narrow ? 46 : 28, bottom: 24 },
       tooltip: { trigger: "axis" },
-      legend: { top: 0, icon: "roundRect", itemWidth: 12, itemHeight: 4 },
+      legend: {
+        top: narrow ? 20 : 0,
+        left: "center",
+        icon: "roundRect",
+        itemWidth: 12,
+        itemHeight: 4,
+        textStyle: { fontSize: narrow ? 9 : 10 },
+      },
       xAxis: { type: "category", data: times, axisLabel: { fontSize: 10 } },
       yAxis: [
         {
           type: "value",
           name: "CPU%",
+          nameTextStyle: { fontSize: narrow ? 9 : 10 },
           axisLabel: { fontSize: 10 },
           splitLine: { lineStyle: { type: "dashed" } },
         },
         {
           type: "value",
           name: "GB",
+          nameTextStyle: { fontSize: narrow ? 9 : 10 },
           axisLabel: { fontSize: 10 },
           splitLine: { show: false },
         },
@@ -152,7 +166,7 @@ export default function Overview() {
         },
       ],
     };
-  }, [history, t, lang]);
+  }, [history, t, lang, bp]);
 
   // 进程分类饼图（分类规则与色板在 lib/aggregate 与 chartTheme，页面不再自持一份）
   const categories = useMemo(
@@ -251,18 +265,16 @@ export default function Overview() {
             {
               id: "disk",
               type: "pie",
-              radius: ["58%", "78%"],
+              radius: ["52%", "72%"],
               center: ["50%", "50%"],
               padAngle: 3,
               itemStyle: { borderColor: chartGapColor(theme), borderWidth: 2 },
-              label: {
-                show: true,
-                position: "outside",
-                fontSize: 10,
-                formatter: (p: { data: { name: string }; percent: number }) =>
-                  `${p.data.name}\n${p.percent}%`,
-              },
-              labelLine: { length: 8, length2: 10 },
+              // 不画外侧标签：多个磁盘时 ECharts 的标签避让实测仍会叠在一起
+              // （「D 38%」压在「C 65%」上），而这张卡的下方本来就有完整的
+              // 磁盘列表（名称 + 已用/总量 + 百分比），hover 还有 tooltip。
+              // 在这里重复一遍标签只会制造噪音和遮挡。
+              label: { show: false },
+              labelLine: { show: false },
               data: diskSeries,
             },
           ]
@@ -270,7 +282,7 @@ export default function Overview() {
             {
               id: "disk-empty",
               type: "pie",
-              radius: ["58%", "78%"],
+              radius: ["52%", "72%"],
               center: ["50%", "50%"],
               silent: true,
               data: [
@@ -290,19 +302,21 @@ export default function Overview() {
   return (
     <div className="flex flex-col gap-5">
       {/* ── Hero 横幅：大标题 + 实时状态 ── */}
-      <div className="hero-glow relative overflow-hidden rounded-2xl border border-line bg-panel p-6">
+      <div className="hero-glow relative overflow-hidden rounded-2xl border border-line bg-panel p-4 sm:p-6">
         <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-accent/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-28 -left-16 h-56 w-56 rounded-full bg-accentsoft/60 blur-3xl" />
-        <div className="relative flex flex-wrap items-center gap-5">
+        {/* 窄屏纵向堆叠：logo 与文案并排时，390px 宽度下文案只剩 ~250px，
+            greeting 那句被挤成每行两三个词的高窄列。 */}
+        <div className="relative flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5">
           <img
             src={logoUrl}
             alt=""
-            className="hero-float h-16 w-16 rounded-2xl shadow-[0_8px_32px_rgba(34,211,238,0.25)]"
+            className="hero-float h-12 w-12 rounded-2xl shadow-[0_8px_32px_rgba(34,211,238,0.25)] sm:h-16 sm:w-16"
             draggable={false}
           />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-wide">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h1 className="text-2xl font-bold tracking-wide sm:text-3xl">
                 {t("overview.heroTitle")}
               </h1>
               <span className="rounded-md border border-accent/40 bg-accentsoft px-2 py-0.5 text-xs font-medium text-accent">
@@ -313,7 +327,7 @@ export default function Overview() {
               {greeting(t)} · {t("overview.heroSubtitle")}
             </p>
           </div>
-          <div className="flex flex-col items-end gap-1.5 text-right">
+          <div className="flex flex-col items-start gap-1.5 text-left sm:items-end sm:text-right">
             <span className="flex items-center gap-2 text-sm font-medium text-ok">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60" />

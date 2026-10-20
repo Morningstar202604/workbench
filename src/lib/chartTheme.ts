@@ -151,7 +151,9 @@ export function horizontalBarOption({
 }: HorizontalBarOptions) {
   const accent = chartTheme(theme).accent;
   return {
-    grid: { left, right: 24, top: 8, bottom: 8 },
+    // 右侧留够空间给数值标签：值为 0 时条形长度为 0，
+    // 标签会紧贴左边缘，right 太小时更容易被裁掉。
+    grid: { left, right: 40, top: 8, bottom: 8 },
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
     xAxis: { type: "value", show: false },
     yAxis: {
@@ -184,7 +186,15 @@ export function horizontalBarOption({
             borderRadius: [0, 6, 6, 0],
           },
         })),
-        label: { show: true, position: "right", fontSize, formatter: valueLabel },
+        label: {
+          show: true,
+          position: "right",
+          fontSize,
+          formatter: valueLabel,
+          // 0 值也显示，但用弱化色，避免看起来像数据缺失
+          color: "inherit",
+          opacity: 0.75,
+        },
       },
     ],
   };

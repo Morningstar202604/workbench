@@ -17,7 +17,7 @@ import { isTauri } from "./lib/api";
 import { APP_VERSION, localeFor, useLang, useT } from "./lib/i18n";
 import logoUrl from "./assets/logo.png";
 import { Btn, Modal, Spinner } from "./ui";
-import { PAGE_COMPONENTS, PAGE_GROUPS, groupOf, pagesByGroup } from "./pages/registry";
+import { PAGE_COMPONENTS, PAGE_GROUPS, pagesByGroup } from "./pages/registry";
 import { useBreakpoint } from "./lib/useBreakpoint";
 import type { ViewKey } from "./pages/registry";
 
@@ -156,7 +156,7 @@ export default function App() {
       {/* 窄屏遮罩：抽屉打开时点击关闭 */}
       {bp === "compact" && drawerOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-[1px]"
           onClick={() => setDrawerOpen(false)}
           aria-hidden="true"
         />
@@ -206,14 +206,24 @@ export default function App() {
 
         <nav className="flex-1 overflow-y-auto px-2 pb-2">
           {pagesByGroup().map(({ group, pages }) => {
-            const isActiveGroup = groupOf(view) === group;
-            const showItems = !collapsed || bp === "compact" || isActiveGroup;
+            // 折叠态也要显示所有页面：只显示当前组会让「设置/日志」没有入口，
+            // 用户必须先展开才能切过去。折叠时用一条分隔线代表分组边界。
+            const showItems = true;
+            const showGroupLabel = !collapsed || bp === "compact";
             return (
               <div key={group} className="mb-1">
-                {(!collapsed || bp === "compact") && (
+                {showGroupLabel ? (
                   <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-dim/70">
                     {t(PAGE_GROUPS.find((g) => g.key === group)?.label ?? group)}
                   </div>
+                ) : (
+                  // 折叠时用分隔线代替组标题；第一个组不画，避免顶部多余线条
+                  group !== "monitor" && (
+                    <div
+                      className="mx-2 my-1.5 border-t border-line/60"
+                      aria-hidden="true"
+                    />
+                  )
                 )}
                 {showItems &&
                   pages.map(({ key, icon: Icon }) => {
