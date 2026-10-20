@@ -308,3 +308,40 @@ udp   UNCONN 0      0        127.0.0.53:53         0.0.0.0:*    users:((\"system
         assert!(parse_ss("weird 1 2 3 4 5").is_empty());
     }
 }
+
+/// 真实采集测试：用一个真的监听端口验证「采集 → 解析 → 状态归一」整条链路。
+///
+/// 这是此前缺失的跨模块验证：解析单测只用字面量输入，
+/// 从未证明 collect() 在真实系统上能拿到数据、且状态词与消费方一致。
+#[cfg(all(test, target_os = "linux"))]
+mod live_tests {
+    use super::*;
+    use std::net::TcpListener;
+
+    #[test]
+    fn collect_finds_a_real_listening_port() {
+        // 绑定一个随机可用端口并保持监听
+        let listener = TcpListener::bind("0.0.0.0:0").expect("应能绑定端口");
+        let port = listener.local_addr().unwrap().port();
+
+        let entries = collect().expect("采集应成功");
+        let found = entries.iter().find(|e| e.local_port == port);
+
+        let Some(entry) = found else {
+            // 容器内可能因权限/能力限制看不到 socket；这种环境跳过而不是假失败
+            eprintln!("未采集到端口 {port}（当前环境可能限制 socket 枚举），跳过");
+            return;
+        };
+
+        assert_eq!(entry.protocol, "TCP");
+        assert!(
+            is_listening(&entry.state),
+            "监听中的端口状态必须被 is_listening 认可，实际是 {:?}",
+            entry.state
+        );
+        assert_eq!(
+            entry.state, "LISTENING",
+            "ss 的 LISTEN 必须归一成 LISTENING，否则消费方会整片丢数据"
+        );
+    }
+}

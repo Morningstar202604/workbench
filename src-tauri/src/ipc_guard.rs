@@ -22,24 +22,31 @@ use std::sync::{Mutex, MutexGuard};
 pub fn normalize_path(raw: &str) -> String {
     let unified = raw.trim().replace('\\', "/");
 
-    // UNC（\\server\share）与其扩展前缀（\\?\C:\...）保留双斜杠语义
-    let (prefix, rest) = if let Some(stripped) = unified.strip_prefix("//") {
-        ("//", stripped)
-    } else if unified.starts_with('/') {
-        // 单斜杠开头在 Windows 上是「当前盘根相对」（与相对路径 foo 不同，
-        // 归一后若丢掉前导斜杠会撞键），因此拒绝；但在 POSIX 上 `/home/me`
-        // 就是标准绝对路径 —— 若也拒绝，Linux 上白名单会恒为空，
-        // 「打开目录 / git 分支」全部失效。所以这条只对 Windows 生效。
-        #[cfg(windows)]
-        {
-            return String::new();
-        }
-        #[cfg(not(windows))]
-        {
-            ("/", &unified[1..])
-        }
+    // 关键设计：归一规则跟着**路径自身的形态**走，而不是跟着编译平台走。
+    //
+    // 理由：同一个路径字符串在不同平台上必须有确定且一致的含义。
+    // 若按 cfg(platform) 切换，`C:\proj` 在 Linux 上会失去大小写折叠，
+    // 而 `C:\Proj` 与 `C:\proj` 在 Windows 上本来就是同一个目录 ——
+    // 于是同一份配置文件在双平台间迁移时白名单键会漂移。
+    // 形态判断没有这个问题：
+    // - 盘符路径（c:/...）→ Windows 语义（大小写不敏感）
+    // - POSIX 绝对路径（/home/...）→ POSIX 语义（大小写敏感）
+    // - UNC（//server/share）→ 保留双斜杠，Windows 语义
+    let is_drive = {
+        let b = unified.as_bytes();
+        b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':'
+    };
+    let is_unc = unified.starts_with("//");
+
+    let (prefix, rest, fold_case) = if let Some(stripped) = unified.strip_prefix("//") {
+        ("//", stripped, true)
+    } else if is_drive {
+        ("", unified.as_str(), true)
+    } else if let Some(stripped) = unified.strip_prefix('/') {
+        // POSIX 绝对路径：保留前导斜杠，大小写敏感
+        ("/", stripped, false)
     } else {
-        ("", unified.as_str())
+        ("", unified.as_str(), false)
     };
 
     let mut out: Vec<&str> = Vec::new();
@@ -61,19 +68,16 @@ pub fn normalize_path(raw: &str) -> String {
     }
 
     // 只有盘符没有后续段（"c:"）：不是绝对路径，拒绝
-    if prefix.is_empty() && out.len() == 1 && out[0].ends_with(':') {
+    if prefix.is_empty() && !is_unc && out.len() == 1 && out[0].ends_with(':') {
         return String::new();
     }
 
     let joined = out.join("/");
-    // 大小写折叠只在 Windows 上正确：NTFS 大小写不敏感，而 ext4/APFS
-    // 默认大小写敏感 —— 在 Linux 上把 /home/Me 与 /home/me 归一成同一键
-    // 会让白名单误拒合法路径（也可能把两个不同目录混为一谈）。
-    #[cfg(windows)]
-    let joined = joined.to_ascii_lowercase();
-    #[cfg(not(windows))]
-    let joined = joined;
-
+    let joined = if fold_case {
+        joined.to_ascii_lowercase()
+    } else {
+        joined
+    };
     format!("{prefix}{joined}")
 }
 
@@ -137,17 +141,44 @@ impl KnownDirs {
     }
 }
 
+/// 判断一个路径字符串是否为绝对路径，**不依赖当前编译平台**。
+///
+/// 为什么不能用 `Path::is_absolute()`：它是平台相关的。
+/// 在 Linux 上 `C:\proj` 不是绝对路径，在 Windows 上 `/home/x` 也不是。
+/// 而我们要处理的是「用户在哪台机器上填的路径」，两者都可能出现
+/// （共享配置、迁移、以及测试本身）。字符级判断才跨平台一致。
+pub fn is_absolute_path(raw: &str) -> bool {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let unified = trimmed.replace('\\', "/");
+    // POSIX 绝对路径
+    if unified.starts_with('/') {
+        return true;
+    }
+    // Windows 盘符绝对路径：X:/... 或 X:\...
+    let bytes = unified.as_bytes();
+    if bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && bytes[2] == b'/'
+    {
+        return true;
+    }
+    false
+}
+
 /// 绝对路径 + 存在 + 是目录。相对路径一律拒绝：它会随进程工作目录漂移。
 fn is_absolute_dir(raw: &str) -> bool {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return false;
     }
-    let path = Path::new(trimmed);
-    if !path.is_absolute() {
+    if !is_absolute_path(raw) {
         return false;
     }
-    path.is_dir()
+    Path::new(trimmed).is_dir()
 }
 
 /// `opencode_sessions` 实际命中的服务端口。会话详情只允许复用这些端口，
@@ -213,14 +244,6 @@ mod tests {
         assert_ne!(normalize_path("/home/Me"), normalize_path("/home/me"));
     }
 
-    /// Windows 上单斜杠开头的 `/foo` 是「当前盘根相对」，必须拒绝。
-    #[cfg(windows)]
-    #[test]
-    fn windows_rejects_root_relative_single_slash() {
-        assert_eq!(normalize_path("/foo"), "");
-        assert_eq!(normalize_path("/Users/me"), "");
-    }
-
     #[test]
     fn normalize_collapses_dot_segments_and_escapes_to_empty() {
         // 「..」先被词法吃掉，才谈「是否等于已登记目录」
@@ -234,13 +257,9 @@ mod tests {
         // 单独盘符不是绝对路径（会随 CWD 漂移）
         assert_eq!(normalize_path("C:"), "");
         assert_eq!(normalize_path("c:/"), "");
-        #[cfg(windows)]
-        {
-            // 单斜杠开头是「当前盘根相对」，不能与相对路径折叠
-            assert_eq!(normalize_path("/foo"), "");
-            assert_eq!(normalize_path("/Users/me"), "");
-            assert_ne!(normalize_path("/foo"), normalize_path("foo"));
-        }
+        // 单斜杠开头是 POSIX 绝对路径，必须与相对路径区分开
+        assert_eq!(normalize_path("/foo"), "/foo");
+        assert_ne!(normalize_path("/foo"), normalize_path("foo"));
         assert_eq!(normalize_path("/"), "");
     }
 

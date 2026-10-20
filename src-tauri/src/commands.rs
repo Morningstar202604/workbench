@@ -21,7 +21,9 @@ use std::process::Command;
 ///
 /// 目前只有 git 探测走这里；端口采集已统一到 procs::run_quiet
 /// （按平台选 netstat / ss）。
-fn silent(mut cmd: Command) -> Command {
+fn silent(cmd: Command) -> Command {
+    #[cfg(windows)]
+    let mut cmd = cmd;
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

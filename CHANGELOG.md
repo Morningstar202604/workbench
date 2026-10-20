@@ -24,9 +24,16 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     config files.
 - **Linux support** — port collection via `ss -tulpn` (with `netstat`
   fallback), unified listen-state vocabulary across both dialects,
-  platform-aware protected-process lists, case-sensitive path handling and
-  POSIX absolute paths on POSIX, plus `deb` / `AppImage` packaging targets.
-  A Linux CI job now compiles and tests the backend on ubuntu-latest.
+  platform-aware protected-process lists, and a single normalisation rule that
+  follows the path's own shape (drive letter, UNC, POSIX) instead of the
+  compile target, so the same config string means the same thing on both
+  platforms.
+  **Verified on real Linux (Ubuntu 24.04)**: 93 unit tests pass, clippy is
+  clean, the `deb` package builds (`Workbench_0.1.1_amd64.deb`, 8.2 MiB), the
+  binary inside it has zero missing shared libraries, and it starts under
+  Xvfb — the log shows the app booting and probing the opencode port.
+  AppImage is not shipped: the bundler downloads `linuxdeploy` from GitHub at
+  build time and that host is unreachable here, so it is unverified.
 - **Responsive shell** — grouped, collapsible sidebar; on narrow windows it
   becomes a drawer. Layout adapts across desktop / tablet / phone widths.
 - New **Cost ledger** page (cost moved out of the AI sessions page) and

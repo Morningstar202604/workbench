@@ -147,7 +147,7 @@ data can never leak into the repo.
 
 | Item | Requirement |
 |------|-------------|
-| OS | Windows 10 / 11 (x64); Linux (deb / AppImage) |
+| OS | Windows 10 / 11 (x64); Linux (deb) |
 | Runtime | Windows needs WebView2 (preinstalled on Windows 11); Linux needs WebKitGTK 4.1 |
 | Disk | ~35 MB installed; portable single file ~15 MB |
 | Privileges | No admin required; killing a process needs same-or-higher privileges |
@@ -338,9 +338,11 @@ Done and planned. Vote or propose new ideas in the Issues.
 ## Known limitations
 
 - Port collection runs `netstat -ano` on Windows and `ss -tulpn` on Linux
-  (falling back to `netstat`). Linux paths are covered by CI on ubuntu-latest,
-  but the packaged deb/AppImage have not yet been smoke-tested on a real
-  desktop distribution
+  (falling back to `netstat`). The Linux backend is tested and the `deb`
+  package has been built and started successfully (Ubuntu 24.04 via
+  container + Xvfb); it has not been tried on a physical desktop yet.
+  AppImage is not produced because the bundler fetches `linuxdeploy` from
+  GitHub at build time
 - The AI assistant sends tool results (process command lines, project paths,
   task titles) to the model service **you configure**. If command lines may
   contain secrets, treat that provider as part of your trust boundary

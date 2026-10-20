@@ -80,23 +80,33 @@ pub fn guess_project_dir(argv: &[String], exe_path: &str, cwd: &str) -> Option<S
         }
     }
 
-    // 2) 参数里形如 <dir>/main:app 的模块路径（uvicorn main:app）
+    // 2) 参数里形如 <dir>/main:app 的模块路径（uvicorn main:app）。
+    // 先把分隔符统一：POSIX 上反斜杠不是分隔符，不统一的话
+    // c:\proj\api\main:app 在 Linux 上拆不出目录。
     for arg in argv {
-        // 排除 Windows 盘符（C:\...）里的冒号
-        if arg.contains(':') && !arg.contains(":\\") && !arg.contains(":/") {
-            let before = arg.split(':').next().unwrap_or("");
-            if let Some(idx) = before.rfind(['\\', '/']) {
-                let dir = &before[..idx];
-                if !dir.trim().is_empty() {
-                    return Some(dir.to_string());
+        let norm = arg.replace('\\', "/");
+        let is_drive_colon = {
+            let b = norm.as_bytes();
+            b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':'
+        };
+        // 只处理「模块:对象」，跳过盘符里的冒号
+        if !is_drive_colon && norm.contains(':') {
+            if let Some(before) = norm.split(':').next() {
+                if let Some(idx) = before.rfind('/') {
+                    let dir = &before[..idx];
+                    if !dir.trim().is_empty() {
+                        return Some(dir.to_string());
+                    }
                 }
             }
+            // 无目录前缀（uvicorn main:app）：交给 cwd 兜底
         }
     }
 
     // 3) 兜底：进程 cwd。只接受绝对路径，避免把相对串塞进白名单。
+    // 用跨平台判断：POSIX 上 Path::is_absolute 会拒绝 Windows 风格路径。
     let trimmed = cwd.trim().trim_end_matches(['\\', '/']);
-    if !trimmed.is_empty() && std::path::Path::new(trimmed).is_absolute() {
+    if !trimmed.is_empty() && crate::ipc_guard::is_absolute_path(trimmed) {
         return Some(trimmed.to_string());
     }
     None
