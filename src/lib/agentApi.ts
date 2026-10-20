@@ -41,6 +41,11 @@ export async function agentRejectTool(callId: string): Promise<void> {
   await invoke("agent_reject_tool", { callId });
 }
 
+/** 清空对话：撤销后端所有待批/已批调用，并停止在跑的那次。 */
+export async function agentClearChat(): Promise<void> {
+  await invoke("agent_clear_chat");
+}
+
 /** 请求停止当前对话（后端在下一个检查点退出）。 */
 export async function agentCancel(): Promise<void> {
   await invoke("agent_cancel");

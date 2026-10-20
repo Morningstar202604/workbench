@@ -425,10 +425,18 @@ pub fn run(app: &AppHandle, state: &AgentState, mut messages: Vec<ChatMessage>) 
                 elapsed_ms: tool_started.elapsed().as_millis() as u64,
             });
 
+            // 每个 tool_call 都必须有一条对应响应，否则下一轮消息序列非法
+            // （assistant 声明了 N 个 tool_calls，却只有 M<N 条 tool 回复 → API 400）。
+            // 需要审批的情况也写一条说明性响应，让模型知道「等用户确认」。
             messages.push(ChatMessage::Tool {
                 tool_call_id: tc.id.clone(),
                 content: if result.ok {
                     result.content
+                } else if result.needs_approval {
+                    format!(
+                        "PENDING USER APPROVAL: {}. Do not retry; the user must confirm.",
+                        result.error
+                    )
                 } else {
                     format!("ERROR: {}", result.error)
                 },
@@ -647,6 +655,13 @@ pub async fn agent_approve_tool(
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+/// 清空对话：同时撤销后端所有待批/已批调用。
+#[tauri::command]
+pub fn agent_clear_chat(state: State<'_, AgentState>) {
+    state.approvals.revoke_all();
+    state.cancel();
 }
 
 /// 请求停止当前对话。循环会在下一个检查点退出。

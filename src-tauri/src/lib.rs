@@ -148,6 +148,7 @@ pub fn run() {
             agent::agent_approve_tool,
             agent::agent_reject_tool,
             agent::agent_cancel,
+            agent::agent_clear_chat,
             agent::agent_run,
         ])
         .run(tauri::generate_context!())

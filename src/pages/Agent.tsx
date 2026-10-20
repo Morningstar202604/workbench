@@ -20,6 +20,7 @@ import { Badge, Btn, Card, Empty, Field, Modal, inputCls } from "../ui";
 import {
   agentApproveTool,
   agentCancel,
+  agentClearChat,
   agentGetProvider,
   agentListTools,
   agentRejectTool,
@@ -255,14 +256,17 @@ export default function Agent() {
     [setToast, t, setTurns, setPending]
   );
 
-  const reject = useCallback(async (approval: PendingApproval) => {
-    try {
-      await agentRejectTool(approval.callId);
-    } catch {
-      /* 拒绝失败不影响 UI */
-    }
-    setPending((prev) => prev.filter((p) => p.callId !== approval.callId));
-  }, [setPending]);
+  const reject = useCallback(
+    async (approval: PendingApproval) => {
+      try {
+        await agentRejectTool(approval.callId);
+      } catch {
+        /* 拒绝失败不影响 UI */
+      }
+      setPending((prev) => prev.filter((p) => p.callId !== approval.callId));
+    },
+    [setPending]
+  );
 
   const grouped = useMemo(() => {
     const map = new Map<string, ToolSpec[]>();
@@ -295,7 +299,11 @@ export default function Agent() {
           <Btn
             className="ml-auto !py-1 !text-xs"
             title={t("agent.clearChat")}
-            onClick={() => clearChat()}
+            onClick={() => {
+              // 先撤销后端待批记录，再清 UI：只清 UI 的话，
+              // 后端留着的待批调用仍可在 5 分钟内被执行
+              void agentClearChat().finally(() => clearChat());
+            }}
           >
             <Trash2 size={12} />
           </Btn>

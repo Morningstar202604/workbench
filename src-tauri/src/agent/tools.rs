@@ -324,6 +324,21 @@ impl Approvals {
             .remove(call_id);
     }
 
+    /// 清空所有待批与已批的调用。
+    /// 清空对话时必须一并调用：前端丢掉 pending 列表后，后端若还留着
+    /// 待批记录，旧调用仍能在 5 分钟内被批准执行 —— 用户以为已经取消的事
+    /// 又被执行了。
+    pub fn revoke_all(&self) {
+        self.pending
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clear();
+        self.granted
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clear();
+    }
+
     pub fn pending_count(&self) -> usize {
         self.pending
             .lock()
@@ -432,6 +447,19 @@ mod tests {
         approvals.revoke("c3");
         assert!(approvals.take_pending("c3").is_none());
         assert!(!approvals.consume("c3"));
+    }
+
+    /// 回归：参数非法时不能消耗用户的批准。
+    /// 若在解析前就 consume，用户会白批一次，还得为同一件事再批一次。
+    #[test]
+    fn invalid_arguments_do_not_consume_approval() {
+        let approvals = Approvals::default();
+        approvals.register_pending("c-bad", "terminate_process", "{not json");
+        let pending = approvals.take_pending("c-bad").unwrap();
+        assert_eq!(pending.arguments, "{not json");
+        // executor 会先解析参数并失败返回；此时我们**没有** grant，
+        // 所以通行证依然不存在 —— 用户可以重新批准。
+        assert!(!approvals.consume("c-bad"), "非法参数不应留下可用通行证");
     }
 
     #[test]
