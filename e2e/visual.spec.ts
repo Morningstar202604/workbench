@@ -133,6 +133,47 @@ test.describe("主题结构契约", () => {
   });
 });
 
+test.describe("图标渲染", () => {
+  /**
+   * 截图比对抓不到 Logo 的问题：它在整页里只占几十像素，
+   * 白底边一圈的差异低于任何合理的全局阈值。
+   * 直接读像素：四角必须透明，中心必须有内容。
+   */
+  test("界面里的 logo 四角透明、中心有内容", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForTimeout(1200);
+
+    const stats = await page.evaluate(async () => {
+      const img = document.querySelector(
+        "aside img, header img"
+      ) as HTMLImageElement | null;
+      if (!img) return { error: "no logo img" };
+      if (!img.complete)
+        await new Promise((r) => img.addEventListener("load", r, { once: true }));
+
+      const size = 64;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, size, size);
+      const px = (x: number, y: number) => ctx.getImageData(x, y, 1, 1).data[3];
+
+      return {
+        corners: [px(0, 0), px(size - 1, 0), px(0, size - 1), px(size - 1, size - 1)],
+        center: px(size / 2, size / 2),
+        naturalSize: `${img.naturalWidth}x${img.naturalHeight}`,
+      };
+    });
+
+    expect(stats.error).toBeUndefined();
+    // 四角必须基本透明（允许一点点抗锯齿）
+    for (const a of stats.corners) expect(a).toBeLessThan(20);
+    // 中心不能是空白
+    expect(stats.center).toBeGreaterThan(200);
+  });
+});
+
 test.describe("图表不重叠", () => {
   /**
    * 用 DOM 断言而不是纯截图：ECharts 画在 canvas 上，

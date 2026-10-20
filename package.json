@@ -23,7 +23,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:e2e": "playwright test",
-    "test:e2e:update": "playwright test --update-snapshots"
+    "test:e2e:update": "playwright test --update-snapshots --workers=1",
+    "icons:check": "python scripts/check_icons.py",
+    "icons:build": "python scripts/make_icons.py"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -19,6 +19,11 @@ jobs:
           cache: npm
 
       - run: npm ci
+      # 图标必须是透明圆角：源图是白底 JPEG，忘了抠会给深色界面
+      # 留下一圈白方块，这不在任何类型检查的覆盖范围内。
+      - name: Icon contract
+        run: python scripts/check_icons.py
+
       - name: Typecheck
         run: npx tsc --noEmit
       - name: Lint
