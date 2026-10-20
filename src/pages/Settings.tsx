@@ -4,6 +4,7 @@ import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { isTauri } from "../lib/api";
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
+import { STYLES } from "../lib/theme/themes";
 import { Badge, Btn, Card, Field, SectionTitle } from "../ui";
 import { formatUsd } from "../lib/util";
 import type { CostSettings, WorkbenchData } from "../types";
@@ -165,22 +166,85 @@ export default function Settings() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {/* ── 外观 ── */}
+        {/* ── 外观：风格选择（带配色预览） ── */}
         <Card className="p-4">
           <SectionTitle>{t("settings.appearance")}</SectionTitle>
-          <div className="flex items-center gap-2">
-            <Btn
-              variant={theme === "dark" ? "primary" : "ghost"}
-              onClick={() => setTheme("dark")}
-            >
-              {t("settings.dark")}
-            </Btn>
-            <Btn
-              variant={theme === "light" ? "primary" : "ghost"}
-              onClick={() => setTheme("light")}
-            >
-              {t("settings.light")}
-            </Btn>
+          {/* 每张卡显示该风格的真实配色与形状：圆角、阴影、底色都取自
+              对应 theme 的 CSS 变量，让用户在点之前就能看出差别。 */}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {STYLES.map((style) => {
+              const active = theme === style.id;
+              const [bg, panel, accent, text] = style.swatch;
+              return (
+                <button
+                  key={style.id}
+                  type="button"
+                  onClick={() => setTheme(style.id)}
+                  aria-pressed={active}
+                  className={`group relative overflow-hidden border text-left transition-all ${
+                    active
+                      ? "border-accent ring-1 ring-accent/40"
+                      : "border-line hover:border-accent/40"
+                  }`}
+                  style={{
+                    borderRadius:
+                      style.shell === "mono" ? 0 : style.shell === "reading" ? 4 : 12,
+                    background: panel,
+                  }}
+                >
+                  {/* 迷你预览：侧栏 + 卡片 */}
+                  <div className="flex h-14" style={{ background: bg }}>
+                    <div
+                      className="w-1/5"
+                      style={{ background: panel, borderRight: `1px solid ${accent}33` }}
+                    />
+                    <div className="flex flex-1 flex-col justify-center gap-1 px-2">
+                      <div
+                        className="h-1.5 w-2/3 rounded-full"
+                        style={{ background: text, opacity: 0.55 }}
+                      />
+                      <div className="flex gap-1">
+                        <div
+                          className="h-4 flex-1"
+                          style={{
+                            background: panel,
+                            border: `1px solid ${accent}44`,
+                            borderRadius: style.shell === "mono" ? 0 : 6,
+                          }}
+                        />
+                        <div
+                          className="h-4 flex-1"
+                          style={{
+                            background: accent,
+                            opacity: 0.75,
+                            borderRadius: style.shell === "mono" ? 0 : 6,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-2.5 py-2" style={{ background: panel }}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold" style={{ color: text }}>
+                        {style.name}
+                      </span>
+                      {active && (
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ background: accent }}
+                        />
+                      )}
+                    </div>
+                    <div
+                      className="mt-0.5 text-[10px] leading-snug"
+                      style={{ color: accent }}
+                    >
+                      {style.tagline[lang]}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-dim">
             {t("settings.appearanceHint")}

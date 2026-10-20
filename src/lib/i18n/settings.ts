@@ -5,6 +5,7 @@ export const dict = {
     "settings.pageSub": "Theme, refresh, costs and data management",
     "settings.appearance": "Appearance",
     "settings.dark": "Dark",
+    "settings.styleHint": "Pick a visual style — layout, spacing and type change too",
     "settings.light": "Light",
     "settings.appearanceHint":
       "Chart themes follow automatically after switching; the pin-to-top button in the title bar is always available.",
@@ -75,6 +76,7 @@ export const dict = {
     "settings.pageSub": "主题、刷新、成本与数据管理",
     "settings.appearance": "外观",
     "settings.dark": "深色",
+    "settings.styleHint": "选择视觉风格 —— 布局、间距与字体都会随之改变",
     "settings.light": "浅色",
     "settings.appearanceHint": "切换后图表主题将自动跟随；标题栏的置顶按钮随时可用。",
     "settings.language": "语言",
@@ -138,6 +140,7 @@ export const dict = {
     "settings.pageSub": "テーマ、更新、コストとデータ管理",
     "settings.appearance": "外観",
     "settings.dark": "ダーク",
+    "settings.styleHint": "スタイルを選択 — レイアウト・余白・書体も変わります",
     "settings.light": "ライト",
     "settings.appearanceHint":
       "切り替えるとチャートのテーマも自動的に追従します。タイトルバーの最前面固定ボタンはいつでも使えます。",

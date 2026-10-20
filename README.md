@@ -13,8 +13,10 @@
 
 A local-first, privacy-preserving desktop workbench for your machine: processes,
 ports, dev servers, and AI coding-session token costs — all visible in one place.
-Data stays on your device by default. Dark & light themes. UI available in **English,
-简体中文 and 日本語**.
+Data stays on your device by default. Five switchable visual styles — from a
+dense dark console to a light "paper" reading layout and a translucent glass
+theme — each changing spacing, corner radius and type, not just colour. UI
+available in **English, 简体中文 and 日本語**.
 
 **Platforms:** Windows 10/11 (NSIS) and Linux (deb / AppImage). Port collection
 uses `netstat -ano` on Windows and `ss -tulpn` on Linux, falling back to

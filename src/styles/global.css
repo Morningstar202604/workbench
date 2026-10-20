@@ -14,20 +14,127 @@
   --color-danger: #f87171;
   --font-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --font-display: var(--font-sans);
+
+  /* 形状与密度：主题切换时整体改写，让不同风格在「结构」上也不同 */
+  --radius-card: 0.75rem;
+  --radius-btn: 0.5rem;
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.12);
+  --space-card: 1rem;
+  --tracking-heading: -0.01em;
 }
 
-[data-theme="light"] {
-  --color-bg: #eef2f8;
+/* ── Frost：明亮通透，大圆角，柔和阴影，宽松间距 ───────────── */
+[data-theme="frost"] {
+  --color-bg: #f7f9fc;
   --color-panel: #ffffff;
-  --color-panel2: #f5f8fc;
-  --color-line: #d8e1ee;
-  --color-text: #17233a;
-  --color-dim: #5d6c85;
-  --color-accent: #0e7490;
-  --color-accentsoft: #d9f1f7;
-  --color-ok: #047857;
-  --color-warn: #b45309;
+  --color-panel2: #f1f5fa;
+  --color-line: #e3e9f2;
+  --color-text: #1c2430;
+  --color-dim: #6b7787;
+  --color-accent: #0a84ff;
+  --color-accentsoft: #e8f2ff;
+  --color-ok: #0f9d58;
+  --color-warn: #d97706;
   --color-danger: #dc2626;
+  --radius-card: 1.25rem;
+  --radius-btn: 0.75rem;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 8px 24px -12px rgb(16 24 40 / 0.12);
+  --space-card: 1.5rem;
+  --tracking-heading: -0.02em;
+}
+
+/* ── Paper：暖纸色、衬线标题、宽边距、几乎无阴影 ──────────────── */
+[data-theme="paper"] {
+  --color-bg: #f6f1e7;
+  --color-panel: #fffdf8;
+  --color-panel2: #f2ebdc;
+  --color-line: #e0d5c0;
+  --color-text: #2b241c;
+  --color-dim: #7a6a55;
+  --color-accent: #8a5a2b;
+  --color-accentsoft: #efe3cd;
+  --color-ok: #4d7c3a;
+  --color-warn: #b45309;
+  --color-danger: #a33a2c;
+  --radius-card: 0.25rem;
+  --radius-btn: 0.125rem;
+  --shadow-card: none;
+  --space-card: 1.75rem;
+  --font-display:
+    "Iowan Old Style", "Palatino Linotype", "Songti SC", "SimSun", Georgia, serif;
+  --tracking-heading: 0.01em;
+}
+
+/* ── Aurora：深蓝紫渐变之上的半透明玻璃 ──────────────────────── */
+[data-theme="aurora"] {
+  --color-bg: #0b1024;
+  --color-panel: #1a2242;
+  --color-panel2: #141a35;
+  --color-line: #2d3760;
+  --color-text: #e8ecff;
+  --color-dim: #9aa5cf;
+  --color-accent: #8b5cf6;
+  --color-accentsoft: #251f4d;
+  --color-ok: #34d399;
+  --color-warn: #fbbf24;
+  --color-danger: #fb7185;
+  --radius-card: 1rem;
+  --radius-btn: 0.75rem;
+  --shadow-card: 0 8px 32px -8px rgb(12 8 40 / 0.55);
+  --space-card: 1.25rem;
+}
+
+/* ── Terminal：纯黑绿、等宽、直角、零装饰 ───────────────────── */
+[data-theme="terminal"] {
+  --color-bg: #060806;
+  --color-panel: #0d120d;
+  --color-panel2: #0a0f0a;
+  --color-line: #1e2b1e;
+  --color-text: #d8ffd8;
+  --color-dim: #6f8f6f;
+  --color-accent: #3ddc84;
+  --color-accentsoft: #10240f;
+  --color-ok: #3ddc84;
+  --color-warn: #ffcc66;
+  --color-danger: #ff6b6b;
+  --radius-card: 0px;
+  --radius-btn: 0px;
+  --shadow-card: none;
+  --space-card: 0.75rem;
+  --font-sans: "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace;
+  --font-display: var(--font-sans);
+  --tracking-heading: 0.02em;
+}
+
+/* ── Aurora 的背景渐变（固定在视口，不随内容滚动） ───────────── */
+[data-theme="aurora"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(55rem 38rem at 8% -6%, rgb(139 92 246 / 0.55), transparent 58%),
+    radial-gradient(48rem 34rem at 95% 4%, rgb(34 211 238 / 0.38), transparent 60%),
+    radial-gradient(44rem 32rem at 55% 108%, rgb(236 72 153 / 0.32), transparent 58%),
+    linear-gradient(180deg, #0b1024 0%, #080c1c 100%);
+}
+[data-theme="aurora"] #root {
+  position: relative;
+  z-index: 1;
+}
+/* 外壳默认有 bg-bg（不透明），会把 body::before 的渐变盖住。
+   Aurora 下让外壳透明，渐变才能透出来。 */
+[data-theme="aurora"] #root > div {
+  background-color: transparent !important;
+}
+/* 侧栏与顶栏在 Aurora 下用半透明，叠在渐变上形成层次 */
+[data-theme="aurora"] aside,
+[data-theme="aurora"] header {
+  background-color: color-mix(in srgb, var(--color-panel) 55%, transparent) !important;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
 }
 
 html,
@@ -158,5 +265,69 @@ input[type="checkbox"] {
   .hero-glow > .pointer-events-none,
   .hero-float {
     animation: none;
+  }
+}
+
+/* ── 主题化的结构类 ────────────────────────────────────────
+   组件用这些类而不是写死 rounded-xl / shadow-*，
+   这样切换风格时圆角、阴影、留白会一起变，而不只是换色。 */
+
+.t-card {
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-card);
+}
+
+/*
+ * 面板底色。默认完全不透明。
+ *
+ * 不要无条件写 `backdrop-filter: blur(0px)`：零半径的 backdrop-filter
+ * 在部分环境（无 GPU 加速的 WebView、截图管线、远程桌面）会让整个元素
+ * 不被绘制 —— 实测设置页整块内容变空白。模糊只在需要玻璃效果时启用。
+ */
+.t-panel {
+  background-color: var(--color-panel);
+}
+
+/* 只有玻璃风格才开启半透明 + 模糊 */
+[data-theme="aurora"] .t-panel {
+  background-color: color-mix(in srgb, var(--color-panel) 62%, transparent);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.t-btn {
+  border-radius: var(--radius-btn);
+}
+
+.t-heading {
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-heading);
+}
+
+/* Paper：标题用衬线且略大，正文行高放宽，像书页 */
+[data-theme="paper"] .t-heading {
+  font-weight: 600;
+}
+[data-theme="paper"] body {
+  line-height: 1.7;
+}
+
+/* Terminal：所有边框更硬，去掉过渡动画的柔和感 */
+[data-theme="terminal"] .card-hover:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Frost：卡片悬浮更轻 */
+[data-theme="frost"] .card-hover:hover {
+  transform: translateY(-1px);
+}
+
+/* 减少动态偏好：玻璃模糊也一并关闭 */
+@media (prefers-reduced-motion: reduce) {
+  .t-panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }

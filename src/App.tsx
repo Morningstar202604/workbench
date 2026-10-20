@@ -19,6 +19,7 @@ import logoUrl from "./assets/logo.png";
 import { Btn, Modal, Spinner } from "./ui";
 import { PAGE_COMPONENTS, PAGE_GROUPS, pagesByGroup } from "./pages/registry";
 import { useBreakpoint } from "./lib/useBreakpoint";
+import { STYLES, styleOf } from "./lib/theme/themes";
 import type { ViewKey } from "./pages/registry";
 
 /** 当前视图的页面组件。注册表由 pages/registry 统一维护。 */
@@ -342,10 +343,14 @@ export default function App() {
             </Btn>
             <Btn
               title={t("app.themeToggle")}
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              // 标题栏按钮循环切换风格，具体选择在设置页（带预览）
+              onClick={() => {
+                const idx = STYLES.findIndex((s) => s.id === theme);
+                setTheme(STYLES[(idx + 1) % STYLES.length].id);
+              }}
               className="!px-2 !py-1"
             >
-              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+              {styleOf(theme).dark ? <Moon size={14} /> : <Sun size={14} />}
             </Btn>
           </div>
         </header>

@@ -10,7 +10,23 @@
  * document.documentElement.dataset.theme，切换主题时 memo 不重算，
  * 图表会残留旧主题的配色。显式传参让这个依赖进入 deps，可被静态检查。
  */
+/**
+ * 图表只关心明暗两档：五种风格共享两套图表配色，
+ * 因为图表需要的是「在深底还是浅底上可读」，而不是某个风格的品牌色。
+ * 品牌色通过 seriesColors 从 CSS 变量取，见下。
+ */
 export type ThemeName = "dark" | "light";
+
+/** 任意风格 id → 图表明暗档。未知值按深色处理。 */
+export function toThemeName(styleId: string | undefined): ThemeName {
+  if (!styleId) return "dark";
+  if (styleId === "light" || styleId === "frost" || styleId === "paper") return "light";
+  if (typeof document !== "undefined") {
+    const attr = document.documentElement.dataset.chartTheme;
+    if (attr === "light") return "light";
+  }
+  return "dark";
+}
 
 interface ChartTheme {
   bg: string;
@@ -51,8 +67,8 @@ export const LIGHT: ChartTheme = {
   danger: "#dc2626",
 };
 
-export function chartTheme(theme: ThemeName): ChartTheme {
-  return theme === "light" ? LIGHT : DARK;
+export function chartTheme(theme: ThemeName | string): ChartTheme {
+  return toThemeName(theme) === "light" ? LIGHT : DARK;
 }
 
 /**
@@ -72,7 +88,7 @@ export const PALETTE = {
 } as const;
 
 /** 多系列图表按序取色。浅色主题下 cyan/green/amber/red 换成深色版本。 */
-export function seriesColors(theme: ThemeName): string[] {
+export function seriesColors(theme: ThemeName | string): string[] {
   const t = chartTheme(theme);
   return [
     t.accent,
@@ -101,14 +117,14 @@ export const FIXED_COLORS = {
  * 图表中「环形图扇区之间的间隙」应使用的颜色 —— 即面板背景色。
  * 不传参时回退读 DOM，供无法拿到 theme 的场景（如测试）使用。
  */
-export function chartGapColor(theme?: ThemeName): string {
+export function chartGapColor(theme?: string): string {
   if (theme) return chartTheme(theme).bg;
   if (typeof document === "undefined") return DARK.bg;
   return document.documentElement.dataset.theme === "light" ? LIGHT.bg : DARK.bg;
 }
 
 /** 当前主题下的分隔线颜色（用于空数据占位图元）。 */
-export function chartLineColor(theme?: ThemeName): string {
+export function chartLineColor(theme?: string): string {
   if (theme) return chartTheme(theme).line;
   if (typeof document === "undefined") return DARK.line;
   return document.documentElement.dataset.theme === "light" ? LIGHT.line : DARK.line;
@@ -125,7 +141,7 @@ export interface HorizontalBarOptions {
   /** 数值；每项可单独指定颜色（两端渐隐），不指定则用默认青色渐变 */
   values: { value: number; color?: string }[];
   /** 主题，决定无自定义颜色时的默认渐变 */
-  theme: ThemeName;
+  theme: ThemeName | string;
   /** 左侧留白，标签越长需要越大 */
   left?: number;
   /** 类目轴字号 */

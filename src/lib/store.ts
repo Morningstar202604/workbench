@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { DEFAULT_STYLE, migrateStyle, type StyleId } from "./theme/themes";
+import { applyTheme } from "./theme/apply";
 import { t } from "./i18n";
 import { persist } from "zustand/middleware";
 import {
@@ -66,7 +68,8 @@ const TOAST_TTL_MS = 2600;
 const SAVE_DEBOUNCE_MS = 300;
 
 interface UiState {
-  theme: "dark" | "light";
+  /** 视觉风格 id（midnight / frost / paper / aurora / terminal） */
+  theme: StyleId;
   refreshMs: number;
   view: ViewKey;
   alwaysOnTop: boolean;
@@ -124,7 +127,7 @@ interface Store extends UiState, RuntimeState {
   toast: string;
   killTarget: ProcInfo | null;
   setView: (v: ViewKey) => void;
-  setTheme: (t: "dark" | "light") => void;
+  setTheme: (t: StyleId) => void;
   setRefreshMs: (ms: number) => void;
   setToast: (t: string) => void;
   clearToast: () => void;
@@ -178,7 +181,7 @@ let refreshAgain = false;
 export const useStore = create<Store>()(
   persist(
     (set, get) => ({
-      theme: "dark",
+      theme: DEFAULT_STYLE,
       refreshMs: 3000,
       view: "overview",
       alwaysOnTop: false,
@@ -219,7 +222,7 @@ export const useStore = create<Store>()(
       setView: (v) => set({ view: v }),
       setTheme: (t) => {
         set({ theme: t });
-        document.documentElement.dataset.theme = t;
+        applyTheme(t);
       },
       setRefreshMs: (ms) => set({ refreshMs: ms }),
       setToast: (t) => {
@@ -652,9 +655,16 @@ export const useStore = create<Store>()(
     }),
     {
       name: "workbench-ui-v1",
-      // 版本号一旦改动就必须同时补 migrate：zustand 在没有 migrate 时不会
-      // 按版本号做任何转换，旧结构会被直接当成新结构反序列化。
-      version: 1,
+      // 版本 1 → 2：theme 从 "dark"/"light" 变成风格 id。
+      // 老用户的选择会被映射到等价的风格（dark→midnight, light→frost）。
+      version: 2,
+      migrate: (persisted: unknown) => {
+        const state = (persisted ?? {}) as Record<string, unknown>;
+        return {
+          ...state,
+          theme: migrateStyle(state.theme),
+        } as never;
+      },
       partialize: (s) => ({
         theme: s.theme,
         refreshMs: s.refreshMs,

@@ -67,8 +67,18 @@ echarts.registerTheme("wb-dark", toEChartsTheme(DARK));
 echarts.registerTheme("wb-light", toEChartsTheme(LIGHT));
 
 /** 读取当前生效的主题名（与 store 的 theme 字段同源）。 */
+/**
+ * 图表用哪套明暗配色。
+ *
+ * 读 `data-chart-theme` 而不是 `data-theme`：后者现在是风格 id
+ * （midnight / frost / paper / aurora / terminal），只比较 "light"
+ * 会让所有风格都退化成深色 —— 浅色底上出现浅灰文字，几乎不可读。
+ */
 function currentThemeName(): ThemeName {
   if (typeof document === "undefined") return "dark";
+  const explicit = document.documentElement.dataset.chartTheme;
+  if (explicit === "light" || explicit === "dark") return explicit;
+  // 兜底：兼容只设置了 data-theme="light" 的旧状态
   return document.documentElement.dataset.theme === "light" ? "light" : "dark";
 }
 

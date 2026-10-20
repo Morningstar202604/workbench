@@ -7,6 +7,20 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Five visual styles** switchable in Settings, each with a live preview card:
+  - *Midnight* — dense dark console (the previous look)
+  - *Frost* — light, airy, large radii, soft shadows
+  - *Paper* — warm paper background, serif headings, wide margins
+  - *Aurora* — translucent glass panels over a fixed gradient
+  - *Terminal* — monospace, sharp corners, high contrast
+
+  These change corner radius, shadow, spacing, type family and panel opacity,
+  not just hue. Chart colours follow the style's light/dark footing
+  automatically.
+- **Visual regression tests** (Playwright): 11 baselines across five styles and
+  key pages, plus structural assertions on theme variables. Added because
+  overlapping chart labels, a collapsed hero column and an entirely blank
+  settings page all passed the unit tests.
 - **AI assistant with real tool calling** — talk to an OpenAI-compatible model
   that can call the workbench's own tools: inspect processes, ports, dev
   servers, AI sessions and cost, then act (create tasks, rescan costs, open a

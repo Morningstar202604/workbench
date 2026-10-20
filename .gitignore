@@ -13,3 +13,8 @@ coverage
 
 # Tauri 自动生成的 schema（构建时自动再生）
 src-tauri/gen/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/

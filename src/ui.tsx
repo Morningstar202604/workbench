@@ -19,11 +19,7 @@ export function Card({
   className?: string;
 }) {
   return (
-    <div
-      className={`rounded-xl border border-line bg-panel shadow-[0_1px_3px_rgb(0_0_0/0.12)] ${className}`}
-    >
-      {children}
-    </div>
+    <div className={`t-card t-panel border border-line ${className}`}>{children}</div>
   );
 }
 
@@ -36,7 +32,7 @@ export function SectionTitle({
 }) {
   return (
     <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-sm font-semibold tracking-wide text-dim uppercase">
+      <h2 className="t-heading text-sm font-semibold tracking-wide text-dim uppercase">
         {children}
       </h2>
       {extra}
@@ -92,7 +88,7 @@ export function Btn({
   type = "button",
 }: BtnProps) {
   const base =
-    "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40";
+    "t-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40";
   const styles: Record<string, string> = {
     primary: "bg-accent text-black hover:opacity-85",
     ghost: "border border-line bg-panel2 text-text hover:border-accent/50",
@@ -223,7 +219,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         onKeyDown={onDialogKeyDown}
-        className={`max-h-[90vh] w-full overflow-y-auto rounded-xl border border-line bg-panel shadow-2xl ${wide ? "max-w-2xl" : "max-w-md"}`}
+        className={`t-card t-panel max-h-[90vh] w-full overflow-y-auto border border-line shadow-2xl ${wide ? "max-w-2xl" : "max-w-md"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div
