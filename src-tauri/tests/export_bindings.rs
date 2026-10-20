@@ -6,6 +6,11 @@
 
 use std::path::Path;
 use ts_rs::{Config, TS};
+use workbench_lib::agent::llm::{
+    ChatMessage, ChatReply, FunctionCall, ProviderConfig, ToolCallWire,
+};
+use workbench_lib::agent::tools::{ToolResult, ToolRisk, ToolSpec};
+use workbench_lib::agent::{AgentRunResult, AgentStep, ProviderView};
 use workbench_lib::ai::{AiProcess, OpencodeSession, SessionDetail, SessionFile, SessionFilePreview};
 use workbench_lib::commands::{DiskInfo, OpencodeSessionsResult, ScanCostResult, SystemInfo};
 use workbench_lib::cost_store::{CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow};
@@ -39,4 +44,16 @@ fn export_ts_bindings() {
     SystemInfo::export_all(&cfg).unwrap();
     DiskInfo::export_all(&cfg).unwrap();
     ScanCostResult::export_all(&cfg).unwrap();
+    // ── Agent 契约 ──
+    ToolSpec::export_all(&cfg).unwrap();
+    ToolRisk::export_all(&cfg).unwrap();
+    ToolResult::export_all(&cfg).unwrap();
+    ProviderConfig::export_all(&cfg).unwrap();
+    ProviderView::export_all(&cfg).unwrap();
+    ChatMessage::export_all(&cfg).unwrap();
+    ChatReply::export_all(&cfg).unwrap();
+    ToolCallWire::export_all(&cfg).unwrap();
+    FunctionCall::export_all(&cfg).unwrap();
+    AgentStep::export_all(&cfg).unwrap();
+    AgentRunResult::export_all(&cfg).unwrap();
 }

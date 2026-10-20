@@ -57,7 +57,15 @@ pub fn normalize_path(raw: &str) -> String {
         return String::new();
     }
 
-    let joined = out.join("/").to_ascii_lowercase();
+    let joined = out.join("/");
+    // 大小写折叠只在 Windows 上正确：NTFS 大小写不敏感，而 ext4/APFS
+    // 默认大小写敏感 —— 在 Linux 上把 /home/Me 与 /home/me 归一成同一键
+    // 会让白名单误拒合法路径（也可能把两个不同目录混为一谈）。
+    #[cfg(windows)]
+    let joined = joined.to_ascii_lowercase();
+    #[cfg(not(windows))]
+    let joined = joined;
+
     format!("{prefix}{joined}")
 }
 

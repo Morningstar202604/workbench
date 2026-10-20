@@ -1,9 +1,27 @@
 //! 进程快照：sysinfo 双次采样拿 CPU%，阻塞调用放在 spawn_blocking 里，不卡 UI 线程。
 
 use serde::Serialize;
+use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use sysinfo::{Pid, ProcessesToUpdate, System};
+
+/// 静默执行一个外部命令并取 stdout（跨平台）。
+///
+/// Windows 上必须带 CREATE_NO_WINDOW：GUI 程序派生控制台子进程会闪黑窗，
+/// 而端口采样是周期性的，闪窗会非常明显。
+pub fn run_quiet(program: &str, args: &[&str]) -> std::io::Result<String> {
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let output = cmd.output()?;
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
 
 /// 一次前端刷新会并发请求「进程 / 端口 / 开发服务器 / AI 进程」四个命令，
 /// 每个都要一份进程快照。原先各自 `System::new_all()` + 220ms 双采样，
@@ -131,7 +149,8 @@ fn collect_processes() -> Vec<ProcInfo> {
         .collect()
 }
 
-/// 不允许结束的系统关键进程（小写名）。
+/// 不允许结束的系统关键进程（小写名，按平台区分）。
+#[cfg(windows)]
 const PROTECTED_PROCESSES: &[&str] = &[
     "system",
     "registry",
@@ -141,13 +160,34 @@ const PROTECTED_PROCESSES: &[&str] = &[
     "services.exe",
     "lsass.exe",
     "winlogon.exe",
+    "svchost.exe",
+    "dwm.exe",
 ];
+
+/// POSIX 上的关键进程：init/systemd 与内核线程一旦被杀，整机或会话即崩。
+#[cfg(not(windows))]
+const PROTECTED_PROCESSES: &[&str] = &[
+    "init",
+    "systemd",
+    "kernel_task",
+    "launchd",
+    "kthreadd",
+    "syslogd",
+    "dbus-daemon",
+];
+
+/// 不允许终止的 PID：Windows 的 0/4 是 System 与空闲进程；
+/// POSIX 的 0/1 是内核调度与 init。
+#[cfg(windows)]
+const PROTECTED_PIDS: &[u32] = &[0, 4];
+#[cfg(not(windows))]
+const PROTECTED_PIDS: &[u32] = &[0, 1];
 
 /// 结束指定进程（不可逆，前端必须二次确认后才调用）。
 /// 目标身份先刷新再校验：拿到的是旧快照时，PID 可能已被系统复用给别的进程，
 /// 直接 kill 等于误杀。刷新后重新确认名字不是关键进程才动手。
 pub fn terminate_process(pid: u32) -> Result<(), String> {
-    if matches!(pid, 0 | 4) {
+    if PROTECTED_PIDS.contains(&pid) {
         return Err(format!("拒绝终止系统关键进程 PID={pid}"));
     }
     let mut sys = System::new_all();
@@ -159,6 +199,10 @@ pub fn terminate_process(pid: u32) -> Result<(), String> {
             if PROTECTED_PROCESSES.contains(&name.as_str()) {
                 return Err(format!("拒绝终止系统关键进程「{name}」"));
             }
+            // 不允许杀掉本应用自身：would orphan the WebView and look like a crash
+            if pid == std::process::id() {
+                return Err("拒绝终止当前应用自身".to_string());
+            }
             if p.kill() {
                 Ok(())
             } else {
@@ -166,5 +210,47 @@ pub fn terminate_process(pid: u32) -> Result<(), String> {
             }
         }
         None => Err(format!("找不到进程 {pid}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn protected_pids_are_rejected() {
+        for pid in PROTECTED_PIDS {
+            assert!(terminate_process(*pid).is_err(), "PID {pid} 必须被拒绝");
+        }
+    }
+
+    #[test]
+    fn refusing_to_kill_self() {
+        assert!(terminate_process(std::process::id()).is_err());
+    }
+
+    #[test]
+    fn protected_names_cover_platform_critical_processes() {
+        // Windows 上 svchost/dwm 也能终结系统响应，必须在内
+        #[cfg(windows)]
+        {
+            assert!(PROTECTED_PROCESSES.contains(&"lsass.exe"));
+            assert!(PROTECTED_PROCESSES.contains(&"svchost.exe"));
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(PROTECTED_PROCESSES.contains(&"systemd"));
+            assert!(PROTECTED_PROCESSES.contains(&"init"));
+        }
+    }
+
+    #[test]
+    fn run_quiet_captures_stdout() {
+        #[cfg(windows)]
+        let (prog, args) = ("cmd", vec!["/c", "echo", "hello"]);
+        #[cfg(not(windows))]
+        let (prog, args) = ("echo", vec!["hello"]);
+        let out = run_quiet(prog, &args).expect("应能执行");
+        assert!(out.to_lowercase().contains("hello"), "got: {out}");
     }
 }

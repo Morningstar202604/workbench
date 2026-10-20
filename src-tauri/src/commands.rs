@@ -17,39 +17,22 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Command;
 
-/// Windows GUI 程序派生控制台进程时必须带 CREATE_NO_WINDOW，
-/// 否则周期性轮询（netstat 等）会在屏幕上反复闪控制台窗口。
-#[cfg(windows)]
-fn silent(mut cmd: Command) -> Command {
-    use std::os::windows::process::CommandExt;
-    // 0x08000000 = CREATE_NO_WINDOW
-    cmd.creation_flags(0x0800_0000);
-    cmd
-}
-
-#[cfg(not(windows))]
-fn silent(cmd: Command) -> Command {
-    cmd
-}
-
-/// 在 Windows 上取 netstat 输出。
+/// 派生外部命令（Windows 上不闪控制台窗口）。
 ///
-/// 不再套 `cmd /c chcp 65001 && netstat`：相比直接执行 netstat 实测从 ~93ms
-/// 降到 ~36ms（多起一个 cmd 内建进程纯属浪费），而 ports.rs 的解析器只认
-/// `TCP/TCP6/UDP/LISTENING` 这类 ASCII token，从不读取本地化的表头文字，
-/// 因此 chcp 并不能改善解析结果。
-/// TODO(P1): 非 Windows 平台改走 POSIX ss/netstat —— 当前 ports.rs 的 POSIX 分支在
-/// 本 crate 里实际不会被执行，README 的跨平台说法也据此收敛为 Windows。
-fn run_netstat() -> Result<String, String> {
-    let output = silent(Command::new("netstat"))
-        .arg("-ano")
-        .output()
-        .map_err(|e| format!("netstat 执行失败: {e}"))?;
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+/// 目前只有 git 探测走这里；端口采集已统一到 procs::run_quiet
+/// （按平台选 netstat / ss）。
+fn silent(mut cmd: Command) -> Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // 0x08000000 = CREATE_NO_WINDOW
+        cmd.creation_flags(0x0800_0000);
+    }
+    cmd
 }
 
 /// 端口采样短缓存。`list_ports` 与 `list_dev_servers` 在一次前端刷新里
-/// 各要一份端口表，原先各起一次 netstat 子进程；这里让同一刷新周期共享。
+/// 各要一份端口表，原先各起一次采集子进程；这里让同一刷新周期共享。
 const PORTS_TTL: std::time::Duration = std::time::Duration::from_millis(400);
 
 fn cached_port_entries() -> Result<Vec<PortEntry>, String> {
@@ -63,7 +46,7 @@ fn cached_port_entries() -> Result<Vec<PortEntry>, String> {
             return Ok(entries.clone());
         }
     }
-    let entries = ports::parse_netstat(&run_netstat()?);
+    let entries = ports::collect()?;
     *guard = Some((Instant::now(), entries.clone()));
     Ok(entries)
 }
@@ -333,10 +316,16 @@ pub fn open_known_path(dirs: tauri::State<'_, KnownDirs>, path: String) -> Resul
     tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| format!("打开失败: {e}"))
 }
 
-fn dirs_home() -> Option<std::path::PathBuf> {
+/// 用户主目录。Windows 用 USERPROFILE，Unix 用 HOME。
+pub fn home_dir() -> Option<std::path::PathBuf> {
     std::env::var_os("USERPROFILE")
-        .or_else(|| std::env::var_os("HOME"))
+        .filter(|v| !v.is_empty())
+        .or_else(|| std::env::var_os("HOME").filter(|v| !v.is_empty()))
         .map(std::path::PathBuf::from)
+}
+
+fn dirs_home() -> Option<std::path::PathBuf> {
+    home_dir()
 }
 
 // ── 系统信息 ──────────────────────────────────────────────

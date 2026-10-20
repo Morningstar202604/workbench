@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod ai;
 pub mod commands;
 pub mod cost_store;
@@ -43,6 +44,8 @@ pub fn run() {
             // IPC 反向入参守卫：目录与端口白名单，随扫描/加载动态登记
             app.manage(ipc_guard::KnownDirs::default());
             app.manage(ipc_guard::AllowedPorts::default());
+            // Agent 运行时状态：provider 配置（密钥仅内存）+ 工具审批登记
+            app.manage(agent::AgentState::default());
 
             // ── 全局快捷键 Ctrl+Shift+W 切换窗口可见性（被占用时降级为警告，不阻断启动）──
             if let Err(e) = app
@@ -69,14 +72,27 @@ pub fn run() {
             }
 
             // ── 托盘：左键切换显示，菜单提供「退出」彻底结束进程 ──
-            let toggle_item = MenuItem::with_id(app, "toggle", "显示 / 隐藏窗口", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "退出工作台", true, None::<&str>)?;
+            // 托盘文案在系统 UI 里长期可见，用双语标注而不是只写中文：
+            // 界面主语言可在三语间切换，但托盘菜单在创建时就固定了，
+            // 折中方案是让两种主要语言同时出现。
+            let toggle_item = MenuItem::with_id(
+                app,
+                "toggle",
+                "显示 / 隐藏窗口 · Show / Hide",
+                true,
+                None::<&str>,
+            )?;
+            let quit_item =
+                MenuItem::with_id(app, "quit", "退出工作台 · Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&toggle_item, &quit_item])?;
             let _tray = TrayIconBuilder::with_id("workbench-tray")
-                .tooltip("工作台 Workbench")
+                .tooltip("Workbench")
+                // 用 PNG 而不是 ico：Linux 的托盘实现只认位图，
+                // include_image 跨平台解析到 icons/32x32.png
                 .icon(tauri::include_image!("icons/32x32.png"))
                 .menu(&menu)
-                .show_menu_on_left_click(false)
+                // Linux 上托盘菜单默认需要左键弹出（很多桌面环境没有右键习惯）
+                .show_menu_on_left_click(cfg!(target_os = "linux"))
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
@@ -125,6 +141,13 @@ pub fn run() {
             commands::get_cost_settings_cmd,
             commands::save_cost_settings_cmd,
             commands::clear_cost_records,
+            // ── Agent（模型 + 工具调用）──
+            agent::agent_set_provider,
+            agent::agent_get_provider,
+            agent::agent_list_tools,
+            agent::agent_approve_tool,
+            agent::agent_reject_tool,
+            agent::agent_run,
         ])
         .run(tauri::generate_context!())
         .expect("运行工作台应用失败");

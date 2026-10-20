@@ -1,5 +1,5 @@
-//! 端口占用解析：`netstat -ano` 输出 → 结构化 PortEntry。
-//! 纯函数解析，跨 Windows / POSIX 两种 netstat 方言做容错。
+//! 端口占用解析：把 `netstat -ano`（Windows）与 `ss -tulpn`（Linux）的
+//! 输出统一成 PortEntry。解析全部是纯函数，平台差异只体现在命令与方言。
 
 use serde::Serialize;
 
@@ -11,6 +11,84 @@ pub struct PortEntry {
     pub remote_addr: String,
     pub state: String,
     pub pid: u32,
+}
+
+/// 采集端口表：按平台选命令，再交给对应的解析器。
+///
+/// - Windows: `netstat -ano`（不做 chcp，解析器只认 ASCII 协议名）
+/// - Linux: `ss -tulpnH`（`-H` 去掉表头；非 root 时进程列为 `users:(("x",pid=N,...))`）
+/// - 其它 POSIX: 退回 `netstat -an`
+pub fn collect() -> Result<Vec<PortEntry>, String> {
+    #[cfg(windows)]
+    {
+        let out = crate::procs::run_quiet("netstat", &["-ano"])
+            .map_err(|e| format!("netstat 执行失败: {e}"))?;
+        Ok(parse_netstat(&out))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        match crate::procs::run_quiet("ss", &["-tulpnH"]) {
+            Ok(out) => Ok(parse_ss(&out)),
+            // 极简发行版可能没有 iproute2，回退到 netstat
+            Err(_) => {
+                let out = crate::procs::run_quiet("netstat", &["-tulpn"])
+                    .map_err(|e| format!("ss 与 netstat 均不可用: {e}"))?;
+                Ok(parse_netstat(&out))
+            }
+        }
+    }
+    #[cfg(all(unix, not(target_os = "linux")))]
+    {
+        let out = crate::procs::run_quiet("netstat", &["-anv"])
+            .map_err(|e| format!("netstat 执行失败: {e}"))?;
+        Ok(parse_netstat(&out))
+    }
+}
+
+/// 解析 `ss -tulpnH` 输出。
+///
+/// 典型行：
+/// `tcp   LISTEN 0  128  0.0.0.0:5173  0.0.0.0:*  users:(("node",pid=2145,fd=20))`
+/// `udp   UNCONN 0  0    127.0.0.53:53  0.0.0.0:*  users:(("systemd-resolve",pid=812,fd=13))`
+/// 非 root 时没有 `users:` 段，pid 记 0（UI 会退化成只显示端口号）。
+pub fn parse_ss(output: &str) -> Vec<PortEntry> {
+    let mut out = Vec::new();
+    for line in output.lines() {
+        let tokens: Vec<&str> = line.split_whitespace().collect();
+        if tokens.len() < 5 {
+            continue;
+        }
+        let protocol = match tokens[0].to_ascii_lowercase().as_str() {
+            "tcp" => "TCP",
+            "udp" => "UDP",
+            _ => continue,
+        };
+        // 布局：Netid State Recv-Q Send-Q Local Peer [Process]
+        let Some((local_addr, local_port)) = split_host_port(tokens[4]) else {
+            continue;
+        };
+        let (remote_addr, _) = split_host_port(tokens[5]).unwrap_or((tokens[5].to_string(), 0));
+        let state = if protocol == "UDP" {
+            "UDP".to_string()
+        } else {
+            tokens[1].to_ascii_uppercase()
+        };
+        let pid = tokens
+            .iter()
+            .find_map(|t| t.split("pid=").nth(1))
+            .and_then(|rest| rest.split([',', ')']).next())
+            .and_then(|n| n.parse::<u32>().ok())
+            .unwrap_or(0);
+        out.push(PortEntry {
+            protocol: protocol.to_string(),
+            local_addr,
+            local_port,
+            remote_addr,
+            state,
+            pid,
+        });
+    }
+    out
 }
 
 /// 从 netstat 输出中解析端口条目。
@@ -156,5 +234,49 @@ udp        0      0 0.0.0.0:5353          0.0.0.0:*                           10
         assert!(parse_netstat("  协议  本地地址  外部地址").is_empty());
         assert!(parse_netstat("TCP incomplete").is_empty());
         assert!(parse_netstat("FOO 1.2.3.4:80 0.0.0.0:0 LISTENING 1").is_empty());
+    }
+}
+
+#[cfg(test)]
+mod ss_tests {
+    use super::*;
+
+    const SS_OUTPUT: &str = "\
+tcp   LISTEN 0      128        0.0.0.0:5173       0.0.0.0:*    users:((\"node\",pid=2145,fd=20))
+tcp   LISTEN 0      4096     127.0.0.53:53         0.0.0.0:*
+tcp   LISTEN 0      511         [::]:8000          [::]:*    users:((\"python\",pid=987,fd=6))
+udp   UNCONN 0      0        127.0.0.53:53         0.0.0.0:*    users:((\"systemd-resolve\",pid=812,fd=13))
+";
+
+    #[test]
+    fn parses_ss_output_with_and_without_process_info() {
+        let entries = parse_ss(SS_OUTPUT);
+        assert_eq!(entries.len(), 4);
+
+        let vite = entries.iter().find(|e| e.local_port == 5173).unwrap();
+        assert_eq!(vite.protocol, "TCP");
+        assert_eq!(vite.state, "LISTEN");
+        assert_eq!(vite.pid, 2145);
+
+        // 非 root 时没有 users: 段 → pid 退化为 0，但端口仍要显示
+        let dns = entries.iter().find(|e| e.local_port == 53 && e.pid == 0).unwrap();
+        assert_eq!(dns.state, "LISTEN");
+
+        // [::] 要能正确拆出地址与端口
+        let v6 = entries.iter().find(|e| e.local_port == 8000).unwrap();
+        assert_eq!(v6.local_addr, "::");
+        assert_eq!(v6.pid, 987);
+
+        // UDP 没有 State 列，统一记 UDP
+        let udp = entries.iter().find(|e| e.protocol == "UDP").unwrap();
+        assert_eq!(udp.state, "UDP");
+        assert_eq!(udp.pid, 812);
+    }
+
+    #[test]
+    fn skips_garbage_ss_lines() {
+        assert!(parse_ss("").is_empty());
+        assert!(parse_ss("tcp LISTEN").is_empty());
+        assert!(parse_ss("weird 1 2 3 4 5").is_empty());
     }
 }
