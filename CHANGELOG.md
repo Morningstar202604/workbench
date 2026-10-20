@@ -3,6 +3,54 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **AI assistant with real tool calling** — talk to an OpenAI-compatible model
+  that can call the workbench's own tools: inspect processes, ports, dev
+  servers, AI sessions and cost, then act (create tasks, rescan costs, open a
+  project directory, terminate a process). Every tool call is shown with its
+  raw arguments so the user can audit it.
+  - Mutating tools require a **per-call approval** that can only be granted by a
+    real click; the approval gate lives in the backend, not the UI.
+  - **Automatic failover**: primary service queued, timed out or reporting "no
+    available channel" → the assistant switches to the configured fallbacks.
+  - API keys are kept in process memory only — never written to disk, logs or
+    config files.
+- **Linux support** — port collection via `ss -tulpn` (with `netstat` fallback),
+  platform-aware protected-process lists, case-sensitive path handling on
+  POSIX, and `deb` / `AppImage` packaging targets.
+- **Responsive shell** — grouped, collapsible sidebar; on narrow windows it
+  becomes a drawer. Layout adapts across desktop / tablet / phone widths.
+- New **Cost ledger** page (cost moved out of the AI sessions page) and
+  **Assistant** page.
+
+### Changed
+
+- Cost metering now reads the model from where the tools actually write it
+  (`message.model` for Claude Code, `turn_context.payload.model` for Codex) and
+  aggregates **per day and per model**, so a session that mixes models is priced
+  correctly instead of applying the first model's rate to the whole file.
+- Process snapshots are shared within a refresh cycle; port sampling is cached
+  for the same window; system info no longer re-enumerates every process.
+- Refresh requests are never dropped: concurrent callers share the in-flight
+  sample and one follow-up runs afterwards.
+- Polling pauses when the window is hidden.
+
+### Fixed
+
+- Windows drive paths (for example `C:/proj`) were misdetected as URL schemes,
+  breaking every "open directory" action.
+- Focus trap in dialogs could be escaped by clicking non-focusable body text.
+- UNC paths collapsed into relative paths in the allowed-directory set.
+- `updateCostSettings` reported success on failure, so unsaved settings looked
+  saved.
+- Modal/confirm dialogs: real focus trapping, ESC handling, focus restoration.
+- Log rotation now happens at runtime (not only at startup) and tail reads no
+  longer corrupt multibyte characters at chunk boundaries.
+- Cost commands no longer block the main thread.
+
 ## [0.1.1] - 2026-10-12
 
 ### Added

@@ -7,7 +7,7 @@
 [![CI](https://github.com/X33834/workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/X33834/workbench/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/X33834/workbench?color=22d3ee&label=release)](https://github.com/X33834/workbench/releases/latest)
 [![License](https://img.shields.io/github/license/X33834/workbench?color=34d399)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078d4)](#system-requirements)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078d4)](#system-requirements)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri&logoColor=white)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)](https://react.dev/)
 
@@ -16,8 +16,15 @@ ports, dev servers, and AI coding-session token costs — all visible in one pla
 All data stays on your device. Dark & light themes. UI available in **English,
 简体中文 and 日本語**.
 
-**Windows-only for now**: port collection uses `netstat -ano` and packaging
-targets NSIS. macOS / Linux are untested and not yet packaged.
+**Platforms:** Windows 10/11 (NSIS) and Linux (deb / AppImage). Port collection
+uses `netstat -ano` on Windows and `ss -tulpn` on Linux, falling back to
+`netstat` when iproute2 is missing. macOS is not packaged yet.
+
+**AI assistant (tool calling):** the app can drive a model that calls the
+workbench's own tools — read processes, ports, dev servers and cost, and act
+(track tasks, rescan costs, open a project, terminate a process). Mutating
+tools require an explicit per-call approval; the API key lives only in process
+memory and is never written to disk.
 
 **🌐 Project homepage** — every mirror hosts its own copy of the landing page
 (see the mirror table below); each copy automatically links back to its own
