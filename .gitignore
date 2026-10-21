@@ -18,3 +18,7 @@ src-tauri/gen/
 test-results/
 playwright-report/
 blob-report/
+
+# Python bytecode from the icon scripts
+__pycache__/
+*.pyc
