@@ -21,6 +21,10 @@ jobs:
       - run: npm ci
       # 图标必须是透明圆角：源图是白底 JPEG，忘了抠会给深色界面
       # 留下一圈白方块，这不在任何类型检查的覆盖范围内。
+      # runner 自带的 python 没有 Pillow，必须先装，否则这一步只会
+      # 报 ModuleNotFoundError —— 门禁变成噪音。
+      - name: Install Pillow
+        run: python -m pip install --disable-pip-version-check pillow
       - name: Icon contract
         run: python scripts/check_icons.py
 
@@ -52,7 +56,7 @@ jobs:
           name: visual-diffs
           path: |
             test-results/
-            e2e/snapshots/
+            e2e/visual.spec.ts-snapshots/
           retention-days: 7
 
   # Linux 后端：平台差异（端口采集、进程保护、路径归一）必须在这里被真正跑到。
