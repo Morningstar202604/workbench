@@ -1,16 +1,37 @@
-import { chartThemeFor, type StyleId } from "./themes";
+import type { ThemeTokens } from "./tokens";
+import { registerChartTheme } from "../chartTheme";
+import type { ShellId, OverviewLayoutId } from "../layout";
 
 /**
- * 把风格应用到 DOM。
+ * 把主题 token 写到 DOM。
  *
- * 只写 `data-theme` 一个属性：所有颜色、圆角、阴影、字体都通过 CSS 变量
- * 从该属性派生，避免 JS 到处写内联样式。
- * 同时把图表需要的明暗信息写成 `data-chart-theme`，供 ECharts 读取。
+ * 为什么改成写内联变量：主题现在是用户可编辑的数据，不能为每一种组合
+ * 预先在 CSS 里写一个 `[data-theme=...]` 块。内联变量同样只落在一个元素上
+ * （`<html>`），组件仍然只消费 `var(--color-*)`，所以没有引入第二种取色路径。
+ *
+ * `data-theme` 仍然写：它不是配色来源，而是给测试/截图/第三方脚本看的
+ * 「当前用的是哪套主题」标识。
  */
-export function applyTheme(id: StyleId): void {
+export function applyTheme(
+  tokens: ThemeTokens,
+  shell: ShellId,
+  layout: OverviewLayoutId
+): void {
   const root = document.documentElement;
-  root.dataset.theme = id;
-  root.dataset.chartTheme = chartThemeFor(id);
-  const isDark = chartThemeFor(id) === "dark";
-  root.style.colorScheme = isDark ? "dark" : "light";
+  for (const [k, v] of Object.entries(tokens.vars)) {
+    root.style.setProperty(k, v);
+  }
+  root.dataset.theme = tokens.id;
+  root.dataset.chartTheme = tokens.dark ? "dark" : "light";
+  root.dataset.shell = shell;
+  root.dataset.layout = layout;
+  // 材质与圆角写成 data 属性：CSS 里有几处「玻璃才模糊」「直角才方」的细节，
+  // 用属性选择器比在每个组件里写条件类更集中。用 token 值判断而不是主题名，
+  // 用户自建的主题同样生效。
+  const material = tokens.vars["--panel-blur"] !== "0px" ? "glass" : "flat";
+  root.dataset.material = material;
+  root.dataset.radius =
+    parseFloat(tokens.vars["--radius-card"]) === 0 ? "sharp" : "round";
+  root.style.colorScheme = tokens.dark ? "dark" : "light";
+  registerChartTheme(tokens.id, tokens.chart);
 }

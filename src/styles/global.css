@@ -38,124 +38,55 @@
   --hairline-strong: color-mix(in srgb, var(--color-text) 14%, transparent);
 }
 
-/* ── Frost：明亮、通透、大留白，但仍然是仪表而不是糖果 ─────── */
-[data-theme="frost"] {
-  --color-bg: #f2f4f7;
-  --color-panel: #ffffff;
-  --color-panel2: #f7f9fb;
-  --color-line: #e2e7ee;
-  --color-text: #10141b;
-  --color-dim: #5b6575;
-  --color-faint: #8a94a4;
-  --color-accent: #0b6bcb;
-  --color-accentsoft: #e6f0fc;
-  --color-ok: #0b7a54;
-  --color-warn: #a86400;
-  --color-danger: #c02b2b;
-  --radius-card: 16px;
-  --radius-btn: 8px;
-  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05), 0 12px 28px -20px rgb(16 24 40 / 0.22);
-  --space-card: 1.25rem;
-  --tracking-heading: -0.025em;
-  --hairline: color-mix(in srgb, var(--color-text) 10%, transparent);
-  --hairline-strong: color-mix(in srgb, var(--color-text) 18%, transparent);
-}
-
-/* ── Paper：暖纸、衬线标题、宽边距；直角，无阴影 ───────────── */
-[data-theme="paper"] {
-  --color-bg: #f3eee5;
-  --color-panel: #fbf8f2;
-  --color-panel2: #f6f0e5;
-  --color-line: #ddd2bf;
-  --color-text: #241f19;
-  --color-dim: #6f6353;
-  --color-faint: #9a8c78;
-  --color-accent: #8a5a2b;
-  --color-accentsoft: #efe2cd;
-  --color-ok: #476f37;
-  --color-warn: #9a5a0a;
-  --color-danger: #9c352a;
-  --radius-card: 2px;
-  --radius-btn: 2px;
-  --shadow-card: none;
-  --space-card: 1.5rem;
-  --font-display:
-    "Iowan Old Style", "Palatino Linotype", "Songti SC", "SimSun", Georgia, serif;
-  --tracking-heading: 0.005em;
-  --hairline: color-mix(in srgb, var(--color-text) 14%, transparent);
-  --hairline-strong: color-mix(in srgb, var(--color-text) 22%, transparent);
-}
-
-/* ── Aurora：深空渐变上的玻璃层 ──────────────────────────── */
-[data-theme="aurora"] {
-  --color-bg: #080a18;
-  --color-panel: #141a33;
-  --color-panel2: #0f142a;
-  --color-line: #262f52;
-  --color-text: #eaeefe;
-  --color-dim: #98a3ca;
-  --color-faint: #6a749b;
-  --color-accent: #8b5cf6;
-  --color-accentsoft: #221d46;
-  --color-ok: #3ecf8e;
-  --color-warn: #f5b544;
-  --color-danger: #fb7185;
-  --radius-card: 18px;
-  --radius-btn: 10px;
-  --shadow-card: none;
-  --space-card: 1.25rem;
-  --tracking-heading: -0.02em;
-  --hairline: color-mix(in srgb, var(--color-text) 10%, transparent);
-  --hairline-strong: color-mix(in srgb, var(--color-text) 16%, transparent);
-}
-
-/* ── Terminal：等宽、直角、零装饰 ────────────────────────── */
-[data-theme="terminal"] {
-  --color-bg: #050706;
-  --color-panel: #0a0e0b;
-  --color-panel2: #0d130e;
-  --color-line: #1c271d;
-  --color-text: #d9f5d9;
-  --color-dim: #7d997d;
-  --color-faint: #57705a;
-  --color-accent: #3ddc84;
-  --color-accentsoft: #0e2413;
-  --color-ok: #3ddc84;
-  --color-warn: #ffcc66;
-  --color-danger: #ff6b6b;
-  --radius-card: 0px;
-  --radius-btn: 0px;
-  --shadow-card: none;
-  --space-card: 0.875rem;
-  --font-sans: "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace;
-  --font-display: var(--font-sans);
-  --tracking-heading: 0.01em;
-  --hairline: color-mix(in srgb, var(--color-text) 12%, transparent);
-  --hairline-strong: color-mix(in srgb, var(--color-text) 20%, transparent);
-}
+/*
+ * 主题变量不再写在这里。
+ *
+ * 主题现在是用户可编辑的数据（lib/theme/tokens.ts），applyTheme 把整组
+ * token 作为内联自定义属性写到 <html> 上。之前这里为每套主题写一个
+ * `[data-theme=...]` 块，结果是「用户自定义主题永远只能改颜色」——
+ * 因为形状、字体、间距都锁死在这些块里。
+ *
+ * 上面的 @theme 只保留默认值，用于 JS 加载前的一帧，避免白屏闪烁。
+ */
 
 /* ── 渐变风背景（固定在视口，不随内容滚动） ───────────────── */
-[data-theme="aurora"] body::before {
+body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  /* 光晕强度由主题的 material 决定：玻璃材质给 1，其它材质给 0。
+     颜色取主题自己的 accent，所以每套玻璃主题的渐变都不同。 */
+  opacity: calc(var(--glow, 0) * 1);
   background:
-    radial-gradient(60rem 40rem at 6% -8%, rgb(139 92 246 / 0.42), transparent 60%),
-    radial-gradient(52rem 36rem at 92% 2%, rgb(34 211 238 / 0.22), transparent 62%),
-    radial-gradient(46rem 34rem at 50% 110%, rgb(236 72 153 / 0.18), transparent 60%),
-    linear-gradient(180deg, #080a18 0%, #05060f 100%);
+    radial-gradient(
+      58rem 38rem at 8% -6%,
+      color-mix(in srgb, var(--color-accent) 42%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      50rem 34rem at 92% 2%,
+      color-mix(in srgb, var(--color-accent) 18%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      44rem 32rem at 52% 108%,
+      color-mix(in srgb, var(--color-danger) 14%, transparent),
+      transparent 60%
+    ),
+    linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg) 100%);
 }
-[data-theme="aurora"] #root {
+#root {
   position: relative;
   z-index: 1;
 }
-[data-theme="aurora"] #root > div {
+/* 玻璃材质：外壳透明，让底下的光晕透出来 */
+[data-material="glass"] #root > div {
   background-color: transparent !important;
 }
-[data-theme="aurora"] aside,
-[data-theme="aurora"] header {
+[data-material="glass"] aside,
+[data-material="glass"] header {
   background-color: color-mix(in srgb, var(--color-panel) 42%, transparent) !important;
   -webkit-backdrop-filter: blur(22px) saturate(1.2);
   backdrop-filter: blur(22px) saturate(1.2);
@@ -194,10 +125,6 @@ body {
   background-size: 64px 64px;
   -webkit-mask-image: radial-gradient(120% 70% at 50% 0%, #000 0%, transparent 72%);
   mask-image: radial-gradient(120% 70% at 50% 0%, #000 0%, transparent 72%);
-}
-[data-theme="frost"] .grid-field,
-[data-theme="paper"] .grid-field {
-  opacity: 0.55;
 }
 
 ::-webkit-scrollbar {
@@ -274,36 +201,96 @@ tbody tr:nth-child(even) {
   border-radius: 2px;
   background: var(--color-accent);
 }
-[data-theme="terminal"] .nav-item[data-active="true"]::before {
+/* 直角主题（radius 为 0）把激活线也做成方的：读 --radius-btn 而不是主题名，
+   用户自建的主题同样生效。 */
+[data-radius="sharp"] .nav-item[data-active="true"]::before {
   width: 3px;
   border-radius: 0;
 }
 
+/* 顶部坞的横向导航：图标 + 文字一行，激活态是底部 2px 信号线 */
+.dock-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius-btn);
+  color: var(--color-dim);
+  font-size: 12px;
+  white-space: nowrap;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+.dock-item:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+.dock-item-active {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+.dock-item-active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+/* 环形布局的卫星卡：需要一点浮起来的层次，否则和虚线圈混在一起 */
+.orbit-satellite {
+  border-radius: var(--radius-card);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--color-text) 6%, transparent) inset,
+    0 18px 44px -28px rgb(0 0 0 / 0.85);
+}
+
 /* ── 卡片：表面 + 内描边 + 顶部一层极淡光照 ────────────────── */
+/*
+ * padding 放在 components 层：Tailwind v4 的 utilities 在更高优先的层里，
+ * 这样 `p-0`、`px-4` 这类显式内边距才真的能生效。
+ * 之前写在层外（优先级高于任何层），导致 <Card className="p-0"> 实测仍是
+ * 16px —— 代码说要零内边距，渲染出来却是有的，属于「假实现」。
+ */
+@layer components {
+  .t-card {
+    padding: var(--space-card);
+  }
+}
+
 .t-card {
   position: relative;
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
-  padding: var(--space-card);
   background-image: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--color-text) 3.5%, transparent),
+    color-mix(in srgb, var(--color-text) var(--card-sheen, 3.5%), transparent),
     transparent 42%
   );
 }
-[data-theme="frost"] .t-card,
-[data-theme="paper"] .t-card {
-  background-image: none;
-}
+/* 卡片顶部光洗：深色主题给 3.5%，浅色主题给 0（浅底上加白没有意义，
+   反而把卡片洗成一片灰）。由 --card-sheen 控制。 */
 
 .t-panel {
   background-color: var(--color-panel);
 }
 
-[data-theme="aurora"] .t-panel {
-  background-color: color-mix(in srgb, var(--color-panel) 58%, transparent);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+.t-panel {
+  background-color: color-mix(
+    in srgb,
+    var(--color-panel) calc(var(--panel-opacity, 1) * 100%),
+    transparent
+  );
+}
+.t-panel {
+  -webkit-backdrop-filter: blur(var(--panel-blur, 0px));
+  backdrop-filter: blur(var(--panel-blur, 0px));
 }
 
 .t-btn {
@@ -399,15 +386,7 @@ input[type="checkbox"] {
   }
 }
 
-/* ── Paper：标题用衬线且略大，正文行高放宽，像书页 ─────────── */
-[data-theme="paper"] .t-heading {
-  font-weight: 600;
-}
-[data-theme="paper"] body {
-  line-height: 1.7;
-}
-
-/* ── Terminal：所有边框更硬 ───────────────────────────────── */
-[data-theme="terminal"] .card-hover:hover {
-  border-color: var(--color-line);
+/* 正文字高由主题密度决定（--line-height-body 在 applyTheme 里写入） */
+body {
+  line-height: var(--line-height-body, 1.55);
 }

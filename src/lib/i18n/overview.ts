@@ -3,6 +3,13 @@
 export const dict = {
   en: {
     "overview.heroTitle": "Workbench",
+    "overview.dragHint": "Drag to reorder",
+    "overview.allHidden":
+      "All overview widgets are hidden — turn some back on in Settings → Appearance.",
+    "overview.hubCpu": "CPU LOAD",
+    "overview.hubProc": "proc",
+    "overview.hubSrv": "srv",
+    "overview.hubAi": "AI",
     "overview.heroSubtitle":
       "Local ops dashboard with AI session cost metering — data stays on this device",
     "overview.liveMonitoring": "Monitoring live",
@@ -62,6 +69,12 @@ export const dict = {
   },
   zh: {
     "overview.heroTitle": "工作台",
+    "overview.dragHint": "拖动排序",
+    "overview.allHidden": "概览组件全部隐藏了——可在设置 → 外观里重新打开。",
+    "overview.hubCpu": "CPU 负载",
+    "overview.hubProc": "进程",
+    "overview.hubSrv": "服务",
+    "overview.hubAi": "AI",
     "overview.heroSubtitle": "本机运维仪表盘与 AI 会话成本计量，数据仅存本机",
     "overview.liveMonitoring": "实时监控中",
     "overview.greeting.lateNight": "夜深了",
@@ -119,6 +132,12 @@ export const dict = {
   },
   ja: {
     "overview.heroTitle": "ワークベンチ",
+    "overview.dragHint": "ドラッグで並べ替え",
+    "overview.allHidden": "概要ウィジェットがすべて非表示です — 設定 → 外観で戻せます。",
+    "overview.hubCpu": "CPU 負荷",
+    "overview.hubProc": "プロセス",
+    "overview.hubSrv": "サービス",
+    "overview.hubAi": "AI",
     "overview.heroSubtitle":
       "ローカル運用ダッシュボードと AI セッションコスト計測。データはこの端末のみに保存",
     "overview.liveMonitoring": "ライブ監視中",

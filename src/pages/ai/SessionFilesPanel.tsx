@@ -53,7 +53,7 @@ export function SessionFilesPanel() {
   return (
     <>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Card className="p-4 xl:col-span-2">
+        <Card className="xl:col-span-2">
           <SectionTitle>
             {t("ai.localSessionRecords", { count: sessionFiles.length })}
           </SectionTitle>
@@ -113,7 +113,7 @@ export function SessionFilesPanel() {
           )}
         </Card>
 
-        <Card className="p-4">
+        <Card className="">
           <SectionTitle>{t("ai.toolDist")}</SectionTitle>
           {toolCounts.length > 0 ? (
             <>
@@ -214,7 +214,7 @@ function CopyBlock({
           <Copy size={10} />
         </Btn>
       </div>
-      <pre className="max-h-[200px] overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-bg p-3 text-[11px]">
+      <pre className="max-h-[200px] overflow-auto whitespace-pre-wrap rounded-[var(--radius-btn)] border border-line bg-bg p-3 text-[11px]">
         {text}
       </pre>
     </div>

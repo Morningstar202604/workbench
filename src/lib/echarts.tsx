@@ -13,7 +13,7 @@ import { PieChart, BarChart, LineChart } from "echarts/charts";
 import { GridComponent, TooltipComponent, LegendComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { EChartsCoreOption as EChartsOption, EChartsType } from "echarts/core";
-import { DARK, LIGHT, type ThemeName } from "./chartTheme";
+import { DARK, LIGHT, chartTheme, type ChartTheme } from "./chartTheme";
 
 // ─── 注册最小集合 ──────────────────────────────────────────
 echarts.use([
@@ -26,9 +26,9 @@ echarts.use([
   CanvasRenderer,
 ]);
 
-function toEChartsTheme(t: typeof DARK): echarts.EChartsCoreOption {
+function toEChartsTheme(t: ChartTheme): echarts.EChartsCoreOption {
   return {
-    color: [t.accent, "#a78bfa", t.ok, t.warn, t.danger, "#60a5fa"],
+    color: t.series ?? [t.accent, "#a78bfa", t.ok, t.warn, t.danger, "#60a5fa"],
     backgroundColor: "transparent",
     textStyle: { color: t.text },
     tooltip: {
@@ -66,20 +66,28 @@ function toEChartsTheme(t: typeof DARK): echarts.EChartsCoreOption {
 echarts.registerTheme("wb-dark", toEChartsTheme(DARK));
 echarts.registerTheme("wb-light", toEChartsTheme(LIGHT));
 
-/** 读取当前生效的主题名（与 store 的 theme 字段同源）。 */
 /**
- * 图表用哪套明暗配色。
+ * 每个已注册主题一份 ECharts 主题。
  *
- * 读 `data-chart-theme` 而不是 `data-theme`：后者现在是风格 id
- * （midnight / frost / paper / aurora / terminal），只比较 "light"
- * 会让所有风格都退化成深色 —— 浅色底上出现浅灰文字，几乎不可读。
+ * ECharts 的主题必须在 init 时传名字，不能事后换；所以 applyTheme 换主题时
+ * 先确保这套色板已注册成 `wb-<id>`，再通知所有图表 dispose + 重建。
+ * 缓存已注册的 id，避免每帧重复 registerTheme。
  */
-function currentThemeName(): ThemeName {
-  if (typeof document === "undefined") return "dark";
-  const explicit = document.documentElement.dataset.chartTheme;
-  if (explicit === "light" || explicit === "dark") return explicit;
-  // 兜底：兼容只设置了 data-theme="light" 的旧状态
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+const registeredEChartsThemes = new Set<string>(["wb-dark", "wb-light"]);
+
+function ensureEChartsTheme(id: string): string {
+  const name = `wb-${id}`;
+  if (registeredEChartsThemes.has(name)) return name;
+  const tokens = chartTheme(id);
+  echarts.registerTheme(name, toEChartsTheme(tokens));
+  registeredEChartsThemes.add(name);
+  return name;
+}
+
+/** 当前主题 id（`data-theme` 由 applyTheme 写入）。 */
+function currentThemeId(): string {
+  if (typeof document === "undefined") return "wb-dark";
+  return document.documentElement.dataset.theme || "dark";
 }
 
 // ─── 组件 ──────────────────────────────────────────────────
@@ -109,6 +117,7 @@ function subscribeTheme(listener: ThemeListener): () => void {
     themeObserver = new MutationObserver(() => {
       for (const fn of themeListeners) fn();
     });
+    // 自定义主题会改内联变量，但 `data-theme` 一定跟着变，所以仍盯它。
     themeObserver.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-theme"],
@@ -139,7 +148,7 @@ export function EChart({
     const node = ref.current;
     if (!node) return;
     chartRef.current?.dispose();
-    chartRef.current = echarts.init(node, `wb-${currentThemeName()}`, {
+    chartRef.current = echarts.init(node, ensureEChartsTheme(currentThemeId()), {
       renderer: "canvas",
     });
     chartRef.current.setOption(optionRef.current, {

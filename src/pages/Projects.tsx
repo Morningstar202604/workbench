@@ -327,7 +327,7 @@ export default function Projects() {
         </div>
       )}
 
-      <Card className="p-4">
+      <Card className="">
         <h3 className="mb-2 text-sm font-medium">{t("projects.tableView")}</h3>
         <Table
           head={[

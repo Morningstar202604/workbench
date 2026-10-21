@@ -1,0 +1,261 @@
+import { buildTheme, mix, type ThemeInput, type ThemeTokens } from "./tokens";
+
+/**
+ * 内置主题。它们现在只是「几行数据」，和用户自建主题走同一条渲染管线——
+ * 这样任何内置主题都能在设置里被「复制为新主题」后随意改，不会出现
+ * 「官方主题能做的事自定义主题做不到」的二等公民。
+ */
+export const BUILTIN_THEMES: ThemeInput[] = [
+  {
+    id: "midnight",
+    name: "Midnight",
+    dark: true,
+    bg: "#07080b",
+    panel: "#0c0f15",
+    text: "#e8ecf2",
+    accent: "#22d3ee",
+    radiusCard: 10,
+    radiusBtn: 7,
+    density: "cozy",
+    font: "sans",
+    material: "line",
+    grid: 1,
+    panelOpacity: 1,
+    builtin: true,
+  },
+  {
+    id: "frost",
+    name: "Frost",
+    dark: false,
+    bg: "#f2f4f7",
+    panel: "#ffffff",
+    text: "#10141b",
+    accent: "#0b6bcb",
+    radiusCard: 16,
+    radiusBtn: 8,
+    density: "cozy",
+    font: "sans",
+    material: "flat",
+    grid: 0.55,
+    panelOpacity: 1,
+    builtin: true,
+  },
+  {
+    id: "paper",
+    name: "Paper",
+    dark: false,
+    bg: "#f3eee5",
+    panel: "#fbf8f2",
+    text: "#241f19",
+    accent: "#8a5a2b",
+    radiusCard: 2,
+    radiusBtn: 2,
+    density: "roomy",
+    font: "serif",
+    material: "flat",
+    grid: 0.4,
+    panelOpacity: 1,
+    builtin: true,
+  },
+  {
+    id: "aurora",
+    name: "Aurora",
+    dark: true,
+    bg: "#080a18",
+    panel: "#141a33",
+    text: "#eaeefe",
+    accent: "#8b5cf6",
+    radiusCard: 18,
+    radiusBtn: 10,
+    density: "cozy",
+    font: "sans",
+    material: "glass",
+    grid: 0,
+    panelOpacity: 0.58,
+    builtin: true,
+  },
+  {
+    id: "terminal",
+    name: "Terminal",
+    dark: true,
+    bg: "#050706",
+    panel: "#0a0e0b",
+    text: "#d9f5d9",
+    accent: "#3ddc84",
+    radiusCard: 0,
+    radiusBtn: 0,
+    density: "compact",
+    font: "mono",
+    material: "flat",
+    grid: 0,
+    panelOpacity: 1,
+    builtin: true,
+  },
+  {
+    id: "ink",
+    name: "Ink",
+    dark: false,
+    bg: "#f7f7f5",
+    panel: "#ffffff",
+    text: "#111111",
+    accent: "#d92b2b",
+    radiusCard: 0,
+    radiusBtn: 0,
+    density: "compact",
+    font: "sans",
+    material: "line",
+    grid: 0,
+    panelOpacity: 1,
+    builtin: true,
+  },
+  {
+    id: "void",
+    name: "Void",
+    dark: true,
+    bg: "#000000",
+    panel: "#050505",
+    text: "#f2f2f2",
+    accent: "#ff4d00",
+    radiusCard: 2,
+    radiusBtn: 2,
+    density: "compact",
+    font: "mono",
+    material: "line",
+    grid: 0,
+    panelOpacity: 1,
+    builtin: true,
+  },
+  {
+    id: "jade",
+    name: "Jade",
+    dark: false,
+    bg: "#eef2ee",
+    panel: "#f8fbf8",
+    text: "#1b241f",
+    accent: "#1f7a5a",
+    radiusCard: 8,
+    radiusBtn: 6,
+    density: "cozy",
+    font: "sans",
+    material: "flat",
+    grid: 0.3,
+    panelOpacity: 1,
+    builtin: true,
+  },
+];
+
+export const DEFAULT_THEME_ID = "midnight";
+
+/** 旧版本持久化的 "dark"/"light"，以及已删除的自定义主题 id。 */
+export function migrateThemeId(raw: unknown, known: ThemeInput[]): string {
+  if (typeof raw === "string") {
+    if (known.some((t) => t.id === raw)) return raw;
+    if (raw === "light") return "frost";
+    if (raw === "dark") return "midnight";
+  }
+  return DEFAULT_THEME_ID;
+}
+
+export function allThemes(custom: ThemeInput[]): ThemeInput[] {
+  // 自定义列表里若混进了 builtin:true（手工编辑过 localStorage、旧格式），
+  // 不丢弃它——那是用户的主题。强制降级为自定义，避免它凭空消失。
+  return [...BUILTIN_THEMES, ...custom.map((c) => ({ ...c, builtin: false }))];
+}
+
+export function findTheme(id: string, custom: ThemeInput[]): ThemeInput {
+  return allThemes(custom).find((t) => t.id === id) ?? BUILTIN_THEMES[0];
+}
+
+export function tokensFor(id: string, custom: ThemeInput[]): ThemeTokens {
+  return buildTheme(findTheme(id, custom));
+}
+
+/** 新建自定义主题时的起点：把当前主题复制一份，只换个名字。 */
+export function deriveTheme(base: ThemeInput, name: string, id: string): ThemeInput {
+  return { ...base, id, name, builtin: false };
+}
+
+/** 设置页色卡预览用的四个色块：底、面板、强调、文字。 */
+export function swatchOf(input: ThemeInput): [string, string, string, string] {
+  return [input.bg, input.panel, input.accent, input.text];
+}
+
+/**
+ * 主题校验：导入的 JSON 来自外部，必须 fail-closed。
+ * 返回 null 表示不可用（调用方负责提示），而不是「尽量修一修」——
+ * 半修好的主题会在界面上产生不可读的低对比文本。
+ */
+export function parseTheme(raw: unknown): ThemeInput | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const num = (v: unknown, lo: number, hi: number, dflt: number) =>
+    typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt;
+
+  const id = str(o.id);
+  const name = str(o.name);
+  const bg = str(o.bg);
+  const panel = str(o.panel);
+  const text = str(o.text);
+  const accent = str(o.accent);
+  if (!id || !name || !bg || !panel || !text || !accent) return null;
+  const isColor = (v: string) => /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v);
+  if (![bg, panel, text, accent].every(isColor)) return null;
+
+  const density = o.density;
+  const font = o.font;
+  const material = o.material;
+
+  return {
+    id,
+    name,
+    dark: typeof o.dark === "boolean" ? o.dark : luminanceOf(bg) < 0.4,
+    bg,
+    panel,
+    text,
+    accent,
+    ok: str(o.ok) ?? undefined,
+    warn: str(o.warn) ?? undefined,
+    danger: str(o.danger) ?? undefined,
+    radiusCard: num(o.radiusCard, 0, 40, 10),
+    radiusBtn: num(o.radiusBtn, 0, 24, 7),
+    density:
+      density === "compact" || density === "cozy" || density === "roomy"
+        ? density
+        : "cozy",
+    font: font === "serif" || font === "mono" ? font : "sans",
+    material:
+      material === "flat" || material === "glass" || material === "line"
+        ? material
+        : "line",
+    grid: num(o.grid, 0, 1, 0),
+    panelOpacity: num(o.panelOpacity, 0.2, 1, 1),
+    builtin: false,
+  };
+}
+
+function luminanceOf(hex: string): number {
+  const h = hex.replace("#", "");
+  const full =
+    h.length === 3
+      ? h
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : h;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** 供设置页展示的一句话描述（不写进主题数据，避免用户自定义主题也要翻译）。 */
+export function describeTheme(t: ThemeInput): string {
+  const bits = [t.dark ? "dark" : "light", t.material];
+  if (t.font !== "sans") bits.push(t.font);
+  if (t.density !== "cozy") bits.push(t.density);
+  return bits.join(" · ");
+}
+
+/** 主题派生一个小色带，用于设置页列表左侧的竖条。 */
+export function themeStripe(t: ThemeInput): string {
+  return `linear-gradient(180deg, ${t.accent}, ${mix(t.accent, t.bg, 0.55)})`;
+}

@@ -444,7 +444,7 @@ export default function Agent() {
                   <span
                     key={tool.name}
                     title={tool.description}
-                    className="flex items-center gap-1 rounded-md border border-line bg-panel2 px-2 py-0.5 font-mono text-[11px] text-dim"
+                    className="flex items-center gap-1 rounded-[var(--radius-btn)] border border-line bg-panel2 px-2 py-0.5 font-mono text-[11px] text-dim"
                   >
                     <Wrench size={10} />
                     {tool.name}
@@ -571,7 +571,7 @@ function TurnView({ turn }: { turn: ChatTurn }) {
   if (turn.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-xl rounded-br-sm bg-accentsoft px-3 py-2 text-sm text-accent">
+        <div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-card)] rounded-br-sm bg-accentsoft px-3 py-2 text-sm text-accent">
           {turn.text}
         </div>
       </div>
@@ -587,7 +587,7 @@ function TurnView({ turn }: { turn: ChatTurn }) {
         </div>
       )}
       {turn.text && (
-        <div className="max-w-[92%] whitespace-pre-wrap rounded-xl rounded-bl-sm border border-line bg-panel2 px-3 py-2 text-sm">
+        <div className="max-w-[92%] whitespace-pre-wrap rounded-[var(--radius-card)] rounded-bl-sm border border-line bg-panel2 px-3 py-2 text-sm">
           {turn.text}
         </div>
       )}

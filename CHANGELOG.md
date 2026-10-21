@@ -7,6 +7,50 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Themes are data now, not CSS.** A theme is six colours plus six shape knobs
+  (card radius, button radius, density, typeface, material, grid strength,
+  panel opacity, dark footing) expanded into 26 CSS variables and a matching
+  chart palette. `src/lib/theme/tokens.ts` owns the derivation;
+  `src/lib/theme/presets.ts` holds eight built-in themes — Midnight, Frost,
+  Paper, Aurora, Terminal, **Ink**, **Void**, **Jade**. Built-ins and custom
+  themes share one render path, so any built-in can be duplicated and edited.
+- Settings gained a real appearance panel: theme editor with live preview,
+  import/export of theme JSON (fail-closed validation, id collisions renamed),
+  shell picker, layout picker and widget manager. Persist version 3 migrates
+  `dark`/`light` to `midnight`/`frost` and cleans the new fields.
+- **Shell** is now a real choice: left rail, top dock (navigation in the header,
+  full-width canvas) or zen (icon strip + centred column). Previously
+  `StyleDef.shell` only rounded the preview swatch in Settings and never
+  affected the app.
+- **Overview has five layouts** over the same nine widget components: bento,
+  ledger, orbit, dense, zen. The orbit layout keeps the yin-yang *structure*
+  (one hub + a ring of satellites) without rotating cards or text — the hub
+  carries the headline gauge.
+- **Widgets can be reordered and hidden** from Settings or dragged directly on
+  the overview page; order and visibility persist per device.
+
+### Fixed
+
+- **Density never applied.** `--space-card` had five values but 23 of 39 cards
+  set `p-4` explicitly, and Tailwind's utilities layer beat the unlayered
+  `.t-card` rule — every theme rendered 16 px padding. The padding rule moved
+  into `@layer components` and the redundant classes were removed; measured
+  Midnight 16 px vs Terminal 12 px afterwards.
+- **Pie chart seams were the page colour, not the panel colour.** On light
+  themes the card is white while the page is off-white, so every gap between
+  sectors showed a grey line. `chartGapColor()` now returns the panel colour.
+- **The visual baseline used pink masks.** Timestamps were masked with
+  `toHaveScreenshot({ mask })`, which paints a solid magenta block into the
+  baseline; the real layout underneath was never captured. Switched to
+  `visibility:hidden`, and the clock is frozen (`page.clock.install`) so a
+  screenshot is reproducible — before this, the first run failed and a rerun
+  passed.
+- Four dead i18n keys (`settings.dark` / `light` / `styleHint` /
+  `appearanceHint`) had no references anywhere; removed.
+
+### Added
+
+
 - **Design language rebuilt around "precision instrument"**, benchmarked against
   Apple / Tesla / Qoder / Linear / Vercel / Raycast / Stripe style modern product
   sites (see `docs/design-references.md`). Concretely:

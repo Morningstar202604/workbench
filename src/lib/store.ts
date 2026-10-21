@@ -1,6 +1,23 @@
 import { create } from "zustand";
-import { DEFAULT_STYLE, migrateStyle, type StyleId } from "./theme/themes";
+import {
+  DEFAULT_THEME_ID,
+  allThemes,
+  migrateThemeId,
+  parseTheme,
+  tokensFor,
+} from "./theme/presets";
+import type { ThemeInput } from "./theme/tokens";
 import { applyTheme } from "./theme/apply";
+import {
+  DEFAULT_ORDER,
+  normalizeHidden,
+  normalizeLayout,
+  normalizeOrder,
+  normalizeShell,
+  type OverviewLayoutId,
+  type ShellId,
+  type WidgetId,
+} from "./layout";
 import { t } from "./i18n";
 import { persist } from "zustand/middleware";
 import {
@@ -68,8 +85,18 @@ const TOAST_TTL_MS = 2600;
 const SAVE_DEBOUNCE_MS = 300;
 
 interface UiState {
-  /** 视觉风格 id（midnight / frost / paper / aurora / terminal） */
-  theme: StyleId;
+  /** 当前主题 id（内置或用户自建） */
+  theme: string;
+  /** 用户自建主题（内置主题不存这里，升级时自动获得新内置主题） */
+  customThemes: ThemeInput[];
+  /** 外壳：侧栏 / 顶部坞 / 专注 */
+  shell: ShellId;
+  /** 概览页布局 */
+  layout: OverviewLayoutId;
+  /** 概览页组件顺序 */
+  widgetOrder: WidgetId[];
+  /** 概览页隐藏的组件 */
+  widgetHidden: WidgetId[];
   refreshMs: number;
   view: ViewKey;
   alwaysOnTop: boolean;
@@ -127,7 +154,16 @@ interface Store extends UiState, RuntimeState {
   toast: string;
   killTarget: ProcInfo | null;
   setView: (v: ViewKey) => void;
-  setTheme: (t: StyleId) => void;
+  setTheme: (id: string) => void;
+  /** 新建/覆盖一个自定义主题；返回它的 id */
+  upsertTheme: (theme: ThemeInput) => string;
+  deleteTheme: (id: string) => void;
+  importTheme: (json: string) => { ok: boolean; error?: string; id?: string };
+  setShell: (s: ShellId) => void;
+  setLayout: (l: OverviewLayoutId) => void;
+  setWidgetOrder: (o: WidgetId[]) => void;
+  setWidgetHidden: (h: WidgetId[]) => void;
+  resetWidgets: () => void;
   setRefreshMs: (ms: number) => void;
   setToast: (t: string) => void;
   clearToast: () => void;
@@ -181,7 +217,12 @@ let refreshAgain = false;
 export const useStore = create<Store>()(
   persist(
     (set, get) => ({
-      theme: DEFAULT_STYLE,
+      theme: DEFAULT_THEME_ID,
+      customThemes: [],
+      shell: "rail",
+      layout: "bento",
+      widgetOrder: DEFAULT_ORDER,
+      widgetHidden: [],
       refreshMs: 3000,
       view: "overview",
       alwaysOnTop: false,
@@ -220,10 +261,54 @@ export const useStore = create<Store>()(
       killTarget: null,
 
       setView: (v) => set({ view: v }),
-      setTheme: (t) => {
-        set({ theme: t });
-        applyTheme(t);
+      setTheme: (id) => {
+        set({ theme: id });
+        const s = get();
+        applyTheme(tokensFor(id, s.customThemes), s.shell, s.layout);
       },
+      upsertTheme: (theme) => {
+        const existing = get().customThemes;
+        const next = theme.builtin
+          ? existing
+          : [...existing.filter((t) => t.id !== theme.id), { ...theme, builtin: false }];
+        set({ customThemes: next, theme: theme.id });
+        const s = get();
+        applyTheme(tokensFor(theme.id, next), s.shell, s.layout);
+        return theme.id;
+      },
+      deleteTheme: (id) => {
+        const existing = get().customThemes.filter((t) => t.id !== id);
+        const current = get().theme === id ? DEFAULT_THEME_ID : get().theme;
+        set({ customThemes: existing, theme: current });
+        const s = get();
+        applyTheme(tokensFor(current, existing), s.shell, s.layout);
+      },
+      importTheme: (json) => {
+        let raw: unknown;
+        try {
+          raw = JSON.parse(json);
+        } catch {
+          return { ok: false, error: t("theme.errJson") };
+        }
+        const parsed = parseTheme(raw);
+        if (!parsed) return { ok: false, error: t("theme.errShape") };
+        // 与内置或已有自定义 id 冲突时改名，避免悄悄覆盖别人的主题
+        let id = parsed.id;
+        const taken = new Set(allThemes(get().customThemes).map((x) => x.id));
+        if (taken.has(id)) id = `${id}-${Math.random().toString(36).slice(2, 6)}`;
+        get().upsertTheme({ ...parsed, id });
+        return { ok: true, id };
+      },
+      setShell: (shell) => {
+        set({ shell });
+        const s = get();
+        applyTheme(tokensFor(s.theme, s.customThemes), shell, s.layout);
+      },
+      setLayout: (layout) => set({ layout }),
+      setWidgetOrder: (widgetOrder) => set({ widgetOrder: normalizeOrder(widgetOrder) }),
+      setWidgetHidden: (widgetHidden) =>
+        set({ widgetHidden: normalizeHidden(widgetHidden) }),
+      resetWidgets: () => set({ widgetOrder: DEFAULT_ORDER, widgetHidden: [] }),
       setRefreshMs: (ms) => set({ refreshMs: ms }),
       setToast: (t) => {
         set({ toast: t });
@@ -656,17 +741,33 @@ export const useStore = create<Store>()(
     {
       name: "workbench-ui-v1",
       // 版本 1 → 2：theme 从 "dark"/"light" 变成风格 id。
-      // 老用户的选择会被映射到等价的风格（dark→midnight, light→frost）。
-      version: 2,
+      // 版本 3：主题变成可编辑数据（+ customThemes）、新增 shell / layout / 组件摆放。
+      // 迁移只做「补齐与清洗」，不覆盖用户的显式选择。
+      version: 3,
       migrate: (persisted: unknown) => {
         const state = (persisted ?? {}) as Record<string, unknown>;
+        const customThemes: ThemeInput[] = Array.isArray(state.customThemes)
+          ? state.customThemes
+              .map((x) => parseTheme(x))
+              .filter((x): x is ThemeInput => Boolean(x))
+          : [];
         return {
           ...state,
-          theme: migrateStyle(state.theme),
+          customThemes,
+          theme: migrateThemeId(state.theme, allThemes(customThemes)),
+          shell: normalizeShell(state.shell),
+          layout: normalizeLayout(state.layout),
+          widgetOrder: normalizeOrder(state.widgetOrder),
+          widgetHidden: normalizeHidden(state.widgetHidden),
         } as never;
       },
       partialize: (s) => ({
         theme: s.theme,
+        customThemes: s.customThemes,
+        shell: s.shell,
+        layout: s.layout,
+        widgetOrder: s.widgetOrder,
+        widgetHidden: s.widgetHidden,
         refreshMs: s.refreshMs,
         alwaysOnTop: s.alwaysOnTop,
       }),

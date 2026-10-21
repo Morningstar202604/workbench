@@ -72,6 +72,9 @@ export const dict = {
     "store.cleared": "Cost data cleared",
     "store.clearFailed": "Failed to clear cost data: {err}",
     "store.alertTitle": "Workbench cost alert",
+    "theme.errJson": "Not valid JSON: {err}",
+    "theme.errShape":
+      "Theme is missing required fields (id / name / bg / panel / text / accent)",
     "store.alertBody":
       "Daily {daily}% / monthly {monthly}% exceeded the {threshold}% threshold",
     "util.noDueDate": "No due date",
@@ -159,6 +162,8 @@ export const dict = {
     "store.cleared": "已清空成本数据",
     "store.clearFailed": "清空成本数据失败: {err}",
     "store.alertTitle": "工作台成本告警",
+    "theme.errJson": "不是合法的 JSON：{err}",
+    "theme.errShape": "主题缺少必需字段（id / name / bg / panel / text / accent）",
     "store.alertBody": "日 {daily}% / 月 {monthly}% 已超预算阈值 {threshold}%",
     "util.noDueDate": "无期限",
     "util.overdue": "逾期 {date}",
@@ -245,6 +250,9 @@ export const dict = {
     "store.cleared": "コストデータを消去しました",
     "store.clearFailed": "コストデータの消去に失敗: {err}",
     "store.alertTitle": "Workbench コストアラート",
+    "theme.errJson": "JSON として不正です: {err}",
+    "theme.errShape":
+      "テーマに必須項目がありません（id / name / bg / panel / text / accent）",
     "store.alertBody": "日 {daily}% / 月 {monthly}% がしきい値 {threshold}% を超えました",
     "util.noDueDate": "期限なし",
     "util.overdue": "期限超過 {date}",

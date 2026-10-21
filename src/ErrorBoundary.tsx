@@ -33,7 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="max-w-md text-sm text-dim">{this.state.error.message}</p>
           <button
             onClick={this.reset}
-            className="flex items-center gap-2 rounded-lg bg-accentsoft px-4 py-2 text-sm text-accent hover:bg-accent/20"
+            className="flex items-center gap-2 rounded-[var(--radius-btn)] bg-accentsoft px-4 py-2 text-sm text-accent hover:bg-accent/20"
           >
             <RefreshCw size={14} />
             {t("err.retry")}

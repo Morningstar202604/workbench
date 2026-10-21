@@ -102,7 +102,7 @@ export function AiProcessPanel() {
         />
       </div>
 
-      <Card className="p-4">
+      <Card className="">
         <SectionTitle>{t("ai.aiMemTitle")}</SectionTitle>
         {ais.length > 0 ? (
           <EChart
@@ -115,7 +115,7 @@ export function AiProcessPanel() {
         )}
       </Card>
 
-      <Card className="p-4">
+      <Card className="">
         <SectionTitle>{t("ai.aiAgentProcesses", { count: ais.length })}</SectionTitle>
         {ais.length === 0 ? (
           <Empty>{t("ai.noAiAgents")}</Empty>
@@ -198,7 +198,7 @@ export function OpencodeSessionsPanel() {
     : [];
 
   return (
-    <Card className="p-4">
+    <Card className="">
       <SectionTitle
         extra={
           <Btn onClick={refreshAi} className="!py-1 !text-xs">
@@ -212,7 +212,7 @@ export function OpencodeSessionsPanel() {
         <div className="flex flex-col gap-2">
           <Empty>{t("ai.opencodeUnreachable")}</Empty>
           {sessionsErr && (
-            <div className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
+            <div className="rounded-[var(--radius-btn)] border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
               {sessionsErr}
               <br />
               {t("ai.opencodeHintPrefix")}{" "}
@@ -228,7 +228,7 @@ export function OpencodeSessionsPanel() {
             return (
               <div
                 key={s.id}
-                className="overflow-hidden rounded-xl border border-line bg-panel2 transition-all"
+                className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-panel2 transition-all"
               >
                 <button
                   type="button"
@@ -317,7 +317,7 @@ function MessageBlock({ label, text }: { label: string; text: string }) {
   return (
     <div>
       <div className="mb-1 text-xs font-medium text-dim">{label}</div>
-      <div className="max-h-[100px] overflow-y-auto whitespace-pre-wrap rounded-lg border border-line bg-bg px-3 py-2 text-xs">
+      <div className="max-h-[100px] overflow-y-auto whitespace-pre-wrap rounded-[var(--radius-btn)] border border-line bg-bg px-3 py-2 text-xs">
         {text}
       </div>
     </div>
@@ -334,7 +334,7 @@ export function InfoChip({
   value: string;
 }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-lg border border-line bg-bg px-2.5 py-1.5">
+    <div className="flex items-center gap-1.5 rounded-[var(--radius-btn)] border border-line bg-bg px-2.5 py-1.5">
       <Icon size={11} className="text-warn" />
       <span className="text-dim">{label}</span>
       <span className="font-mono font-medium text-text">{value}</span>

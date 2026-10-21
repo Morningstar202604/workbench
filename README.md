@@ -112,6 +112,31 @@ directly on the panel, on any background.
 |-------------------|------------------------|
 | ![Collapsed](docs/screenshots/13-sidebar-collapsed.png) | ![Drawer](docs/screenshots/12-mobile-drawer.png) |
 
+### Themes, shells and layouts
+
+Theme is **data, not CSS**: six colours plus six shape knobs expand into 26 CSS
+variables and a matching chart palette. Everything below is reachable from
+Settings → Appearance, and any built-in theme can be duplicated and edited.
+
+| Orbit layout (Aurora) | Ledger layout (Ink) |
+|-----------------------|---------------------|
+| ![Orbit](docs/screenshots/20-layout-orbit-aurora.png) | ![Ledger](docs/screenshots/21-layout-ledger-ink.png) |
+
+| Zen layout (Void) | Dense layout (Terminal) |
+|-------------------|--------------------------|
+| ![Zen](docs/screenshots/22-layout-zen-void.png) | ![Dense](docs/screenshots/23-layout-dense-terminal.png) |
+
+| Dock shell | Zen shell |
+|------------|-----------|
+| ![Dock](docs/screenshots/24-shell-dock.png) | ![Zen shell](docs/screenshots/25-shell-zen.png) |
+
+- **Shell** moves the navigation: left rail, top dock, or a collapsed icon strip.
+- **Layout** re-arranges the overview: bento, ledger, orbit, dense, zen.
+- **Widgets** can be dragged, reordered and hidden independently of both.
+
+See [docs/plan-audit.md](docs/plan-audit.md) for the full capability audit and
+the list of features that were declared but never actually wired up.
+
 Regenerate screenshots yourself: `npm run build`, then `npm run preview`,
 then run a headless Chrome with
 `--remote-debugging-port=9222`, then `node scripts/shoot_docs.mjs`.
@@ -351,13 +376,16 @@ Done and planned. Vote or propose new ideas in the Issues.
 - [x] Real-time process / port / dev-server monitoring
 - [x] AI session cost metering with budget alerts
 - [x] Projects & task kanban
-- [x] Dark / light themes, log viewer
+- [x] Data-driven themes (8 built-ins + custom editor + import/export), log viewer
+- [x] Three shells (rail / top dock / zen) and five overview layouts
+- [x] Draggable, hideable overview widgets
 - [x] Multilingual UI (English / 简体中文 / 日本語)
-- [ ] Cross-platform support (macOS / Linux collection & packaging)
+- [ ] Cross-platform support (Linux done and verified; macOS not built)
 - [ ] Installer code signing
 - [ ] UI editor for `pricing_overrides.json`
 - [ ] Sharded cost ledger (100k+ records)
-- [ ] Page-level end-to-end tests
+- [ ] Page-level end-to-end tests (visual + structural covered; agent and
+      import/export flows are not)
 
 ## Known limitations
 

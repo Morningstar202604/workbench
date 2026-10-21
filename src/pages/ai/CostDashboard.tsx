@@ -155,7 +155,7 @@ export function CostDashboard() {
   return (
     <div className="flex flex-col gap-4">
       {budgetStatus?.exceeded && (
-        <div className="flex items-center gap-3 rounded-xl border border-danger/50 bg-danger/10 px-4 py-3 text-sm">
+        <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-danger/50 bg-danger/10 px-4 py-3 text-sm">
           <AlertTriangle size={16} className="shrink-0 text-danger" />
           <span className="font-medium text-danger">
             {t("ai.budgetExceeded", {
@@ -166,7 +166,7 @@ export function CostDashboard() {
         </div>
       )}
       {budgetStatus?.nearLimit && !budgetStatus.exceeded && (
-        <div className="flex items-center gap-3 rounded-xl border border-warn/50 bg-warn/10 px-4 py-3 text-sm">
+        <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-warn/50 bg-warn/10 px-4 py-3 text-sm">
           <AlertTriangle size={16} className="shrink-0 text-warn" />
           <span className="font-medium text-warn">
             {t("ai.budgetNearLimit", {
@@ -261,7 +261,7 @@ export function CostDashboard() {
 
       {costOverview &&
         (costOverview.daily_budget > 0 || costOverview.monthly_budget > 0) && (
-          <Card className="p-4">
+          <Card className="">
             <SectionTitle>{t("ai.budgetProgress")}</SectionTitle>
             <div className="grid gap-4 lg:grid-cols-2">
               {costOverview.daily_budget > 0 && (
@@ -287,13 +287,13 @@ export function CostDashboard() {
       {(costTrendChart || modelBreakdownChart) && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
           {costTrendChart && (
-            <Card className="p-4 lg:col-span-3">
+            <Card className="lg:col-span-3">
               <SectionTitle>{t("ai.costTrendTitle")}</SectionTitle>
               <EChart option={costTrendChart} style={{ height: 200 }} lazyUpdate />
             </Card>
           )}
           {modelBreakdownChart && (
-            <Card className="p-4 lg:col-span-2">
+            <Card className="lg:col-span-2">
               <SectionTitle>{t("ai.modelBreakdownTitle")}</SectionTitle>
               {isPieWorthRendering(
                 costModelBreakdown.map((r) => [r.model, r.cost] as [string, number])

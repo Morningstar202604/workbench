@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { DollarSign, Download, Eraser, Globe, RefreshCw, Upload } from "lucide-react";
+import { DollarSign, Download, Eraser, RefreshCw, Upload } from "lucide-react";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { isTauri } from "../lib/api";
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
-import { STYLES } from "../lib/theme/themes";
 import { Badge, Btn, Card, Field, SectionTitle, inputCls } from "../ui";
+import { AppearancePanel } from "../components/AppearancePanel";
 import { formatUsd } from "../lib/util";
 import type { CostSettings, WorkbenchData } from "../types";
 
@@ -64,8 +64,6 @@ export default function Settings() {
   const t = useT();
   const lang = useLang();
   const {
-    theme,
-    setTheme,
     refreshMs,
     setRefreshMs,
     data,
@@ -79,8 +77,6 @@ export default function Settings() {
     costOverview,
   } = useStore(
     useShallow((s) => ({
-      theme: s.theme,
-      setTheme: s.setTheme,
       refreshMs: s.refreshMs,
       setRefreshMs: s.setRefreshMs,
       data: s.data,
@@ -165,116 +161,30 @@ export default function Settings() {
         <span className="text-xs text-dim">{t("settings.pageSub")}</span>
       </div>
 
+      <AppearancePanel />
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {/* ── 外观：风格选择（带配色预览） ── */}
-        <Card className="p-4">
-          <SectionTitle>{t("settings.appearance")}</SectionTitle>
-          {/* 每张卡显示该风格的真实配色与形状：圆角、阴影、底色都取自
-              对应 theme 的 CSS 变量，让用户在点之前就能看出差别。 */}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {STYLES.map((style) => {
-              const active = theme === style.id;
-              const [bg, panel, accent, text] = style.swatch;
-              return (
-                <button
-                  key={style.id}
-                  type="button"
-                  onClick={() => setTheme(style.id)}
-                  aria-pressed={active}
-                  className={`group relative overflow-hidden border text-left transition-all ${
-                    active
-                      ? "border-accent ring-1 ring-accent/40"
-                      : "border-line hover:border-accent/40"
-                  }`}
-                  style={{
-                    borderRadius:
-                      style.shell === "mono" ? 0 : style.shell === "reading" ? 4 : 12,
-                    background: panel,
-                  }}
-                >
-                  {/* 迷你预览：侧栏 + 卡片 */}
-                  <div className="flex h-14" style={{ background: bg }}>
-                    <div
-                      className="w-1/5"
-                      style={{ background: panel, borderRight: `1px solid ${accent}33` }}
-                    />
-                    <div className="flex flex-1 flex-col justify-center gap-1 px-2">
-                      <div
-                        className="h-1.5 w-2/3 rounded-full"
-                        style={{ background: text, opacity: 0.55 }}
-                      />
-                      <div className="flex gap-1">
-                        <div
-                          className="h-4 flex-1"
-                          style={{
-                            background: panel,
-                            border: `1px solid ${accent}44`,
-                            borderRadius: style.shell === "mono" ? 0 : 6,
-                          }}
-                        />
-                        <div
-                          className="h-4 flex-1"
-                          style={{
-                            background: accent,
-                            opacity: 0.75,
-                            borderRadius: style.shell === "mono" ? 0 : 6,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="px-2.5 py-2" style={{ background: panel }}>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-semibold" style={{ color: text }}>
-                        {style.name}
-                      </span>
-                      {active && (
-                        <span
-                          className="h-1.5 w-1.5 rounded-full"
-                          style={{ background: accent }}
-                        />
-                      )}
-                    </div>
-                    <div
-                      className="mt-0.5 text-[10px] leading-snug"
-                      style={{ color: accent }}
-                    >
-                      {style.tagline[lang]}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
+        {/* ── 语言 ── */}
+        <Card>
+          <SectionTitle>{t("settings.language")}</SectionTitle>
+          <div className="flex flex-wrap gap-2">
+            {LANG_OPTIONS.map((o) => (
+              <Btn
+                key={o.code}
+                variant={lang === o.code ? "primary" : "ghost"}
+                onClick={() => setLang(o.code)}
+              >
+                {o.label}
+              </Btn>
+            ))}
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-dim">
-            {t("settings.appearanceHint")}
+            {t("settings.languageHint")}
           </p>
-
-          {/* ── 语言 ── */}
-          <div className="mt-4 border-t border-line pt-3">
-            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-dim">
-              <Globe size={13} />
-              {t("settings.language")}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {LANG_OPTIONS.map((o) => (
-                <Btn
-                  key={o.code}
-                  variant={lang === o.code ? "primary" : "ghost"}
-                  onClick={() => setLang(o.code)}
-                >
-                  {o.label}
-                </Btn>
-              ))}
-            </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-dim">
-              {t("settings.languageHint")}
-            </p>
-          </div>
         </Card>
 
         {/* ── 刷新 ── */}
-        <Card className="p-4">
+        <Card className="">
           <SectionTitle>{t("settings.refresh")}</SectionTitle>
           <Field label={t("settings.refreshLabel")}>
             <div className="flex flex-wrap gap-2">
@@ -298,7 +208,7 @@ export default function Settings() {
         </Card>
 
         {/* ── ⚡ 成本计量（新增主 section）── */}
-        <Card className="p-4">
+        <Card className="">
           <SectionTitle
             extra={costDirty && <Badge tone="warn">{t("settings.unsaved")}</Badge>}
           >
@@ -439,7 +349,7 @@ export default function Settings() {
         </Card>
 
         {/* ── 数据备份（右列，与刷新/外观同排） ── */}
-        <Card className="p-4 xl:row-span-2">
+        <Card className="xl:row-span-2">
           <SectionTitle>{t("settings.data")}</SectionTitle>
           <div className="flex flex-wrap gap-2">
             <Btn onClick={exportJson}>
@@ -479,7 +389,7 @@ export default function Settings() {
       </div>
 
       {/* ── 关于 ── */}
-      <Card className="p-4">
+      <Card className="">
         <SectionTitle>{t("settings.about")}</SectionTitle>
         <div className="flex flex-col gap-1.5 text-xs text-dim">
           <div className="flex items-center gap-2">

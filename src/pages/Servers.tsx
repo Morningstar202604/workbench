@@ -153,7 +153,7 @@ export default function Servers() {
 
       {/* ── 图表区 ── */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card className="p-4">
+        <Card className="">
           <SectionTitle>{t("servers.frameworkDist")}</SectionTitle>
           {frameworkData.length > 0 ? (
             <>
@@ -181,7 +181,7 @@ export default function Servers() {
           )}
         </Card>
 
-        <Card className="p-4">
+        <Card className="">
           <SectionTitle>{t("servers.portDist")}</SectionTitle>
           {listening.length > 0 ? (
             <EChart option={portBarOption} style={{ height: 180 }} lazyUpdate />
@@ -192,7 +192,7 @@ export default function Servers() {
       </div>
 
       {/* ── 开发服务器列表 ── */}
-      <Card className="p-4">
+      <Card className="">
         <SectionTitle
           extra={
             <Btn onClick={refreshRuntime} className="!py-1 !text-xs">
@@ -212,7 +212,7 @@ export default function Servers() {
               return (
                 <div
                   key={`${d.port}-${d.pid}`}
-                  className="rounded-xl border border-line bg-panel2 transition-all overflow-hidden"
+                  className="rounded-[var(--radius-card)] border border-line bg-panel2 transition-all overflow-hidden"
                 >
                   {/* 折叠头部 */}
                   <button
@@ -323,7 +323,7 @@ export default function Servers() {
       </Card>
 
       {/* ── 全部监听端口 ── */}
-      <Card className="p-4">
+      <Card className="">
         <SectionTitle>
           {t("servers.allTcpPorts", { count: listening.length })}
         </SectionTitle>
@@ -334,7 +334,7 @@ export default function Servers() {
             {listening.map((p) => (
               <div
                 key={`${p.local_addr}-${p.local_port}-${p.pid}`}
-                className="flex items-center gap-2 rounded-lg border border-line/50 bg-panel2 px-3 py-2 text-xs hover:border-accent/40 transition-colors"
+                className="flex items-center gap-2 rounded-[var(--radius-btn)] border border-line/50 bg-panel2 px-3 py-2 text-xs hover:border-accent/40 transition-colors"
               >
                 <Network size={12} className="text-accent shrink-0" />
                 <span className="font-mono font-semibold text-accent">

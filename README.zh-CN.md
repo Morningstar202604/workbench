@@ -15,8 +15,8 @@
 的 token 成本，一屏看清。数据仅存本机。界面默认 **简体中文**，
 可切换 English / 日本語。
 
-**当前只在 Windows 上开发与打包**（端口采集走 `netstat -ano`，安装目标为
-NSIS）；macOS / Linux 尚未接入采集与打包，属未验证状态。
+**平台**：Windows 10/11（NSIS 安装包）与 Linux（deb，已用 dpkg 安装并启动验证）；
+端口采集在 Windows 走 `netstat -ano`、Linux 走 `ss -tulpn`。macOS 尚未构建。
 
 **🌐 项目主页** —— 每个镜像都有自己的落地页（见下方镜像表），且各站链接
 自动指向该镜像自己的仓库与 Release。
@@ -96,6 +96,30 @@ NSIS）；macOS / Linux 尚未接入采集与打包，属未验证状态。
 | 折叠侧栏 | 窄屏抽屉 |
 |----------|----------|
 | ![折叠](docs/screenshots/13-sidebar-collapsed.png) | ![抽屉](docs/screenshots/12-mobile-drawer.png) |
+
+### 主题、外壳与版面
+
+主题是**数据而不是 CSS**：六个颜色加六个形状旋钮，展开成 26 个 CSS 变量和配套图表色板。
+下面这些都在「设置 → 外观」里，任何内置主题都能复制后随意改。
+
+| 环仪版面（Aurora） | 账本版面（Ink） |
+|--------------------|-----------------|
+| ![环仪](docs/screenshots/20-layout-orbit-aurora.png) | ![账本](docs/screenshots/21-layout-ledger-ink.png) |
+
+| 极简版面（Void） | 密排版面（Terminal） |
+|------------------|----------------------|
+| ![极简](docs/screenshots/22-layout-zen-void.png) | ![密排](docs/screenshots/23-layout-dense-terminal.png) |
+
+| 顶部坞外壳 | 专注外壳 |
+|------------|----------|
+| ![顶部坞](docs/screenshots/24-shell-dock.png) | ![专注](docs/screenshots/25-shell-zen.png) |
+
+- **外壳**决定导航在哪：左侧栏 / 顶部坞 / 图标条。
+- **版面**重排概览页：便当格 / 账本 / 环仪 / 密排 / 极简。
+- **组件**可以拖拽排序、逐个隐藏，与外壳和版面相互独立。
+
+完整的能力审计（含「声明了但从未生效」的功能清单）见
+[docs/plan-audit.md](docs/plan-audit.md)。
 
 截图可自行重生（需先 `npm run build` 并启动 `npm run preview`，另开一个
 `chrome --headless=new --remote-debugging-port=9222`，然后
@@ -309,13 +333,15 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 - [x] 进程 / 端口 / 开发服务器实时监控
 - [x] AI 会话成本计量与预算告警
 - [x] 项目与任务管理
-- [x] 深浅双主题、日志查看器
+- [x] 数据驱动主题（8 套内置 + 自定义编辑器 + 导入导出）、日志查看器
+- [x] 三种外壳（侧栏 / 顶部坞 / 专注）与五种概览版面
+- [x] 可拖拽、可隐藏的概览组件
 - [x] 多语言界面（English / 简体中文 / 日本語）
-- [ ] 跨平台支持（macOS / Linux 采集与打包）
+- [ ] 跨平台支持（Linux 已完成并验证；macOS 未构建）
 - [ ] 安装包代码签名
 - [ ] `pricing_overrides.json` 的 UI 编辑入口
 - [ ] 成本账本分片存储（支撑十万级记录）
-- [ ] 页面级端到端测试
+- [ ] 页面级端到端测试（视觉与结构已覆盖；Agent 对话、导入导出流程未覆盖）
 
 ## 已知限制
 

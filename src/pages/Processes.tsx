@@ -196,13 +196,13 @@ export default function Processes() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card className="p-4">
+        <Card className="">
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
             <Cpu size={14} className="text-warn" /> {t("procs.cpuDistTitle")}
           </h3>
           <EChart option={cpuChart} style={{ height: 170 }} lazyUpdate />
         </Card>
-        <Card className="p-4">
+        <Card className="">
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
             <MemoryStick size={14} className="text-ok" /> {t("procs.memDistTitle")}
           </h3>
@@ -211,7 +211,7 @@ export default function Processes() {
       </div>
 
       {/* ── 搜索栏 ── */}
-      <Card className="flex flex-wrap items-center gap-3 p-3">
+      <Card className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-[160px] flex-1 sm:min-w-[220px]">
           <Search
             size={14}
@@ -236,7 +236,7 @@ export default function Processes() {
               key={key}
               type="button"
               onClick={() => setChip(key)}
-              className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+              className={`rounded-[var(--radius-btn)] border px-2.5 py-1 text-xs transition-colors ${
                 chip === key
                   ? "border-accent/50 bg-accentsoft text-accent"
                   : "border-line bg-panel2 text-dim hover:text-text"
@@ -249,7 +249,7 @@ export default function Processes() {
         <label className="flex items-center gap-1.5 text-xs text-dim">
           {t("procs.sortLabel")}
           <select
-            className="rounded-lg border border-line bg-panel2 px-2 py-1 text-xs text-text outline-none"
+            className="rounded-[var(--radius-btn)] border border-line bg-panel2 px-2 py-1 text-xs text-text outline-none"
             value={sort}
             onChange={(e) => setSort(e.target.value as SortKey)}
           >

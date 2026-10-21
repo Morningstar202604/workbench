@@ -1,34 +1,18 @@
 /**
- * 图表配色取值（与 lib/echarts.tsx 的主题注册保持同一份色板）。
- *
- * 为什么单独成文件：这些是纯函数，却被 `EChart` 组件所在的模块导出，
- * 会让 Vite 的 Fast Refresh 无法只刷新组件（react-refresh 规则会告警）。
- * 拆开后组件模块只导出组件，热更新语义干净。
+ * 图表配色。
  *
  * 为什么必须显式传 theme 而不是读 DOM：ECharts 不解析 CSS 变量，选项里
  * 必须给真实色值；而页面里图表选项是 useMemo 缓存的，若隐式读
  * document.documentElement.dataset.theme，切换主题时 memo 不重算，
  * 图表会残留旧主题的配色。显式传参让这个依赖进入 deps，可被静态检查。
- */
-/**
- * 图表只关心明暗两档：五种风格共享两套图表配色，
- * 因为图表需要的是「在深底还是浅底上可读」，而不是某个风格的品牌色。
- * 品牌色通过 seriesColors 从 CSS 变量取，见下。
+ *
+ * 现在主题是用户可编辑的数据（见 lib/theme/tokens.ts），所以不再只有
+ * 「深/浅两套图表色」：applyTheme 会把每套主题的真实色板注册进来，
+ * 这里只负责查表 + 在拿不到时按明暗兜底。
  */
 export type ThemeName = "dark" | "light";
 
-/** 任意风格 id → 图表明暗档。未知值按深色处理。 */
-export function toThemeName(styleId: string | undefined): ThemeName {
-  if (!styleId) return "dark";
-  if (styleId === "light" || styleId === "frost" || styleId === "paper") return "light";
-  if (typeof document !== "undefined") {
-    const attr = document.documentElement.dataset.chartTheme;
-    if (attr === "light") return "light";
-  }
-  return "dark";
-}
-
-interface ChartTheme {
+export interface ChartTheme {
   bg: string;
   panel: string;
   line: string;
@@ -39,6 +23,8 @@ interface ChartTheme {
   ok: string;
   warn: string;
   danger: string;
+  /** 多系列按序取色；缺省时回退到 PALETTE 组合 */
+  series?: string[];
 }
 
 export const DARK: ChartTheme = {
@@ -67,8 +53,31 @@ export const LIGHT: ChartTheme = {
   danger: "#c02b2b",
 };
 
+/** 主题 id → 真实色板。由 applyTheme 写入，未注册时按明暗兜底。 */
+const registry = new Map<string, ChartTheme>();
+
+export function registerChartTheme(id: string, theme: ChartTheme): void {
+  registry.set(id, theme);
+}
+
+/** 任意主题 id → 图表色板。 */
 export function chartTheme(theme: ThemeName | string): ChartTheme {
-  return toThemeName(theme) === "light" ? LIGHT : DARK;
+  const hit = registry.get(theme);
+  if (hit) return hit;
+  // 未注册（测试、首帧、旧 id）：按明暗兜底
+  if (typeof document !== "undefined" && !theme) {
+    return document.documentElement.dataset.chartTheme === "light" ? LIGHT : DARK;
+  }
+  if (
+    theme === "light" ||
+    theme === "frost" ||
+    theme === "paper" ||
+    theme === "jade" ||
+    theme === "ink"
+  ) {
+    return LIGHT;
+  }
+  return DARK;
 }
 
 /**
@@ -90,15 +99,17 @@ export const PALETTE = {
 /** 多系列图表按序取色。浅色主题下 cyan/green/amber/red 换成深色版本。 */
 export function seriesColors(theme: ThemeName | string): string[] {
   const t = chartTheme(theme);
-  return [
-    t.accent,
-    PALETTE.violet,
-    t.ok,
-    t.warn,
-    t.danger,
-    PALETTE.blue,
-    PALETTE.fuchsia,
-  ];
+  return (
+    t.series ?? [
+      t.accent,
+      PALETTE.violet,
+      t.ok,
+      t.warn,
+      t.danger,
+      PALETTE.blue,
+      PALETTE.fuchsia,
+    ]
+  );
 }
 
 /** 单色（不随主题）的固定语义色，用于分类标签等不参与主题切换的场景。 */
@@ -114,20 +125,25 @@ export const FIXED_COLORS = {
 } as const;
 
 /**
- * 图表中「环形图扇区之间的间隙」应使用的颜色 —— 即面板背景色。
- * 不传参时回退读 DOM，供无法拿到 theme 的场景（如测试）使用。
+ * 图表中「环形图扇区之间的间隙」应使用的颜色。
+ *
+ * 必须是**面板色**而不是页面底色：环形图画在卡片里，扇区缝隙要看起来是
+ * 「卡片被切开了」。早先取的是 bg，浅色主题下卡片是纯白、页面底色是浅灰，
+ * 于是每个缝隙都露出一条灰线（Frost 实测可见）。
  */
 export function chartGapColor(theme?: string): string {
-  if (theme) return chartTheme(theme).bg;
-  if (typeof document === "undefined") return DARK.bg;
-  return document.documentElement.dataset.theme === "light" ? LIGHT.bg : DARK.bg;
+  if (theme) return chartTheme(theme).panel;
+  if (typeof document === "undefined") return DARK.panel;
+  return document.documentElement.dataset.chartTheme === "light"
+    ? LIGHT.panel
+    : DARK.panel;
 }
 
 /** 当前主题下的分隔线颜色（用于空数据占位图元）。 */
 export function chartLineColor(theme?: string): string {
   if (theme) return chartTheme(theme).line;
   if (typeof document === "undefined") return DARK.line;
-  return document.documentElement.dataset.theme === "light" ? LIGHT.line : DARK.line;
+  return document.documentElement.dataset.chartTheme === "light" ? LIGHT.line : DARK.line;
 }
 
 // ── 通用图表选项构造器 ─────────────────────────────────────

@@ -266,7 +266,7 @@ export default function Tasks() {
         <label className="ml-auto flex items-center gap-2 text-xs text-dim">
           {t("tasks.filterByProject")}
           <select
-            className="rounded-lg border border-line bg-panel2 px-2 py-1 text-xs text-text outline-none"
+            className="rounded-[var(--radius-btn)] border border-line bg-panel2 px-2 py-1 text-xs text-text outline-none"
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
           >
@@ -465,7 +465,7 @@ function TaskCard({
       style={style}
       {...listeners}
       {...attributes}
-      className="cursor-grab rounded-lg border border-line bg-panel2 p-2.5 active:cursor-grabbing hover:border-accent/40 transition-colors"
+      className="cursor-grab rounded-[var(--radius-btn)] border border-line bg-panel2 p-2.5 active:cursor-grabbing hover:border-accent/40 transition-colors"
     >
       <div className="flex items-start gap-2">
         <button className="flex-1 text-left text-sm" onClick={onEdit}>
