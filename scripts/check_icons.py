@@ -19,6 +19,14 @@ from pathlib import Path
 
 from PIL import Image
 
+# Windows CI 的控制台是 cp1252/charmap：任何非 ASCII 输出都会直接抛
+# UnicodeEncodeError，把门禁变成崩溃。这里强制 UTF-8 且永不因编码失败中断。
+for stream in (sys.stdout, sys.stderr):
+    try:
+        stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 ROOT = Path(__file__).resolve().parent.parent
 TARGETS = [
     ROOT / "src" / "assets" / "logo.png",
@@ -70,12 +78,12 @@ def main() -> int:
     failed = False
     for path in TARGETS:
         if not path.exists():
-            print(f"FAIL 缺少文件: {path}")
+            print(f"FAIL missing file: {path}")
             failed = True
             continue
         img = Image.open(path)
         if img.mode != "RGBA":
-            print(f"FAIL {path.name}: 模式是 {img.mode}，应为 RGBA")
+            print(f"FAIL {path.name}: mode is {img.mode}, expected RGBA")
             failed = True
             continue
 
@@ -88,21 +96,23 @@ def main() -> int:
         white_ring, _ = count_white(img, ring=ring)
 
         if any(a > 8 for a in corners):
-            print(f"FAIL {path.name}: 四角不透明 {corners}")
+            print(f"FAIL {path.name}: corners are opaque {corners}")
             failed = True
         elif ratio > 0.001:
-            print(f"FAIL {path.name}: 出现白片 —— 近白占可见像素 {ratio:.2%}")
+            print(f"FAIL {path.name}: white patch - near-white is {ratio:.2%} of visible px")
             failed = True
         elif white_ring > 0:
-            print(f"FAIL {path.name}: 边缘 {ring}px 内有 {white_ring} 个近白像素（白边）")
+            print(f"FAIL {path.name}: {white_ring} near-white px inside the {ring}px edge ring")
             failed = True
         else:
-            print(f"ok   {path.name}: {w}x{h} 四角alpha={corners} 近白={ratio:.3%}")
+            print(
+                f"ok   {path.name}: {w}x{h} corner_alpha={corners} near_white={ratio:.3%}"
+            )
 
     if failed:
-        print("\n图标检查未通过。运行 `python scripts/make_icons.py` 重新生成。")
+        print("\nIcon contract failed. Run `python scripts/make_icons.py` to regenerate.")
         return 1
-    print("\n所有图标均无白片、四角透明。")
+    print("\nAll icons are plate-free with transparent corners.")
     return 0
 
 
