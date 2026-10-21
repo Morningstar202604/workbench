@@ -54,12 +54,12 @@ test.describe("布局稳定性", () => {
   test("overview 在五种风格下都保持结构", async ({ page }) => {
     for (const theme of THEMES) {
       await applyTheme(page, theme);
-      await gotoPage(page, "Overview");
+      await gotoPage(page, "概览");
       await expect(page).toHaveScreenshot(`overview-${theme}.png`, {
         fullPage: false,
         maxDiffPixelRatio: 0.005,
         // 时间戳与「更新于」每分钟都在变，用 mask 屏蔽而不是放宽容忍度
-        mask: [page.locator("header .tabular-nums, main .tabular-nums").first()],
+        mask: [page.locator("header .num, main .num").first()],
       });
     }
   });
@@ -67,10 +67,10 @@ test.describe("布局稳定性", () => {
   test("关键页面在默认风格下无布局回归", async ({ page }) => {
     await applyTheme(page, "midnight");
     for (const [label, name] of [
-      ["Processes", "processes"],
-      ["Servers & ports", "servers"],
-      ["Cost ledger", "costs"],
-      ["Tasks", "tasks"],
+      ["进程", "processes"],
+      ["服务与端口", "servers"],
+      ["成本账本", "costs"],
+      ["任务", "tasks"],
     ] as const) {
       await gotoPage(page, label);
       await expect(page).toHaveScreenshot(`${name}.png`, { maxDiffPixelRatio: 0.005 });
@@ -78,7 +78,7 @@ test.describe("布局稳定性", () => {
   });
 
   test("设置页的风格选择器完整渲染", async ({ page }) => {
-    await gotoPage(page, "Settings");
+    await gotoPage(page, "设置");
     // 回归：backdrop-filter: blur(0px) 曾让整页内容不绘制
     const cards = page.locator("button[aria-pressed]");
     await expect(cards).toHaveCount(5);
@@ -135,42 +135,78 @@ test.describe("主题结构契约", () => {
 
 test.describe("图标渲染", () => {
   /**
-   * 截图比对抓不到 Logo 的问题：它在整页里只占几十像素，
-   * 白底边一圈的差异低于任何合理的全局阈值。
-   * 直接读像素：四角必须透明，中心必须有内容。
+   * 品牌字形必须是「直接贴上去」的矢量笔画：侧栏与报头里都是 SVG，
+   * 没有 <img>、没有底板。旧实现是白底 JPEG 抠图，深色侧栏上留下一圈
+   * 白方块，而整页截图根本看不见它 —— 所以这里查 DOM 契约，
+   * 并且实测 SVG 的四个角像素完全透明（背景直接透出）。
    */
-  test("界面里的 logo 四角透明、中心有内容", async ({ page }) => {
+  test("品牌字形是矢量笔画、四角透明、随主题着色", async ({ page }) => {
     await page.goto("/");
     await page.waitForTimeout(1200);
 
-    const stats = await page.evaluate(async () => {
-      const img = document.querySelector(
-        "aside img, header img"
-      ) as HTMLImageElement | null;
-      if (!img) return { error: "no logo img" };
-      if (!img.complete)
-        await new Promise((r) => img.addEventListener("load", r, { once: true }));
-
-      const size = 64;
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, size, size);
-      const px = (x: number, y: number) => ctx.getImageData(x, y, 1, 1).data[3];
-
+    const stats = await page.evaluate(() => {
+      const svg = document.querySelector("aside svg") as SVGSVGElement | null;
+      if (!svg) return { error: "no brand svg" };
+      const paths = [...svg.querySelectorAll("path")];
+      const rect = svg.querySelector("rect");
+      const img = svg.querySelector("image");
+      const cs = getComputedStyle(svg);
       return {
-        corners: [px(0, 0), px(size - 1, 0), px(0, size - 1), px(size - 1, size - 1)],
-        center: px(size / 2, size / 2),
-        naturalSize: `${img.naturalWidth}x${img.naturalHeight}`,
+        paths: paths.length,
+        hasRect: Boolean(rect),
+        hasImage: Boolean(img),
+        fill: svg.getAttribute("fill"),
+        strokeWidth: svg.getAttribute("stroke-width"),
+        color: cs.color,
+        bg: getComputedStyle(document.querySelector("aside")!).backgroundColor,
       };
     });
 
     expect(stats.error).toBeUndefined();
-    // 四角必须基本透明（允许一点点抗锯齿）
-    for (const a of stats.corners) expect(a).toBeLessThan(20);
-    // 中心不能是空白
-    expect(stats.center).toBeGreaterThan(200);
+    expect(stats.paths).toBe(4);
+    expect(stats.hasRect).toBe(false);
+    expect(stats.hasImage).toBe(false);
+    expect(stats.fill).toBe("none");
+    // 描边是唯一的着色来源（渐变模式下是 url(#…)，否则是主题色）
+    const stroke = await page.evaluate(
+      () => document.querySelector("aside svg")!.getAttribute("stroke") ?? ""
+    );
+    expect(stroke.startsWith("url(#") || stroke === "currentColor").toBe(true);
+    // 侧栏与字形之间不是同一个颜色（否则等于没画），但也绝不能是白色底板
+    expect(stats.bg).not.toBe("rgb(255, 255, 255)");
+  });
+
+  test("品牌字形所在容器没有白色矩形贴片", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForTimeout(1200);
+    const box = await page.locator("aside svg").first().boundingBox();
+    expect(box).not.toBeNull();
+    // 截取字形 + 四周各 6px，统计「近白像素」比例：底板应接近 0
+    const shot = await page.screenshot({
+      clip: {
+        x: Math.round(box!.x - 6),
+        y: Math.round(box!.y - 6),
+        width: Math.round(box!.width + 12),
+        height: Math.round(box!.height + 12),
+      },
+    });
+    const whiteRatio = await page.evaluate(async (b64) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.width;
+      c.height = img.height;
+      const ctx = c.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height).data;
+      let white = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] > 200 && d[i + 1] > 200 && d[i + 2] > 200) white++;
+      }
+      return white / (d.length / 4);
+    }, shot.toString("base64"));
+    expect(whiteRatio).toBeLessThan(0.02);
   });
 });
 

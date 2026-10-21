@@ -12,8 +12,8 @@
 [![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)](https://react.dev/)
 
 一个本地优先、隐私可控的桌面运维工作台：进程、端口、开发服务器与 AI 编码会话
-的 token 成本，一屏看清。数据仅存本机，深浅双主题。界面提供
-**English / 简体中文 / 日本語** 三语切换。
+的 token 成本，一屏看清。数据仅存本机。界面默认 **简体中文**，
+可切换 English / 日本語。
 
 **当前只在 Windows 上开发与打包**（端口采集走 `netstat -ano`，安装目标为
 NSIS）；macOS / Linux 尚未接入采集与打包，属未验证状态。
@@ -182,7 +182,7 @@ npm run tauri build
 | IPC 契约 | ts-rs 12 由 Rust 结构体生成 `src/generated/*.ts`，CI 校验无漂移 |
 | 进程采集 | sysinfo |
 | 端口解析 | netstat 解析器（POSIX / Windows 双方言兼容） |
-| 多语言 | 英语默认，可切换简体中文 / 日本語 |
+| 多语言 | 简体中文默认，可切换 English / 日本語 |
 | 质量门禁 | ESLint 10 + Prettier 3 + vitest 5 + clippy `-D warnings` |
 
 ## 项目结构

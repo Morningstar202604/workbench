@@ -5,6 +5,39 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Design language rebuilt around "precision instrument"**, benchmarked against
+  Apple / Tesla / Qoder / Linear / Vercel / Raycast / Stripe style modern product
+  sites (see `docs/design-references.md`). Concretely:
+  - Sidebar: 212 px rail, 32 px rows, active state = 2 px signal line + 8 % tint
+    instead of a filled pill; brand block is a 52 px bar with a 1px hairline.
+  - Header: 52 px, floating icon cluster (refresh / pin / theme) inside a pill,
+    monospace timestamp, status chip with a live dot.
+  - Cards: surface + 1px inner hairline + a 3.5 % top light wash. Removed the
+    coloured top bars, the 32 px icon tiles and the heavy shadows from every
+    stat card; numbers are now tabular monospace at 26–30 px and carry the card.
+  - Overview opens with a masthead (mark + title + live state) directly on the
+    canvas instead of a hero card with blurred blobs; machine info became a
+    one-line nameplate; a 64 px grid field sits under the content.
+  - Typography: 13 px base, 12 px section titles, 10 px tabular column heads,
+    tighter heading tracking; all-caps was removed from section titles (it now
+    only marks table column headers, where it is actually meaningful).
+- **Chinese is the default UI language.** English and Japanese remain available
+  in Settings; an explicitly stored choice is never overridden.
+
+### Fixed
+
+- **Logo no longer shows a white patch.** The sidebar and the overview masthead
+  now render `BrandMark`, a pure-vector mark (four strokes, `currentColor`, no
+  plate, no rect, no bitmap) — it sits directly on whatever surface is behind it.
+  The app icon pipeline was rewritten to derive alpha from luminance instead of
+  applying an estimated rounded-rect mask, which left a white ring wherever the
+  mask radius disagreed with the badge radius. `scripts/check_icons.py` now also
+  fails on any near-white visible pixel, not just opaque corners.
+- Chart palette, `data-theme` swatches and the chart gap colour were re-based on
+  the new surface colours, so Frost/Paper pies no longer draw black seams.
+
 ### Added
 
 - **Five visual styles** switchable in Settings, each with a live preview card:

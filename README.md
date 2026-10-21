@@ -16,7 +16,7 @@ ports, dev servers, and AI coding-session token costs — all visible in one pla
 Data stays on your device by default. Five switchable visual styles — from a
 dense dark console to a light "paper" reading layout and a translucent glass
 theme — each changing spacing, corner radius and type, not just colour. UI
-available in **English, 简体中文 and 日本語**.
+ships in **简体中文 (default), English and 日本語**.
 
 **Platforms:** Windows 10/11 (NSIS) and Linux (deb / AppImage). Port collection
 uses `netstat -ano` on Windows and `ss -tulpn` on Linux, falling back to
@@ -215,7 +215,7 @@ Artifacts land in `src-tauri/target/release/bundle/`.
 | Contracts | ts-rs 12 generates `src/generated/*.ts` from Rust structs, CI drift-gated |
 | Process data | sysinfo |
 | Ports | netstat parser (POSIX / Windows dialects) |
-| i18n | English default, switchable 简体中文 / 日本語 |
+| i18n | 简体中文 default, switchable English / 日本語 |
 | Quality gates | ESLint 10 + Prettier 3 + vitest 5 + clippy `-D warnings` |
 
 ## Project structure

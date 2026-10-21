@@ -78,7 +78,7 @@
         height: 62px;
       }
       .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
-      .brand img { width: 32px; height: 32px; border-radius: 9px; }
+      .brand svg { width: 26px; height: 23px; display: block; }
       .brand small { display: block; font-size: 10px; color: var(--dim); font-weight: 400; }
       .nav-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
       .nav-links { display: flex; gap: 20px; font-size: 14px; }
@@ -261,7 +261,7 @@
     <header>
       <div class="wrap nav">
         <div class="brand">
-          <img src="logo.png" alt="Workbench logo" />
+          <svg viewBox="0 0 100 88" fill="none" stroke="#22d3ee" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Workbench logo"><path d="M3 3H97"/><path d="M10.8 12.7 29.7 85.5 43.4 47.8"/><path d="M50.1 12.7V46.8"/><path d="M89.2 12.7 69.4 85.5 56.7 47.8"/></svg>
           <div>Workbench<small>工作台</small></div>
         </div>
         <div class="nav-right">
@@ -766,7 +766,9 @@
             var saved = localStorage.getItem("wb-lang");
             if (saved && I18N[saved]) return saved;
           } catch (e) {}
-          return "en"; // English-first by design
+          // 中文优先：与桌面端默认语言一致
+          var nav = (navigator.language || "").toLowerCase();
+          return nav.indexOf("zh") === 0 ? "zh" : "en";
         }
 
         function applyLang(lang) {

@@ -64,7 +64,9 @@ const DICTS: Record<Lang, Dict> = {
 };
 
 const STORAGE_KEY = "workbench-lang";
-const DEFAULT_LANG: Lang = "en"; // 英语为主
+// 默认中文：产品的主要使用者是中文用户；英文/日文在设置页可切换。
+// 旧版本显式存下的 "en" 仍然优先（用户自己选过就不覆盖）。
+const DEFAULT_LANG: Lang = "zh";
 
 function loadLang(): Lang {
   try {

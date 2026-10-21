@@ -202,7 +202,7 @@ npm run tauri build
 | 契約 | ts-rs 12 が Rust 構造体から `src/generated/*.ts` を生成、CI がドリフト検証 |
 | プロセス取得 | sysinfo |
 | ポート解析 | netstat パーサー（POSIX / Windows 両方言） |
-| 多言語 | 英語デフォルト、簡体中文 / 日本語に切替可 |
+| 多言語 | 簡体中文デフォルト、英語 / 日本語に切替可 |
 | 品質ゲート | ESLint 10 + Prettier 3 + vitest 5 + clippy `-D warnings` |
 
 ## プロジェクト構成
