@@ -81,6 +81,28 @@ Release を指します。
 | ![設定](docs/screenshots/07-settings.png) | ![ログ](docs/screenshots/08-logs.png) |
 | テーマ、更新間隔、予算、インポート/エクスポート | 内蔵ログビューア、末尾読み取り |
 
+### ビジュアルシステム
+
+![5 つのスタイル](docs/screenshots/00-themes.png)
+
+5 つのスタイルは 1 つのトークン群（表面・ヘアライン・角丸・字階）を共有し、
+色相だけでなく、表面色・角丸・密度・書体で差をつけています。
+
+| ブランドマーク（サイドバー） | ブランドマーク（マストヘッド） |
+|------------------------------|--------------------------------|
+| ![サイドバー](docs/screenshots/09-brand-sidebar.png) | ![マストヘッド](docs/screenshots/10-brand-hero.png) |
+
+マークは 4 本のベクターストローク（`currentColor`、底板なし）で、どの背景でも
+そのまま重なります。
+
+| 各サイズのアイコン | exe に埋め込まれたアイコン |
+|--------------------|----------------------------|
+| ![アイコンサイズ](docs/screenshots/11-icon-sizes.png) | ![exe アイコン](docs/screenshots/14-exe-icon.png) |
+
+| 折りたたみサイドバー | 狭い画面（ドロワー） |
+|----------------------|----------------------|
+| ![折りたたみ](docs/screenshots/13-sidebar-collapsed.png) | ![ドロワー](docs/screenshots/12-mobile-drawer.png) |
+
 スクリーンショットは自分で再生成できます: `npm run build` → `npm run preview`
 → ヘッドレス Chrome を `--remote-debugging-port=9222` で起動 →
 `node scripts/shoot_docs.mjs`。スクリプトはデモモードであることを検証し、

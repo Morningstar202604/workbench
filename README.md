@@ -90,6 +90,28 @@ releases where supported:
 | ![Settings](docs/screenshots/07-settings.png) | ![Logs](docs/screenshots/08-logs.png) |
 | Theme, refresh interval, budgets, import/export | Built-in log viewer, tail reading |
 
+### Visual system
+
+![Five styles](docs/screenshots/00-themes.png)
+
+Five styles share one token set (surface, hairline, radius, type scale); they
+differ in surface colour, radius, density and type family, not just hue.
+
+| Brand mark (sidebar) | Brand mark (masthead) |
+|----------------------|-----------------------|
+| ![Sidebar brand](docs/screenshots/09-brand-sidebar.png) | ![Masthead brand](docs/screenshots/10-brand-hero.png) |
+
+The mark is four vector strokes with `currentColor` and no plate — it sits
+directly on the panel, on any background.
+
+| Icon at every shipped size | Icon embedded in the exe |
+|----------------------------|--------------------------|
+| ![Icon sizes](docs/screenshots/11-icon-sizes.png) | ![Exe icon](docs/screenshots/14-exe-icon.png) |
+
+| Collapsed sidebar | Narrow screen (drawer) |
+|-------------------|------------------------|
+| ![Collapsed](docs/screenshots/13-sidebar-collapsed.png) | ![Drawer](docs/screenshots/12-mobile-drawer.png) |
+
 Regenerate screenshots yourself: `npm run build`, then `npm run preview`,
 then run a headless Chrome with
 `--remote-debugging-port=9222`, then `node scripts/shoot_docs.mjs`.

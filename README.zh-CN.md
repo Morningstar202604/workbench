@@ -75,6 +75,28 @@ NSIS）；macOS / Linux 尚未接入采集与打包，属未验证状态。
 | ![设置](docs/screenshots/07-settings.png) | ![运行日志](docs/screenshots/08-logs.png) |
 | 主题、刷新间隔、预算与数据导入导出 | 内置日志查看器，按需尾部读取 |
 
+### 视觉体系
+
+![五种风格](docs/screenshots/00-themes.png)
+
+五套风格共用一套 token（表面、细描边、圆角、字阶），差异在底色、圆角、密度与
+字体家族，而不只是换色。
+
+| 品牌字形（侧栏） | 品牌字形（报头） |
+|------------------|------------------|
+| ![侧栏品牌](docs/screenshots/09-brand-sidebar.png) | ![报头品牌](docs/screenshots/10-brand-hero.png) |
+
+字形是四条矢量描边、`currentColor`、没有底板——直接贴在面板上，任何底色都不会
+出现白片。
+
+| 各尺寸图标 | 打进 exe 的图标 |
+|------------|-----------------|
+| ![图标尺寸](docs/screenshots/11-icon-sizes.png) | ![exe 图标](docs/screenshots/14-exe-icon.png) |
+
+| 折叠侧栏 | 窄屏抽屉 |
+|----------|----------|
+| ![折叠](docs/screenshots/13-sidebar-collapsed.png) | ![抽屉](docs/screenshots/12-mobile-drawer.png) |
+
 截图可自行重生（需先 `npm run build` 并启动 `npm run preview`，另开一个
 `chrome --headless=new --remote-debugging-port=9222`，然后
 `node scripts/shoot_docs.mjs`）。脚本内置演示模式断言，页面未出现演示标记时
