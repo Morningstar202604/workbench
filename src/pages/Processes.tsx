@@ -174,28 +174,24 @@ export default function Processes() {
           label={t("procs.statTotal")}
           value={procs.length}
           tone="accent"
-          bar="bg-accent"
         />
         <StatCard
           icon={Cpu}
           label={t("procs.sortCpu")}
           value={`${procs.reduce((a, p) => a + (p.cpu ?? 0), 0).toFixed(0)}%`}
           tone="warn"
-          bar="bg-warn"
         />
         <StatCard
           icon={MemoryStick}
           label={t("procs.statMemoryTotal")}
           value={formatBytes(procs.reduce((a, p) => a + (p.memory ?? 0), 0))}
           tone="ok"
-          bar="bg-ok"
         />
         <StatCard
           icon={Search}
           label={t("procs.statHighCpu")}
           value={procs.filter((p) => p.cpu > 10).length}
           tone="danger"
-          bar="bg-danger"
         />
       </div>
 
@@ -403,13 +399,13 @@ export default function Processes() {
                       <Td>
                         <div className="flex items-center gap-2">
                           <span
-                            className={`w-11 text-right tabular-nums ${
+                            className={`num w-11 text-right ${
                               p.cpu > 50 ? "text-danger" : p.cpu > 10 ? "text-warn" : ""
                             }`}
                           >
                             {p.cpu.toFixed(1)}%
                           </span>
-                          <span className="h-1.5 w-14 overflow-hidden rounded-full bg-panel2">
+                          <span className="h-1 w-14 overflow-hidden rounded-full bg-panel2">
                             <span
                               className={`block h-full rounded-full ${
                                 p.cpu > 50

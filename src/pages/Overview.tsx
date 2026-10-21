@@ -24,7 +24,7 @@ import { formatBytes, formatCpu, formatUptime, dueLabel, shortPath } from "../li
 import { useT, useLang, localeFor } from "../lib/i18n";
 import { useBreakpoint } from "../lib/useBreakpoint";
 import { categorizeProcesses, portDistribution } from "../lib/aggregate";
-import logoUrl from "../assets/logo.png";
+import { BrandMark } from "../components/BrandMark";
 
 // ─── 主组件 ──────────────────────────────────────────────
 
@@ -300,92 +300,73 @@ export default function Overview() {
   );
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* ── Hero 横幅：大标题 + 实时状态 ── */}
-      <div className="hero-glow relative overflow-hidden rounded-2xl border border-line bg-panel p-4 sm:p-6">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-accent/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-28 -left-16 h-56 w-56 rounded-full bg-accentsoft/60 blur-3xl" />
-        {/* 窄屏纵向堆叠：logo 与文案并排时，390px 宽度下文案只剩 ~250px，
-            greeting 那句被挤成每行两三个词的高窄列。 */}
-        <div className="relative flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5">
-          <img
-            src={logoUrl}
-            alt=""
-            className="hero-float h-12 w-12 rounded-2xl shadow-[0_8px_32px_rgba(34,211,238,0.25)] sm:h-16 sm:w-16"
-            draggable={false}
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <h1 className="text-2xl font-bold tracking-wide sm:text-3xl">
-                {t("overview.heroTitle")}
-              </h1>
-              <span className="rounded-md border border-accent/40 bg-accentsoft px-2 py-0.5 text-xs font-medium text-accent">
-                Workbench
-              </span>
-            </div>
-            <p className="mt-1.5 text-sm text-dim">
-              {greeting(t)} · {t("overview.heroSubtitle")}
-            </p>
-          </div>
-          <div className="flex flex-col items-start gap-1.5 text-left sm:items-end sm:text-right">
-            <span className="flex items-center gap-2 text-sm font-medium text-ok">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-ok" />
-              </span>
-              {t("overview.liveMonitoring")}
-            </span>
-            <span className="font-mono text-xs tabular-nums text-dim">
-              {new Date().toLocaleDateString(localeFor(lang), {
-                month: "long",
-                day: "numeric",
-                weekday: "long",
-              })}
+    <div className="flex flex-col gap-4">
+      {/* ── 报头：像仪表铭牌，不是营销横幅 ──
+          没有卡片、没有底色块：标题直接落在画布上，字形与背景同一平面。 */}
+      <header className="flex flex-col gap-3 border-b border-line/70 pb-4 sm:flex-row sm:items-end">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-3">
+            <BrandMark className="h-6 w-[27px] shrink-0 sm:h-7 sm:w-8" gradient />
+            <h1 className="t-heading truncate text-[26px] font-semibold leading-none sm:text-[30px]">
+              {t("overview.heroTitle")}
+            </h1>
+            <span className="hidden text-[11px] font-medium tracking-[0.14em] text-faint sm:inline">
+              WORKBENCH
             </span>
           </div>
+          <p className="mt-2 max-w-[62ch] text-[12.5px] leading-relaxed text-dim">
+            {greeting(t)}，{t("overview.heroSubtitle")}
+          </p>
         </div>
-      </div>
+        <div className="flex items-center gap-4 sm:ml-auto sm:flex-col sm:items-end sm:gap-1.5">
+          <span className="flex items-center gap-2 text-[11px] font-medium text-ok">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-ok" />
+            </span>
+            {t("overview.liveMonitoring")}
+          </span>
+          <span className="num text-[11px] text-faint">
+            {new Date().toLocaleDateString(localeFor(lang), {
+              month: "long",
+              day: "numeric",
+              weekday: "long",
+            })}
+          </span>
+        </div>
+      </header>
 
-      {/* ── 系统信息栏 ── */}
+      {/* ── 机器铭牌：一条细带，不是卡片。
+          这些值用户不会长时间盯，但需要随时能扫到，所以压成一行等宽读数。 */}
       {sysinfo && (
-        <Card className="p-4">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
-            <span className="flex items-center gap-1.5 text-dim">
-              <Monitor size={13} className="text-accent" />
-              <span className="font-medium text-text">{sysinfo.hostname}</span>
-            </span>
-            <span className="flex items-center gap-1.5 text-dim">
-              <Cpu size={13} />
-              {sysinfo.os_name}
-            </span>
-            <span className="flex items-center gap-1.5 text-dim">
-              <Cpu size={13} className="text-accent" />
-              CPU{" "}
-              <span className="font-mono font-semibold text-text">
-                {sysinfo.cpu_cores} {t("overview.cpuCores")}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-[var(--radius-btn)] border border-line/70 bg-panel/40 px-3.5 py-2 text-[11px] text-dim">
+          <span className="flex items-center gap-1.5">
+            <Monitor size={12} className="text-accent" />
+            <span className="font-medium text-text">{sysinfo.hostname}</span>
+          </span>
+          <span className="h-3 w-px bg-line" aria-hidden="true" />
+          <span>{sysinfo.os_name}</span>
+          <span className="h-3 w-px bg-line" aria-hidden="true" />
+          <span className="flex items-center gap-1">
+            <Cpu size={12} className="text-faint" />
+            <span className="num text-text">{sysinfo.cpu_cores}</span>
+            {t("overview.cpuCores")}
+          </span>
+          <span className="flex items-center gap-1">
+            <HardDrive size={12} className="text-faint" />
+            <span className="num text-text">{formatBytes(sysinfo.total_memory)}</span>
+            {memUsedPct > 0 && (
+              <span className="text-faint">
+                {t("overview.memUsedPct", { pct: memUsedPct })}
               </span>
-            </span>
-            <span className="flex items-center gap-1.5 text-dim">
-              <HardDrive size={13} className="text-warn" />
-              {t("overview.memory")}{" "}
-              <span className="font-mono font-semibold text-text">
-                {formatBytes(sysinfo.total_memory)}
-              </span>
-              {memUsedPct > 0 && (
-                <span className="text-dim">
-                  {t("overview.memUsedPct", { pct: memUsedPct })}
-                </span>
-              )}
-            </span>
-            <span className="flex items-center gap-1.5 text-dim">
-              <Clock size={13} className="text-ok" />
-              {t("overview.uptime")}{" "}
-              <span className="font-mono font-semibold text-text">
-                {formatUptime(sysinfo.uptime_seconds)}
-              </span>
-            </span>
-          </div>
-        </Card>
+            )}
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock size={12} className="text-faint" />
+            {t("overview.uptime")}{" "}
+            <span className="num text-text">{formatUptime(sysinfo.uptime_seconds)}</span>
+          </span>
+        </div>
       )}
 
       {/* ── 顶部统计 ── */}
@@ -396,7 +377,6 @@ export default function Overview() {
           value={procs.length}
           hint={t("overview.statCpuTotal", { cpu: formatCpu(cpuTotal) })}
           tone="accent"
-          bar="bg-accent"
         />
         <StatCard
           icon={Server}
@@ -406,7 +386,6 @@ export default function Overview() {
             devs.map((d) => `${d.framework}:${d.port}`).join(" / ") || t("overview.none")
           }
           tone="ok"
-          bar="bg-ok"
         />
         <StatCard
           icon={Sparkles}
@@ -414,7 +393,6 @@ export default function Overview() {
           value={ais.length}
           hint={ais.map((a) => a.name).join(" / ") || t("overview.none")}
           tone="warn"
-          bar="bg-warn"
         />
         <StatCard
           icon={Activity}
@@ -422,7 +400,6 @@ export default function Overview() {
           value={doingTasks.length}
           hint={t("overview.statTotalTasks", { count: data.tasks.length })}
           tone="text"
-          bar="bg-accent"
         />
       </div>
 

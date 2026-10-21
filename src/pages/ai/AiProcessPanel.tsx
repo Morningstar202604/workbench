@@ -81,28 +81,24 @@ export function AiProcessPanel() {
           label={t("ai.aiProcesses")}
           value={ais.length}
           tone="warn"
-          bar="bg-warn"
         />
         <StatCard
           icon={MessageSquare}
           label={t("ai.onlineSessions")}
           value={sessions.length}
           tone="accent"
-          bar="bg-accent"
         />
         <StatCard
           icon={Terminal}
           label={t("ai.localSessionFiles")}
           value={sessionFiles.length}
           tone="ok"
-          bar="bg-ok"
         />
         <StatCard
           icon={Hash}
           label={t("ai.totalMessages")}
           value={totalMessages || "—"}
           tone="text"
-          bar="bg-accent"
         />
       </div>
 

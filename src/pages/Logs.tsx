@@ -82,11 +82,11 @@ export default function Logs() {
   }, [content, autoRefresh]);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-3 pb-3">
-        <FileText size={16} className="text-accent" />
-        <span className="text-sm font-medium">{t("logs.title")}</span>
-        <label className="ml-3 flex items-center gap-1.5 text-xs text-dim">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-wrap items-center gap-3 border-b border-line/70 pb-3">
+        <FileText size={14} className="text-accent" />
+        <span className="section-title">{t("logs.title")}</span>
+        <label className="ml-1 flex items-center gap-1.5 text-[11px] text-dim">
           <input
             type="checkbox"
             checked={autoRefresh}
@@ -107,7 +107,7 @@ export default function Logs() {
 
       <pre
         ref={preRef}
-        className="flex-1 overflow-auto rounded-lg border border-line bg-bg p-4 font-mono text-[11px] leading-relaxed text-dim"
+        className="mt-3 flex-1 overflow-auto rounded-[var(--radius-card)] border border-line/80 bg-[color-mix(in_srgb,var(--color-bg)_82%,black)] p-4 font-mono text-[11.5px] leading-[1.7] text-dim"
       >
         {content || t("logs.empty")}
       </pre>

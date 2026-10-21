@@ -42,29 +42,29 @@ interface ChartTheme {
 }
 
 export const DARK: ChartTheme = {
-  bg: "#0a0f1c",
-  panel: "#121a2b",
-  line: "#22304a",
-  text: "#e6edf7",
-  dim: "#8b98ad",
+  bg: "#07080b",
+  panel: "#0c0f15",
+  line: "#1b212c",
+  text: "#e8ecf2",
+  dim: "#8a93a6",
   accent: "#22d3ee",
-  accentSoft: "#16323d",
-  ok: "#34d399",
-  warn: "#fbbf24",
-  danger: "#f87171",
+  accentSoft: "#0d2f38",
+  ok: "#3ecf8e",
+  warn: "#f5b544",
+  danger: "#ff6b6b",
 };
 
 export const LIGHT: ChartTheme = {
-  bg: "#eef2f8",
+  bg: "#f2f4f7",
   panel: "#ffffff",
-  line: "#d8e1ee",
-  text: "#17233a",
-  dim: "#5d6c85",
-  accent: "#0e7490",
-  accentSoft: "#d9f1f7",
-  ok: "#047857",
-  warn: "#b45309",
-  danger: "#dc2626",
+  line: "#e2e7ee",
+  text: "#10141b",
+  dim: "#5b6575",
+  accent: "#0b6bcb",
+  accentSoft: "#e6f0fc",
+  ok: "#0b7a54",
+  warn: "#a86400",
+  danger: "#c02b2b",
 };
 
 export function chartTheme(theme: ThemeName | string): ChartTheme {
@@ -79,9 +79,9 @@ export function chartTheme(theme: ThemeName | string): ChartTheme {
 export const PALETTE = {
   cyan: "#22d3ee",
   violet: "#a78bfa",
-  green: "#34d399",
-  amber: "#fbbf24",
-  red: "#f87171",
+  green: "#3ecf8e",
+  amber: "#f5b544",
+  red: "#ff6b6b",
   blue: "#60a5fa",
   fuchsia: "#e879f9",
   slate: "#64748b",

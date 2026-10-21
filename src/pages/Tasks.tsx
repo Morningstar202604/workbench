@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { BarChart3, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { EChart } from "../lib/echarts";
 import { chartGapColor, FIXED_COLORS } from "../lib/chartTheme";
 import { isPieWorthRendering } from "../lib/aggregate";
@@ -19,6 +19,7 @@ import { useShallow } from "zustand/react/shallow";
 import {
   Badge,
   Btn,
+  Card,
   Empty,
   Field,
   Modal,
@@ -166,10 +167,8 @@ export default function Tasks() {
     <div className="flex flex-col gap-4">
       {/* ── 图表区 ── */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-line bg-panel2 p-4">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <BarChart3 size={14} className="text-warn" /> {t("tasks.priorityDist")}
-          </div>
+        <Card>
+          <SectionTitle>{t("tasks.priorityDist")}</SectionTitle>
           {data.tasks.length > 0 ? (
             <>
               {isPieWorthRendering(
@@ -197,11 +196,11 @@ export default function Tasks() {
               {t("tasks.emptyTasks")}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* 完成率进度 */}
-        <div className="rounded-xl border border-line bg-panel2 p-4 flex flex-col">
-          <div className="text-sm font-medium">{t("tasks.completionRate")}</div>
+        <Card className="flex flex-col">
+          <SectionTitle>{t("tasks.completionRate")}</SectionTitle>
           <div className="flex flex-1 items-center justify-center">
             <div className="relative flex h-24 w-24 items-center justify-center">
               <svg className="h-24 w-24 -rotate-90">
@@ -218,13 +217,13 @@ export default function Tasks() {
                   cy="48"
                   r="38"
                   fill="none"
-                  stroke="#34d399"
+                  stroke="var(--color-ok)"
                   strokeWidth="8"
                   strokeLinecap="round"
                   strokeDasharray={`${(completionRate / 100) * 239} 239`}
                 />
               </svg>
-              <span className="absolute text-2xl font-bold text-ok">
+              <span className="num absolute text-[22px] font-semibold text-ok">
                 {completionRate}%
               </span>
             </div>
@@ -233,11 +232,11 @@ export default function Tasks() {
             {data.tasks.filter((task) => task.status === "done").length} /{" "}
             {data.tasks.length}
           </div>
-        </div>
+        </Card>
 
         {/* 各列数量 */}
-        <div className="rounded-xl border border-line bg-panel2 p-4">
-          <div className="text-sm font-medium mb-3">{t("tasks.taskDist")}</div>
+        <Card>
+          <SectionTitle>{t("tasks.taskDist")}</SectionTitle>
           <div className="space-y-3">
             {COLUMNS.map((c) => {
               const count = data.tasks.filter((task) => task.status === c.key).length;
@@ -258,7 +257,7 @@ export default function Tasks() {
               );
             })}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* ── 筛选 ── */}
@@ -410,12 +409,12 @@ function Column({
   return (
     <div
       ref={setNodeRef}
-      className={`flex min-h-[280px] flex-col rounded-xl border bg-panel p-3 transition-colors ${
-        isOver ? "border-accent" : "border-line"
+      className={`flex min-h-[300px] flex-col rounded-[var(--radius-card)] border bg-panel p-3 transition-colors ${
+        isOver ? "border-accent/70 bg-accent/[0.03]" : "border-line/90"
       }`}
     >
-      <div className="mb-2 flex items-center gap-2">
-        <span className="text-sm font-semibold">{label}</span>
+      <div className="mb-2.5 flex items-center gap-2">
+        <span className="section-title">{label}</span>
         <Badge tone="dim">{count}</Badge>
         <span className="ml-auto h-2 w-2 rounded-full" style={{ background: color }} />
       </div>

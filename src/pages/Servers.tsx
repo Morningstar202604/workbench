@@ -136,21 +136,18 @@ export default function Servers() {
           label={t("servers.stats.devServers")}
           value={devs.length}
           tone="ok"
-          bar="bg-ok"
         />
         <StatCard
           icon={Network}
           label={t("servers.stats.tcpListening")}
           value={listening.length}
           tone="accent"
-          bar="bg-accent"
         />
         <StatCard
           icon={BarChart3}
           label={t("servers.stats.frameworkKinds")}
           value={frameworkData.length}
           tone="warn"
-          bar="bg-warn"
         />
       </div>
 

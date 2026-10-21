@@ -19,7 +19,7 @@ export function Card({
   className?: string;
 }) {
   return (
-    <div className={`t-card t-panel border border-line ${className}`}>{children}</div>
+    <div className={`t-card t-panel border border-line/90 ${className}`}>{children}</div>
   );
 }
 
@@ -31,9 +31,10 @@ export function SectionTitle({
   extra?: ReactNode;
 }) {
   return (
-    <div className="mb-3 flex items-center justify-between">
-      <h2 className="t-heading text-sm font-semibold tracking-wide text-dim uppercase">
-        {children}
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <h2 className="section-title flex min-w-0 items-center gap-2">
+        <span className="h-3 w-px shrink-0 bg-accent/70" aria-hidden="true" />
+        <span className="truncate">{children}</span>
       </h2>
       {extra}
     </div>
@@ -44,10 +45,10 @@ export function SectionTitle({
 export type Tone = "accent" | "ok" | "warn" | "danger" | "dim";
 
 const TONES: Record<Tone, string> = {
-  accent: "text-accent border-accent/40 bg-accentsoft",
-  ok: "text-ok border-ok/40 bg-ok/10",
-  warn: "text-warn border-warn/40 bg-warn/10",
-  danger: "text-danger border-danger/40 bg-danger/10",
+  accent: "text-accent border-accent/35 bg-accent/8",
+  ok: "text-ok border-ok/35 bg-ok/8",
+  warn: "text-warn border-warn/35 bg-warn/8",
+  danger: "text-danger border-danger/35 bg-danger/8",
   dim: "text-dim border-line bg-panel2",
 };
 
@@ -62,7 +63,7 @@ export function Badge({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium ${TONES[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-[4px] border px-1.5 py-[1px] text-[10.5px] font-medium leading-[16px] ${TONES[tone]} ${className}`}
     >
       {children}
     </span>
@@ -88,11 +89,13 @@ export function Btn({
   type = "button",
 }: BtnProps) {
   const base =
-    "t-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40";
+    "t-btn inline-flex items-center gap-1.5 px-3 py-[5px] text-[12.5px] font-medium transition-colors disabled:opacity-40";
   const styles: Record<string, string> = {
-    primary: "bg-accent text-black hover:opacity-85",
-    ghost: "border border-line bg-panel2 text-text hover:border-accent/50",
-    danger: "border border-danger/50 bg-danger/10 text-danger hover:bg-danger/20",
+    primary:
+      "bg-accent text-[#04120f] hover:brightness-110 active:brightness-95 font-semibold",
+    ghost:
+      "border border-line bg-panel2/70 text-text hover:border-line hover:bg-panel2 hover:text-text",
+    danger: "border border-danger/40 bg-danger/10 text-danger hover:bg-danger/18",
   };
   return (
     <button
@@ -319,44 +322,46 @@ const STAT_TONES: Record<"text" | Tone, string> = {
   dim: "text-dim",
 };
 
-/** 全局统一的统计卡片：顶部彩条 + 图标 + 滚动数字 + 提示行。 */
+/**
+ * 统计单元：标签在上、数字在下，数字用等宽表格数字。
+ * 刻意没有彩色顶条、没有图标底块——那两样是任何仪表盘都会有的默认装饰。
+ * 需要的只有一个东西：数字本身站得住。
+ */
 export function StatCard({
   icon: Icon,
   label,
   value,
   hint,
   tone = "text",
-  bar = "bg-accent",
 }: {
   icon: typeof Inbox;
   label: string;
   value: number | string;
   hint?: string;
   tone?: "text" | Tone;
-  bar?: string;
 }) {
   const color = STAT_TONES[tone];
   const numeric = typeof value === "number";
   const shown = useCountUp(numeric ? value : 0);
   return (
-    <Card className="card-hover relative overflow-hidden p-4">
-      <span className={`absolute inset-x-0 top-0 h-0.5 ${bar}`} />
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accentsoft">
-          <Icon size={15} className={color} />
-        </span>
-        <span className="min-w-0 text-xs text-dim">{label}</span>
+    <Card className="card-hover group relative overflow-hidden px-4 py-3.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-[11px] font-medium text-dim">{label}</span>
+        <Icon
+          size={13}
+          className="shrink-0 text-faint transition-colors group-hover:text-accent"
+        />
       </div>
       {/* 数值字号随屏幕收缩：390px 下两列卡片只有 ~160px 宽，
           text-3xl 的 "17.66M" 会溢出卡片边界。 */}
       <div
-        className={`mt-2 truncate text-2xl font-bold tabular-nums sm:text-3xl ${color}`}
+        className={`num mt-2 truncate text-[26px] font-semibold leading-none sm:text-[30px] ${color}`}
         title={String(numeric ? shown : value)}
       >
         {numeric ? shown : value}
       </div>
       {hint && (
-        <div className="mt-1 truncate text-[11px] text-dim" title={hint}>
+        <div className="mt-2 truncate text-[11px] text-faint" title={hint}>
           {hint}
         </div>
       )}
@@ -372,8 +377,8 @@ export function Empty({
   icon?: typeof Inbox;
 }) {
   return (
-    <div className="flex h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line text-sm text-dim">
-      {Icon && <Icon size={20} className="opacity-60" />}
+    <div className="flex h-32 flex-col items-center justify-center gap-2.5 rounded-[6px] border border-dashed border-line/80 text-[12px] text-faint">
+      {Icon && <Icon size={18} className="opacity-50" />}
       {children}
     </div>
   );
@@ -395,16 +400,16 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 
 export const inputCls =
-  "w-full rounded-lg border border-line bg-panel2 px-3 py-1.5 text-sm text-text outline-none focus:border-accent/60";
+  "w-full rounded-[var(--radius-btn)] border border-line bg-panel2/60 px-2.5 py-[6px] text-[12.5px] text-text outline-none transition-colors placeholder:text-faint focus:border-accent/60 focus:bg-panel2";
 
 export function Table({ head, children }: { head: ReactNode[]; children: ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-[12.5px]">
         <thead>
-          <tr className="border-b border-line text-left text-xs text-dim">
+          <tr className="border-b border-line/80 text-left">
             {head.map((h, i) => (
-              <th key={i} className="whitespace-nowrap px-3 py-2 font-medium">
+              <th key={i} className="col-head whitespace-nowrap px-3 py-2 font-medium">
                 {h}
               </th>
             ))}
@@ -428,7 +433,7 @@ export const Tr = forwardRef<HTMLTableRowElement, TrProps>(function Tr(
   return (
     <tr
       ref={ref}
-      className={`border-b border-line/60 hover:bg-panel2/70 ${onClick ? "cursor-pointer" : ""} ${className}`}
+      className={`border-b border-line/50 transition-colors hover:bg-panel2/60 ${onClick ? "cursor-pointer" : ""} ${className}`}
       onClick={onClick}
       {...rest}
     >

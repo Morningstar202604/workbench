@@ -5,7 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 import { isTauri } from "../lib/api";
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
 import { STYLES } from "../lib/theme/themes";
-import { Badge, Btn, Card, Field, SectionTitle } from "../ui";
+import { Badge, Btn, Card, Field, SectionTitle, inputCls } from "../ui";
 import { formatUsd } from "../lib/util";
 import type { CostSettings, WorkbenchData } from "../types";
 
@@ -323,7 +323,7 @@ export default function Settings() {
                     type="number"
                     step="0.5"
                     min="0"
-                    className="w-full rounded-lg border border-line bg-panel2 px-3 py-1.5 text-sm outline-none focus:border-accent/60"
+                    className={inputCls}
                     value={costDraft.daily_budget}
                     onChange={(e) =>
                       updateCost({
@@ -340,7 +340,7 @@ export default function Settings() {
                     type="number"
                     step="5"
                     min="0"
-                    className="w-full rounded-lg border border-line bg-panel2 px-3 py-1.5 text-sm outline-none focus:border-accent/60"
+                    className={inputCls}
                     value={costDraft.monthly_budget}
                     onChange={(e) =>
                       updateCost({
@@ -386,7 +386,7 @@ export default function Settings() {
 
             {/* 当前状态展示 */}
             {costOverview && (
-              <div className="rounded-lg border border-line bg-panel2 p-3">
+              <div className="rounded-[var(--radius-btn)] border border-line/80 bg-panel2/50 p-3">
                 <div className="mb-2 text-xs font-medium text-dim">
                   {t("settings.statusTitle")}
                 </div>

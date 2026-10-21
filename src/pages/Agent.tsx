@@ -16,7 +16,8 @@ import {
 import { useStore, type AgentChatTurn, type AgentPending } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../lib/i18n";
-import { Badge, Btn, Card, Empty, Field, Modal, inputCls } from "../ui";
+import { Badge, Btn, Card, Field, Modal, inputCls } from "../ui";
+import { BrandMark } from "../components/BrandMark";
 import {
   agentApproveTool,
   agentCancel,
@@ -279,7 +280,7 @@ export default function Agent() {
   }, [tools]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* 顶部：状态 + 配置入口 */}
       <div className="flex flex-wrap items-center gap-2">
         <Bot size={16} className="text-accent" />
@@ -320,7 +321,24 @@ export default function Agent() {
       <Card className="flex min-h-0 flex-1 flex-col p-0">
         <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
           {turns.length === 0 && !busy ? (
-            <Empty icon={Bot}>{t("agent.emptyHint")}</Empty>
+            <div className="flex h-full flex-col items-center justify-center gap-4 py-16 text-center">
+              <BrandMark className="h-9 w-10" gradient />
+              <p className="max-w-[46ch] text-[12.5px] leading-relaxed text-dim">
+                {t("agent.emptyHint")}
+              </p>
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {[0, 1, 2].map((i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="rounded-full border border-line/80 bg-panel2/60 px-2.5 py-1 text-[11px] text-dim transition-colors hover:border-accent/40 hover:text-text"
+                    onClick={() => setInput(t(`agent.suggest.${i}`))}
+                  >
+                    {t(`agent.suggest.${i}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : (
             turns.map((turn, i) => <TurnView key={i} turn={turn} />)
           )}
@@ -404,7 +422,7 @@ export default function Agent() {
       </Card>
 
       {/* 工具能力一览：让用户知道模型能做什么 */}
-      <details className="rounded-xl border border-line bg-panel px-4 py-3 text-sm">
+      <details className="rounded-[var(--radius-card)] border border-line/80 bg-panel px-4 py-3 text-[12.5px]">
         <summary className="cursor-pointer text-xs font-medium text-dim">
           {t("agent.capabilities", { count: tools.length })}
         </summary>
@@ -585,7 +603,7 @@ function TurnView({ turn }: { turn: ChatTurn }) {
 function ToolStepView({ step }: { step: AgentStep }) {
   if (step.kind === "answer") return null;
   return (
-    <details className="rounded-lg border border-line bg-panel px-3 py-2 text-xs">
+    <details className="rounded-[var(--radius-btn)] border border-line/70 bg-panel px-3 py-2 text-[11.5px]">
       <summary className="flex cursor-pointer items-center gap-2">
         <Wrench size={11} className={step.ok ? "text-ok" : "text-danger"} />
         <span className="font-mono">{step.tool || "notice"}</span>

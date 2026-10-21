@@ -187,7 +187,6 @@ export function CostDashboard() {
             label={t("ai.todayCost")}
             value={costOverview ? formatUsd(costOverview.today_cost) : "—"}
             tone="warn"
-            bar="bg-warn"
             hint={
               costOverview
                 ? t("ai.tokensCount", {
@@ -203,7 +202,6 @@ export function CostDashboard() {
             label={t("ai.monthCost")}
             value={costOverview ? formatUsd(costOverview.month_cost) : "—"}
             tone="accent"
-            bar="bg-accent"
             hint={
               costOverview
                 ? t("ai.tokensCount", {
@@ -219,7 +217,6 @@ export function CostDashboard() {
             label={t("ai.totalCost")}
             value={costOverview ? formatUsd(costOverview.total_cost) : "—"}
             tone="ok"
-            bar="bg-ok"
             hint={
               costOverview
                 ? t("ai.recordCount", { count: costOverview.record_count })
@@ -231,7 +228,6 @@ export function CostDashboard() {
             label={t("ai.totalTokens")}
             value={totalTokensDisplay}
             tone="text"
-            bar="bg-accent"
             hint={
               costOverview
                 ? t("ai.tokensMeasuredEstimated", {

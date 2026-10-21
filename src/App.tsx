@@ -15,7 +15,7 @@ import { useShallow } from "zustand/react/shallow";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./lib/api";
 import { APP_VERSION, localeFor, useLang, useT } from "./lib/i18n";
-import logoUrl from "./assets/logo.png";
+import { BrandMark } from "./components/BrandMark";
 import { Btn, Modal, Spinner } from "./ui";
 import { PAGE_COMPONENTS, PAGE_GROUPS, pagesByGroup } from "./pages/registry";
 import { useBreakpoint } from "./lib/useBreakpoint";
@@ -165,30 +165,32 @@ export default function App() {
 
       <aside
         className={[
-          "z-40 flex shrink-0 flex-col border-r border-line bg-panel transition-[width,transform] duration-200",
+          "z-40 flex shrink-0 flex-col border-r border-line/80 bg-panel transition-[width,transform] duration-200",
           // 窄屏：变成从左侧滑出的抽屉，默认收起
           bp === "compact"
             ? `fixed inset-y-0 left-0 w-60 ${drawerOpen ? "translate-x-0" : "-translate-x-full"}`
             : collapsed
-              ? "w-14"
-              : "w-52",
+              ? "w-[56px]"
+              : "w-[212px]",
         ].join(" ")}
       >
+        {/* 品牌：字形直接贴在面板上，没有底板、没有圆角方块、没有阴影片 */}
         <div
-          className={`flex items-center gap-2 px-3 py-4 ${collapsed && bp !== "compact" ? "justify-center" : ""}`}
+          className={`flex h-[52px] items-center border-b border-line/60 ${
+            collapsed && bp !== "compact" ? "justify-center px-0" : "gap-2.5 px-4"
+          }`}
         >
-          <img
-            src={logoUrl}
-            alt="Workbench logo"
-            className="h-8 w-8 shrink-0 rounded-lg"
-            draggable={false}
+          <BrandMark
+            className="wb-brand-mark h-[22px] w-[25px] shrink-0"
+            gradient
+            title={t("app.brand")}
           />
           {(!collapsed || bp === "compact") && (
-            <div className="min-w-0">
-              <div className="truncate text-sm font-bold leading-tight">
+            <div className="min-w-0 leading-none">
+              <div className="truncate text-[13px] font-semibold tracking-[-0.01em]">
                 {t("app.brand")}
               </div>
-              <div className="truncate text-[10px] leading-tight text-dim">
+              <div className="mt-1 truncate text-[10px] tracking-[0.08em] text-faint">
                 {t("app.brandSub")}
               </div>
             </div>
@@ -205,23 +207,23 @@ export default function App() {
           )}
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2 pb-2">
+        <nav className="flex-1 overflow-y-auto px-2 py-2">
           {pagesByGroup().map(({ group, pages }) => {
             // 折叠态也要显示所有页面：只显示当前组会让「设置/日志」没有入口，
             // 用户必须先展开才能切过去。折叠时用一条分隔线代表分组边界。
             const showItems = true;
             const showGroupLabel = !collapsed || bp === "compact";
             return (
-              <div key={group} className="mb-1">
+              <div key={group} className="mb-0.5">
                 {showGroupLabel ? (
-                  <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-dim/70">
+                  <div className="px-2.5 pb-1 pt-2.5 text-[10px] font-medium tracking-[0.09em] text-faint">
                     {t(PAGE_GROUPS.find((g) => g.key === group)?.label ?? group)}
                   </div>
                 ) : (
                   // 折叠时用分隔线代替组标题；第一个组不画，避免顶部多余线条
                   group !== "monitor" && (
                     <div
-                      className="mx-2 my-1.5 border-t border-line/60"
+                      className="mx-2 my-2 border-t border-line/60"
                       aria-hidden="true"
                     />
                   )
@@ -234,22 +236,24 @@ export default function App() {
                         key={key}
                         type="button"
                         title={t(`app.nav.${key}`)}
+                        data-active={active}
                         onClick={() => {
                           setView(key as ViewKey);
                           setDrawerOpen(false);
                         }}
-                        className={`relative flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                          active
-                            ? "bg-accentsoft font-semibold text-accent"
-                            : "text-dim hover:bg-panel2 hover:text-text"
-                        } ${collapsed && bp !== "compact" ? "justify-center px-0" : ""}`}
+                        className={`nav-item w-full text-left ${
+                          collapsed && bp !== "compact" ? "justify-center px-0" : ""
+                        }`}
                       >
-                        {active && (
-                          <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent" />
-                        )}
-                        <Icon size={16} className="shrink-0" />
+                        <Icon
+                          size={15}
+                          strokeWidth={active ? 2 : 1.7}
+                          className={`shrink-0 ${active ? "text-accent" : ""}`}
+                        />
                         {(!collapsed || bp === "compact") && (
-                          <span className="truncate">{t(`app.nav.${key}`)}</span>
+                          <span className={`truncate ${active ? "font-medium" : ""}`}>
+                            {t(`app.nav.${key}`)}
+                          </span>
                         )}
                       </button>
                     );
@@ -264,7 +268,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setCollapsed(!collapsed)}
-            className="flex items-center gap-2 border-t border-line px-3 py-2 text-xs text-dim hover:text-text"
+            className="flex h-9 items-center gap-2 border-t border-line/60 px-3 text-[11px] text-faint transition-colors hover:text-text"
             title={collapsed ? t("app.nav.expand") : t("app.nav.collapse")}
           >
             {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
@@ -272,11 +276,20 @@ export default function App() {
           </button>
         )}
 
-        <div className="px-3 py-2 text-[10px] leading-relaxed text-dim">
+        <div
+          className={`border-t border-line/60 py-2 text-[10px] leading-relaxed text-faint ${
+            collapsed && bp !== "compact" ? "px-0 text-center" : "px-4"
+          }`}
+        >
           {(!collapsed || bp === "compact") && (
             <>
-              <div>{tauri ? t("app.mode.desktop") : t("app.mode.browser")}</div>
-              <div className="mt-0.5 opacity-60">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${tauri ? "bg-ok" : "bg-warn"}`}
+                />
+                {tauri ? t("app.mode.desktop") : t("app.mode.browser")}
+              </div>
+              <div className="mt-0.5 opacity-70">
                 {t("app.versionLine", { version: APP_VERSION })}
               </div>
             </>
@@ -286,8 +299,8 @@ export default function App() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
-          className={`flex h-12 shrink-0 items-center gap-2 border-b border-line bg-panel/80 backdrop-blur ${
-            bp === "compact" ? "px-3" : "px-5"
+          className={`flex h-[52px] shrink-0 items-center gap-3 border-b border-line/80 bg-panel/70 backdrop-blur-sm ${
+            bp === "compact" ? "px-3" : "px-6"
           }`}
           data-tauri-drag-region
         >
@@ -300,15 +313,21 @@ export default function App() {
               <Menu size={16} />
             </Btn>
           )}
-          <h1 className="truncate text-base font-semibold">{t(`app.title.${view}`)}</h1>
+          <h1 className="t-heading truncate text-[15px] font-semibold">
+            {t(`app.title.${view}`)}
+          </h1>
           <span
-            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium ${tauri ? "text-ok border-ok/40 bg-ok/10" : "text-warn border-warn/40 bg-warn/10"}`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-[3px] text-[10px] font-medium tracking-[0.02em] ${
+              tauri
+                ? "border-ok/30 bg-ok/8 text-ok"
+                : "border-warn/30 bg-warn/8 text-warn"
+            }`}
           >
+            <span className={`h-1 w-1 rounded-full ${tauri ? "bg-ok" : "bg-warn"}`} />
             {tauri ? t("app.mode.realtime") : t("app.mode.demo")}
           </span>
-          <div className="ml-auto flex items-center gap-2 text-xs text-dim">
-            {loading && <Spinner />}
-            <span className="hidden sm:inline">
+          <div className="ml-auto flex items-center gap-3">
+            <span className="num hidden text-[11px] text-faint sm:inline">
               {lastRefreshAt
                 ? t("app.updatedAt", {
                     time: new Date(lastRefreshAt).toLocaleTimeString(localeFor(lang), {
@@ -317,57 +336,71 @@ export default function App() {
                   })
                 : t("app.waitingRefresh")}
             </span>
-            <Btn
-              title={t("app.refreshNow")}
-              onClick={refreshRuntime}
-              className="!px-2 !py-1"
-            >
-              <RefreshCw size={14} />
-            </Btn>
-            <Btn
-              title={alwaysOnTop ? t("app.pinOn") : t("app.pinOff")}
-              onClick={async () => {
-                const next = !alwaysOnTop;
-                setAlwaysOnTop(next);
-                if (isTauri()) {
-                  try {
-                    await invoke("set_always_on_top", { on: next });
-                  } catch {
-                    setAlwaysOnTop(!next);
+            {loading && <Spinner />}
+            <div className="flex items-center gap-0.5 rounded-full border border-line/70 bg-panel2/60 p-0.5">
+              <Btn
+                title={t("app.refreshNow")}
+                onClick={refreshRuntime}
+                className="!rounded-full !border-0 !bg-transparent !px-1.5 !py-1 !text-dim hover:!text-text"
+              >
+                <RefreshCw size={13} />
+              </Btn>
+              <Btn
+                title={alwaysOnTop ? t("app.pinOn") : t("app.pinOff")}
+                onClick={async () => {
+                  const next = !alwaysOnTop;
+                  setAlwaysOnTop(next);
+                  if (isTauri()) {
+                    try {
+                      await invoke("set_always_on_top", { on: next });
+                    } catch {
+                      setAlwaysOnTop(!next);
+                    }
                   }
-                }
-              }}
-              className={`!px-2 !py-1 ${alwaysOnTop ? "!text-accent" : ""}`}
-            >
-              {alwaysOnTop ? <Pin size={14} /> : <PinOff size={14} />}
-            </Btn>
-            <Btn
-              title={t("app.themeToggle")}
-              // 标题栏按钮循环切换风格，具体选择在设置页（带预览）
-              onClick={() => {
-                const idx = STYLES.findIndex((s) => s.id === theme);
-                setTheme(STYLES[(idx + 1) % STYLES.length].id);
-              }}
-              className="!px-2 !py-1"
-            >
-              {styleOf(theme).dark ? <Moon size={14} /> : <Sun size={14} />}
-            </Btn>
+                }}
+                className={`!rounded-full !border-0 !bg-transparent !px-1.5 !py-1 !text-dim hover:!text-text ${
+                  alwaysOnTop ? "!text-accent" : ""
+                }`}
+              >
+                {alwaysOnTop ? <Pin size={13} /> : <PinOff size={13} />}
+              </Btn>
+              <Btn
+                title={t("app.themeToggle")}
+                // 标题栏按钮循环切换风格，具体选择在设置页（带预览）
+                onClick={() => {
+                  const idx = STYLES.findIndex((s) => s.id === theme);
+                  setTheme(STYLES[(idx + 1) % STYLES.length].id);
+                }}
+                className="!rounded-full !border-0 !bg-transparent !px-1.5 !py-1 !text-dim hover:!text-text"
+              >
+                {styleOf(theme).dark ? <Moon size={13} /> : <Sun size={13} />}
+              </Btn>
+            </div>
           </div>
         </header>
 
         <main
           key={view}
-          className={`flex-1 overflow-auto animate-in ${bp === "compact" ? "p-3" : "p-5"}`}
+          className={`relative flex-1 overflow-auto animate-in ${
+            bp === "compact" ? "p-3" : "px-6 py-5"
+          }`}
         >
-          <Suspense
-            fallback={
-              <div className="flex h-64 items-center justify-center gap-3 text-sm text-dim">
-                <Spinner /> {t("app.loading")}
-              </div>
-            }
-          >
-            <CurrentPage view={view} />
-          </Suspense>
+          {/* 底板网格：纯装饰，位于内容之下，给大片深色一个可测量的空间感 */}
+          <div
+            className="grid-field pointer-events-none absolute inset-0"
+            aria-hidden="true"
+          />
+          <div className="relative flex min-h-full flex-col">
+            <Suspense
+              fallback={
+                <div className="flex h-64 items-center justify-center gap-3 text-sm text-dim">
+                  <Spinner /> {t("app.loading")}
+                </div>
+              }
+            >
+              <CurrentPage view={view} />
+            </Suspense>
+          </div>
         </main>
       </div>
 
@@ -397,7 +430,7 @@ export default function App() {
 
       {toast && (
         <div
-          className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-line bg-panel px-4 py-2 text-sm shadow-xl"
+          className="animate-in fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-line bg-panel2/95 px-4 py-1.5 text-[12.5px] shadow-[0_12px_40px_-12px_rgba(0,0,0,0.7)] backdrop-blur"
           role="alert"
           aria-live="assertive"
         >

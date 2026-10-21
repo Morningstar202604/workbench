@@ -10,6 +10,9 @@ export const dict = {
     "agent.emptyHint":
       "Ask about processes, ports, dev servers or AI cost — I will call the tools on this machine and report what I find.",
     "agent.inputPlaceholder": "Ask something…",
+    "agent.suggest.0": "Which ports are listening?",
+    "agent.suggest.1": "What did AI sessions cost this week?",
+    "agent.suggest.2": "Anything eating CPU right now?",
     "agent.inputHint": "Enter to send, Shift+Enter for a new line",
     "agent.toolsLoading": "Loading tool list…",
     "agent.toolsDesktopOnly": "Tool list is only available in the desktop app.",
@@ -47,6 +50,9 @@ export const dict = {
     "agent.emptyHint":
       "可以问我进程、端口、开发服务器或 AI 花费的情况——我会调用本机工具去查，并把结果如实报告。",
     "agent.inputPlaceholder": "问点什么…",
+    "agent.suggest.0": "现在有哪些端口在监听？",
+    "agent.suggest.1": "这周 AI 会话花了多少钱？",
+    "agent.suggest.2": "有进程在占 CPU 吗？",
     "agent.inputHint": "Enter 发送，Shift+Enter 换行",
     "agent.toolsLoading": "正在加载工具清单…",
     "agent.toolsDesktopOnly": "工具清单仅在桌面端可用。",
@@ -84,6 +90,9 @@ export const dict = {
     "agent.emptyHint":
       "プロセス、ポート、開発サーバー、AI コストについて聞いてください。ツールを呼び出して調べます。",
     "agent.inputPlaceholder": "質問を入力…",
+    "agent.suggest.0": "どのポートが待ち受けていますか？",
+    "agent.suggest.1": "今週の AI セッション費用は？",
+    "agent.suggest.2": "CPU を使っているプロセスは？",
     "agent.inputHint": "Enter で送信、Shift+Enter で改行",
     "agent.toolsLoading": "ツール一覧を読み込み中…",
     "agent.toolsDesktopOnly": "ツール一覧はデスクトップ版でのみ利用できます。",

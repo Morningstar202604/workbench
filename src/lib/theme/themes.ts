@@ -40,7 +40,7 @@ export const STYLES: StyleDef[] = [
     },
     shell: "dense",
     dark: true,
-    swatch: ["#0a0f1c", "#121a2b", "#22d3ee", "#e6edf7"],
+    swatch: ["#07080b", "#0c0f15", "#22d3ee", "#e8ecf2"],
   },
   {
     id: "frost",
@@ -52,7 +52,7 @@ export const STYLES: StyleDef[] = [
     },
     shell: "airy",
     dark: false,
-    swatch: ["#f7f9fc", "#ffffff", "#0a84ff", "#1c2430"],
+    swatch: ["#f2f4f7", "#ffffff", "#0b6bcb", "#10141b"],
   },
   {
     id: "paper",
@@ -64,7 +64,7 @@ export const STYLES: StyleDef[] = [
     },
     shell: "reading",
     dark: false,
-    swatch: ["#f6f1e7", "#fffdf8", "#8a5a2b", "#2b241c"],
+    swatch: ["#f3eee5", "#fbf8f2", "#8a5a2b", "#241f19"],
   },
   {
     id: "aurora",
@@ -76,7 +76,7 @@ export const STYLES: StyleDef[] = [
     },
     shell: "glass",
     dark: true,
-    swatch: ["#0b1024", "#1a2242", "#8b5cf6", "#e8ecff"],
+    swatch: ["#080a18", "#141a33", "#8b5cf6", "#eaeefe"],
   },
   {
     id: "terminal",
@@ -88,7 +88,7 @@ export const STYLES: StyleDef[] = [
     },
     shell: "mono",
     dark: true,
-    swatch: ["#060806", "#0d120d", "#3ddc84", "#d8ffd8"],
+    swatch: ["#050706", "#0a0e0b", "#3ddc84", "#d9f5d9"],
   },
 ];
 

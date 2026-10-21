@@ -12,6 +12,7 @@ import {
   Empty,
   Field,
   Modal,
+  SectionTitle,
   Table,
   Td,
   Tr,
@@ -173,8 +174,8 @@ export default function Projects() {
     <div className="flex flex-col gap-4">
       {/* ── 顶部图表 ── */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card className="p-4">
-          <h3 className="mb-2 text-sm font-medium">{t("projects.statusDistTitle")}</h3>
+        <Card>
+          <SectionTitle>{t("projects.statusDistTitle")}</SectionTitle>
           {data.projects.length > 0 ? (
             <>
               {isPieWorthRendering(
@@ -210,8 +211,8 @@ export default function Projects() {
             <Empty>{t("projects.emptyProjects")}</Empty>
           )}
         </Card>
-        <Card className="p-4 md:col-span-2">
-          <h3 className="mb-2 text-sm font-medium">{t("projects.topTasksTitle")}</h3>
+        <Card className="md:col-span-2">
+          <SectionTitle>{t("projects.topTasksTitle")}</SectionTitle>
           {taskCountData.length > 0 ? (
             <EChart option={taskBarOption} style={{ height: 160 }} lazyUpdate />
           ) : (
@@ -250,12 +251,9 @@ export default function Projects() {
             const tasks = data.tasks.filter((task) => task.project_id === p.id);
             const doing = tasks.filter((task) => task.status === "doing").length;
             return (
-              <Card
-                key={p.id}
-                className="flex flex-col gap-2 p-4 hover:border-accentsoft transition-colors"
-              >
+              <Card key={p.id} className="card-hover flex flex-col gap-2 px-4 py-3.5">
                 <div className="flex items-start gap-2">
-                  <span className="font-semibold">{p.name}</span>
+                  <span className="text-[13px] font-semibold">{p.name}</span>
                   {p.pinned && <Pin size={12} className="mt-1 text-accent" />}
                   <div className="ml-auto flex gap-1">
                     <Badge tone={st.tone}>{statusLabel(p.status)}</Badge>
