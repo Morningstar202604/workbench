@@ -172,6 +172,68 @@ fn cost_data_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("cost_data.json"))
 }
 
+/// 定价覆盖的读取结果：合法条目 + 每条被拒的原因。
+#[derive(Default, Debug)]
+pub struct OverrideRead {
+    pub overrides: HashMap<String, (f64, f64)>,
+    pub problems: Vec<String>,
+}
+
+/// 读取并校验用户的定价覆盖文件。
+///
+/// 与「静默忽略坏文件」不同：这里把每个条目的校验错误都收集起来返回，
+/// 因为定价直接影响账单——用户以为改了价、实际被忽略，比报错更糟。
+pub fn read_pricing_overrides(app: &AppHandle) -> Result<OverrideRead, String> {
+    read_pricing_overrides_at(&cost_data_path_overrides(app)?)
+}
+
+/// 纯路径版本：可脱离 AppHandle 测试（文件格式、逐条校验、空文件语义）。
+pub fn read_pricing_overrides_at(path: &std::path::Path) -> Result<OverrideRead, String> {
+    let raw: Option<HashMap<String, (f64, f64)>> = json_store::read_json(path)?;
+    let Some(map) = raw else {
+        return Ok(OverrideRead::default());
+    };
+    let mut ok = HashMap::new();
+    let mut problems = Vec::new();
+    for (model, (input, output)) in map {
+        match crate::pricing::PricingTable::validate_override(&model, input, output) {
+            Ok((key, pair)) => {
+                ok.insert(key, pair);
+            }
+            Err(e) => problems.push(format!("{model}: {e}")),
+        }
+    }
+    Ok(OverrideRead {
+        overrides: ok,
+        problems,
+    })
+}
+
+/// 写入定价覆盖（整体替换，原子写）。
+pub fn save_pricing_overrides(
+    app: &AppHandle,
+    overrides: &HashMap<String, (f64, f64)>,
+) -> Result<(), String> {
+    save_pricing_overrides_at(&cost_data_path_overrides(app)?, overrides)
+}
+
+/// 纯路径版本：空表删除文件，非空原子写入。
+pub fn save_pricing_overrides_at(
+    path: &std::path::Path,
+    overrides: &HashMap<String, (f64, f64)>,
+) -> Result<(), String> {
+    if overrides.is_empty() {
+        // 空覆盖表 = 回到内置价：删掉文件比留一个 {} 更干净，
+        // 也避免用户误以为「已经改过价」。
+        match std::fs::remove_file(path) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(format!("删除 {} 失败: {e}", path.display())),
+        }
+    }
+    json_store::write_json_atomic(path, overrides)
+}
+
 /// 用户自定义定价覆盖文件路径
 pub fn cost_data_path_overrides(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
@@ -488,6 +550,73 @@ mod tests {
             records,
             settings: CostSettings::default(),
         }
+    }
+
+    /// 临时目录（不引 tempfile 依赖，只用标准库）。
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("wb-cost-test-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn pricing_overrides_roundtrip_and_empty_deletes_file() {
+        let dir = temp_dir("pricing");
+        let path = dir.join("pricing_overrides.json");
+
+        // 无文件 → 空覆盖、无问题
+        let read = read_pricing_overrides_at(&path).unwrap();
+        assert!(read.overrides.is_empty());
+        assert!(read.problems.is_empty());
+
+        let mut map = HashMap::new();
+        map.insert("my-model".to_string(), (1.5, 6.0));
+        map.insert("gpt-4o".to_string(), (9.0, 30.0));
+        save_pricing_overrides_at(&path, &map).unwrap();
+        assert!(path.exists());
+
+        let read = read_pricing_overrides_at(&path).unwrap();
+        assert_eq!(read.overrides.len(), 2);
+        assert_eq!(read.overrides["gpt-4o"], (9.0, 30.0));
+        assert!(read.problems.is_empty());
+
+        // 空表 → 删文件（回到内置价），而不是留一个 {}
+        save_pricing_overrides_at(&path, &HashMap::new()).unwrap();
+        assert!(!path.exists(), "空覆盖必须删除文件");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pricing_overrides_bad_entries_are_reported_not_dropped_silently() {
+        let dir = temp_dir("pricing-bad");
+        let path = dir.join("pricing_overrides.json");
+        // 手工写入：一条合法、三条非法（负价 / 全 0 / 过高）
+        std::fs::write(
+            &path,
+            r#"{"good-model":[1.0,2.0],"neg":[-1.0,2.0],"zero":[0.0,0.0],"huge":[20000.0,1.0]}"#,
+        )
+        .unwrap();
+
+        let read = read_pricing_overrides_at(&path).unwrap();
+        assert_eq!(read.overrides.len(), 1, "只有合法条目生效");
+        assert_eq!(read.overrides["good-model"], (1.0, 2.0));
+        assert_eq!(read.problems.len(), 3, "每条非法条目都要有原因");
+        assert!(read.problems.iter().any(|p| p.starts_with("neg:")));
+        assert!(read.problems.iter().any(|p| p.starts_with("zero:")));
+        assert!(read.problems.iter().any(|p| p.starts_with("huge:")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pricing_overrides_model_names_are_normalized_on_read() {
+        let dir = temp_dir("pricing-norm");
+        let path = dir.join("pricing_overrides.json");
+        std::fs::write(&path, r#"{"My-Model":[1.0,2.0]}"#).unwrap();
+        let read = read_pricing_overrides_at(&path).unwrap();
+        // 键统一小写，否则 lookup 的小写匹配永远命中不了大写键
+        assert!(read.overrides.contains_key("my-model"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -590,21 +590,90 @@ pub struct ScanCostResult {
     pub model_breakdown: Vec<ModelBreakdownRow>,
 }
 
+/// 定价覆盖：读取（含每条的校验错误）
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct PricingView {
+    pub rows: Vec<crate::pricing::PricingRow>,
+    /// 覆盖文件里被拒绝的条目及原因（例如单价为负）
+    pub problems: Vec<String>,
+    /// 覆盖文件路径，便于用户手动备份/编辑
+    pub path: String,
+}
+
+#[tauri::command(async)]
+pub async fn get_pricing(app: AppHandle) -> Result<PricingView, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let table = build_pricing_table(&app);
+        let problems = cost_store::read_pricing_overrides(&app)?.problems;
+        let path = cost_store::cost_data_path_overrides(&app)?
+            .to_string_lossy()
+            .to_string();
+        Ok(PricingView {
+            rows: table.rows(),
+            problems,
+            path,
+        })
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+/// 保存定价覆盖。整体替换：UI 传什么就是什么（含删除某条覆盖）。
+///
+/// 这里是**全部校验后才写**：任一条非法就整体拒绝，不做「跳过坏的、写入好的」——
+/// 部分成功会让界面上的价格表和磁盘上的不一致，用户无法判断到底生效了什么。
+#[tauri::command(async)]
+pub async fn save_pricing(
+    app: AppHandle,
+    overrides: HashMap<String, (f64, f64)>,
+) -> Result<PricingView, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut clean: HashMap<String, (f64, f64)> = HashMap::new();
+        let mut problems: Vec<String> = Vec::new();
+        for (model, (input, output)) in overrides {
+            match crate::pricing::PricingTable::validate_override(&model, input, output) {
+                Ok((key, pair)) => {
+                    clean.insert(key, pair);
+                }
+                Err(e) => problems.push(format!("{model}: {e}")),
+            }
+        }
+        if !problems.is_empty() {
+            return Err(problems.join("；"));
+        }
+        cost_store::save_pricing_overrides(&app, &clean)?;
+        let table = build_pricing_table(&app);
+        let path = cost_store::cost_data_path_overrides(&app)?
+            .to_string_lossy()
+            .to_string();
+        Ok(PricingView {
+            rows: table.rows(),
+            problems: Vec::new(),
+            path,
+        })
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
 /// 构造当前定价表 = 内置快照 + 用户覆盖文件 pricing_overrides.json。
 /// 覆盖文件是可选增强：损坏时降级为内置表并告警，不能让整个成本扫描失败
 /// （data.json 才是用户核心数据，那里才该「保全后上抛」）。
 pub fn build_pricing_table(app: &AppHandle) -> PricingTable {
     let mut table = PricingTable::default();
-    let path = match cost_store::cost_data_path_overrides(app) {
-        Ok(p) => p,
-        Err(e) => {
-            log::warn!("定位定价覆盖文件失败，使用内置价格表: {e}");
-            return table;
+    // 走与 get_pricing 相同的读取路径：坏条目被逐条拒绝并记日志，
+    // 而不是整个文件被静默忽略（那会让用户以为改价生效了）。
+    match cost_store::read_pricing_overrides(app) {
+        Ok(read) => {
+            if !read.problems.is_empty() {
+                log::warn!(
+                    "pricing_overrides.json 有 {} 条被拒绝: {}",
+                    read.problems.len(),
+                    read.problems.join("; ")
+                );
+            }
+            table.overrides = read.overrides;
         }
-    };
-    match crate::json_store::read_json::<HashMap<String, (f64, f64)>>(&path) {
-        Ok(Some(overrides)) => table.overrides = overrides,
-        Ok(None) => log::debug!("无 pricing_overrides.json，使用内置价格表"),
         Err(e) => log::warn!("pricing_overrides.json 不可用，忽略覆盖价: {e}"),
     }
     table

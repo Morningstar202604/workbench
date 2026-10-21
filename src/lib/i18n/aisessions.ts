@@ -14,6 +14,7 @@ export const dict = {
     "ai.recordCount": "{count} records",
     "ai.tokensMeasuredEstimated": "Measured {measured} / estimated {estimated}",
     "ai.scanCostsTitle": "Scan session files to extract token usage and calculate costs",
+    "ai.pricingOverrides": "{count} model price(s) overridden",
     "ai.scanCosts": "Scan costs",
     "ai.scanning": "Scanning…",
     "ai.scanHint":
@@ -88,6 +89,7 @@ export const dict = {
     "ai.recordCount": "{count} 条记录",
     "ai.tokensMeasuredEstimated": "实测 {measured} / 估算 {estimated}",
     "ai.scanCostsTitle": "扫描 session 文件提取 token 用量并计算成本",
+    "ai.pricingOverrides": "已覆盖 {count} 个型号的价格",
     "ai.scanCosts": "扫描成本",
     "ai.scanning": "扫描中…",
     "ai.scanHint": "会话记录较多时，全量扫描需要几秒钟。",
@@ -161,6 +163,7 @@ export const dict = {
     "ai.tokensMeasuredEstimated": "実測 {measured} / 推定 {estimated}",
     "ai.scanCostsTitle":
       "セッションファイルをスキャンしてトークン使用量を抽出し、コストを計算します",
+    "ai.pricingOverrides": "{count} 件のモデル価格を上書き中",
     "ai.scanCosts": "コストをスキャン",
     "ai.scanning": "スキャン中…",
     "ai.scanHint": "履歴が多い場合、全体スキャンには数秒かかります。",

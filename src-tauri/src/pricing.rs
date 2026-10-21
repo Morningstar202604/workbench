@@ -3,7 +3,7 @@
 //! 价格单位：USD / 1M tokens。内置主流厂商公开价格快照，可被用户自定义覆盖。
 //! 匹配逻辑：先精确匹配 → 再前缀匹配（如 `claude-sonnet-4-5` 匹配 `claude-sonnet-4`）。
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// (input_price, output_price)  USD per 1M tokens
@@ -122,10 +122,92 @@ fn builtin_table() -> &'static BuiltinTable {
 }
 
 /// 价格表：内置快照 + 用户覆盖。
-#[derive(Serialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct PricingTable {
     /// 用户自定义覆盖（优先级高于内置）
     pub overrides: HashMap<String, PricePair>,
+}
+
+/// 一行可编辑的价格：给 UI 的完整视图（内置值 + 是否有覆盖）。
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, ts_rs::TS)]
+pub struct PricingRow {
+    pub model: String,
+    /// 内置快照的输入/输出单价（USD / 1M tokens），未知型号为 null
+    pub builtin_input: Option<f64>,
+    pub builtin_output: Option<f64>,
+    /// 当前生效的覆盖值；没有覆盖时为 null
+    pub override_input: Option<f64>,
+    pub override_output: Option<f64>,
+}
+
+/// 导出内置价格表（只读参考，供定价编辑器列出型号）。
+pub fn builtin_rows() -> Vec<(&'static str, PricePair)> {
+    let mut v: Vec<(&'static str, PricePair)> = builtin_table()
+        .prices
+        .iter()
+        .map(|(k, p)| (*k, *p))
+        .collect();
+    v.sort_by(|a, b| a.0.cmp(b.0));
+    v
+}
+
+impl PricingTable {
+    /// 生成 UI 视图：内置型号 + 仅存在于覆盖文件里的型号，按名字排序。
+    pub fn rows(&self) -> Vec<PricingRow> {
+        let builtin = builtin_table();
+        let mut names: Vec<String> = builtin.prices.keys().map(|k| k.to_string()).collect();
+        for k in self.overrides.keys() {
+            if !builtin.prices.contains_key(k.as_str()) {
+                names.push(k.clone());
+            }
+        }
+        names.sort();
+        names.dedup();
+        names
+            .into_iter()
+            .map(|model| {
+                let b = builtin.prices.get(model.as_str()).copied();
+                let o = self.overrides.get(&model).copied();
+                PricingRow {
+                    builtin_input: b.map(|p| p.0),
+                    builtin_output: b.map(|p| p.1),
+                    override_input: o.map(|p| p.0),
+                    override_output: o.map(|p| p.1),
+                    model,
+                }
+            })
+            .collect()
+    }
+
+    /// 校验一条覆盖：型号必须非空、单价必须是非负有限数、至少一个 > 0。
+    /// 返回规范化后的 (model, (input, output))。
+    pub fn validate_override(
+        model: &str,
+        input: f64,
+        output: f64,
+    ) -> Result<(String, PricePair), String> {
+        let key = model.trim().to_ascii_lowercase();
+        if key.is_empty() {
+            return Err("模型名不能为空".to_string());
+        }
+        if key.len() > 120 {
+            return Err("模型名过长（上限 120 字符）".to_string());
+        }
+        if !input.is_finite() || !output.is_finite() || input < 0.0 || output < 0.0 {
+            return Err("单价必须是有限的非负数".to_string());
+        }
+        if input == 0.0 && output == 0.0 {
+            return Err("输入与输出单价不能同时为 0（等于把该型号标成未定价）".to_string());
+        }
+        // 上限 10000 USD / 1M tokens：任何真实模型都远低于此，
+        // 超过它几乎必然是「把每 token 价按每 1M 填」这类单位错误。
+        if input > 10_000.0 || output > 10_000.0 {
+            return Err(
+                "单价过高（上限 10000 USD / 1M tokens），请检查是否填成了每 token 价".to_string(),
+            );
+        }
+        Ok((key, (input, output)))
+    }
 }
 
 impl PricingTable {
@@ -265,6 +347,60 @@ mod tests {
         let t = PricingTable::default();
         assert_eq!(t.lookup("ernie-4.0"), (0.12, 0.12));
         assert_eq!(t.lookup("ERNIE-4.0"), (0.12, 0.12));
+    }
+
+    #[test]
+    fn rows_include_builtin_and_override_only_models() {
+        let mut t = PricingTable::default();
+        t.overrides.insert("my-private-model".into(), (1.5, 6.0));
+        t.overrides.insert("gpt-4o".into(), (9.0, 30.0));
+        let rows = t.rows();
+
+        let gpt = rows.iter().find(|r| r.model == "gpt-4o").unwrap();
+        assert_eq!(gpt.builtin_input, Some(2.5), "内置价必须仍然可见");
+        assert_eq!(gpt.override_input, Some(9.0), "覆盖价要标出来");
+
+        let mine = rows.iter().find(|r| r.model == "my-private-model").unwrap();
+        assert_eq!(mine.builtin_input, None, "非内置型号没有内置价");
+        assert_eq!(mine.override_output, Some(6.0));
+
+        // 排序稳定，且没有重复
+        let mut sorted = rows.clone();
+        sorted.sort_by(|a, b| a.model.cmp(&b.model));
+        assert_eq!(
+            rows.iter().map(|r| &r.model).collect::<Vec<_>>(),
+            sorted.iter().map(|r| &r.model).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn validate_override_rejects_bad_input() {
+        // 空名、负价、NaN、全 0、过高单价全部拒绝
+        assert!(PricingTable::validate_override("", 1.0, 1.0).is_err());
+        assert!(PricingTable::validate_override("  ", 1.0, 1.0).is_err());
+        assert!(PricingTable::validate_override("m", -1.0, 1.0).is_err());
+        assert!(PricingTable::validate_override("m", 1.0, -0.5).is_err());
+        assert!(PricingTable::validate_override("m", f64::NAN, 1.0).is_err());
+        assert!(PricingTable::validate_override("m", f64::INFINITY, 1.0).is_err());
+        assert!(PricingTable::validate_override("m", 0.0, 0.0).is_err());
+        assert!(PricingTable::validate_override("m", 20_000.0, 1.0).is_err());
+    }
+
+    #[test]
+    fn validate_override_normalizes_model_name() {
+        let (key, pair) = PricingTable::validate_override("  My-Model  ", 1.0, 2.0).unwrap();
+        assert_eq!(
+            key, "my-model",
+            "型号名统一小写并去空白，否则大小写会存成两条"
+        );
+        assert_eq!(pair, (1.0, 2.0));
+    }
+
+    #[test]
+    fn override_with_zero_output_price_is_allowed() {
+        // embedding 类模型 output 就是 0，不能被上面「全 0」规则误杀
+        let (_, pair) = PricingTable::validate_override("embed-x", 0.02, 0.0).unwrap();
+        assert_eq!(pair, (0.02, 0.0));
     }
 
     #[test]

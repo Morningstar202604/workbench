@@ -26,6 +26,8 @@ export type { WorkbenchData } from "./generated/WorkbenchData";
 export type { SystemInfo } from "./generated/SystemInfo";
 export type { DiskInfo } from "./generated/DiskInfo";
 export type { ScanCostResult } from "./generated/ScanCostResult";
+export type { PricingRow } from "./generated/PricingRow";
+export type { PricingView } from "./generated/PricingView";
 
 // ── Agent（模型 + 工具调用）──
 export type { ChatMessage } from "./generated/ChatMessage";

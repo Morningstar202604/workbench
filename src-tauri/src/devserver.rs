@@ -47,8 +47,54 @@ const FRAMEWORK_RULES: &[(&str, &str, &str)] = &[
     ("deno", "Deno", "medium"),
     ("bun", "Bun", "medium"),
     ("esbuild", "esbuild", "medium"),
-    ("serve", "serve (静态服务)", "low"),
+    // `serve` 是最容易误判的一条：子串匹配会让 server / dist-server /
+    // *.server.js 全部命中，实测把一台机器上的 42 个 node 进程全标成
+    // 「开发服务器」。因此这条单独走 token 匹配（见 TOKEN_RULES）。
 ];
+
+/// 需要「独立单词」匹配的规则：命令行里必须出现一个正好等于这些词的 token
+/// （允许带 .exe / .cmd 后缀）。
+///
+/// 为什么不能用子串：`serve` 是 `server` 的前五个字母，而 Node 项目的
+/// 入口常叫 `main.js`、`dist-server/server/main.js`、`x.server.js`。
+/// 子串匹配会把它们全部算成静态服务器，用户看到 42 个「开发服务器」。
+/// 这类短词必须按 token 精确匹配。
+const TOKEN_RULES: &[(&str, &str, &str)] = &[
+    ("serve", "serve (静态服务)", "medium"),
+    ("http-server", "http-server", "high"),
+    ("live-server", "live-server", "high"),
+];
+
+/// 守护进程标记：带这些参数时，即使出现 serve 也不是开发服务器。
+///
+/// 真实反例：opencode-cli.exe serve --service —— opencode 的本地服务端，
+/// 它确实跑在端口上，但那是应用自带的常驻 API，不是用户在写的项目。
+const DAEMON_FLAGS: &[&str] = &["--service", "--daemon", "--background"];
+
+/// 把命令行切成「命令词」候选：按空白与常见 shell 分隔符切，去掉引号与路径前缀。
+/// 返回每个 token 的 basename（小写、去 .exe/.cmd/.bat/.js 后缀）。
+fn command_tokens(haystack: &str) -> Vec<String> {
+    haystack
+        .split(|c: char| {
+            c.is_whitespace() || c == '&' || c == '|' || c == ';' || c == '(' || c == ')'
+        })
+        .filter_map(|raw| {
+            let t = raw.trim_matches(|c| c == '"' || c == '\'' || c == ',');
+            if t.is_empty() {
+                return None;
+            }
+            let base = t.rsplit(['\\', '/']).next().unwrap_or(t);
+            let lower = base.to_ascii_lowercase();
+            let stem = lower
+                .strip_suffix(".exe")
+                .or_else(|| lower.strip_suffix(".cmd"))
+                .or_else(|| lower.strip_suffix(".bat"))
+                .or_else(|| lower.strip_suffix(".js"))
+                .unwrap_or(&lower);
+            Some(stem.to_string())
+        })
+        .collect()
+}
 
 /// 判断一个监听端口背后的进程是否是开发服务器。
 /// 返回 (框架名, 置信度)；不是则 None。
@@ -61,6 +107,22 @@ pub fn classify_dev_server(
         if haystack.contains(needle) {
             return Some((*label, confidence.to_string()));
         }
+    }
+    // 守护进程不是用户项目：带 --service/--daemon 的一律不算开发服务器
+    if DAEMON_FLAGS.iter().any(|f| haystack.contains(f)) {
+        return None;
+    }
+    // 短词按独立命令匹配，避免 serve ⊂ server
+    let tokens = command_tokens(&haystack);
+    for (needle, label, confidence) in TOKEN_RULES {
+        if tokens.iter().any(|t| t == needle) {
+            return Some((*label, confidence.to_string()));
+        }
+    }
+    // 全局安装的 serve 包入口是 node_modules/serve/build/main.js：
+    // token 是 main，但路径里带 node_modules/serve/ —— 这个组合无歧义。
+    if haystack.contains("node_modules/serve/") || haystack.contains(r"node_modules\serve\") {
+        return Some(("serve (静态服务)", "medium".to_string()));
     }
     None
 }
@@ -141,6 +203,65 @@ mod tests {
     fn non_dev_server_returns_none() {
         assert!(classify_dev_server("chrome.exe --type=renderer", "chrome.exe").is_none());
         assert!(classify_dev_server("code.exe", "code.exe").is_none());
+    }
+
+    /// 真实回归：`serve` 是 `server` 的前缀，子串匹配把
+    /// `dist-server/server/main.js`、`main.js` 这类入口全标成开发服务器。
+    /// 实测一台机器 42 个「开发服务器」，全是误报。
+    #[test]
+    fn serve_must_be_a_standalone_command() {
+        // 含 server 但不是 serve 命令：不应命中
+        for cmd in [
+            "node dist-server/server/main.js",
+            "node apps/server/dist/apps/server/src/main.js",
+            "node C:/proj/webpack.server.js",
+            "node server.js",
+        ] {
+            assert!(
+                classify_dev_server(cmd, "node.exe").is_none(),
+                "误判为开发服务器: {cmd}"
+            );
+        }
+
+        // 真正的 serve 命令（全局安装的静态服务器，入口在 npm 的 node_modules 下）
+        let (f, c) = classify_dev_server(
+            "node C:/Users/u/AppData/Roaming/npm/node_modules/serve/build/main.js --port 3000",
+            "node.exe",
+        )
+        .unwrap();
+        assert_eq!(f, "serve (静态服务)");
+        assert_eq!(c, "medium");
+
+        // npx serve / serve 直接调用
+        assert!(classify_dev_server("serve -s dist", "node.exe").is_some());
+        assert!(classify_dev_server("npx serve dist", "node.exe").is_some());
+        // Windows 的 serve.cmd
+        assert!(classify_dev_server(r"C:\npm\serve.cmd dist", "cmd.exe").is_some());
+    }
+
+    /// 真实反例：opencode 的常驻服务端 `opencode-cli.exe serve --service`
+    /// 会被 serve 规则命中，但它不是用户项目。
+    #[test]
+    fn daemon_flag_disqualifies_serve() {
+        let cmd = concat!(
+            "C:\\Users\\u\\AppData\\Roaming\\ai.opencode.desktop\\cli\\\\",
+            "opencode-cli.exe serve --service"
+        );
+        assert!(classify_dev_server(cmd, "opencode-cli.exe").is_none());
+        assert!(classify_dev_server("mydaemon serve --daemon", "mydaemon.exe").is_none());
+        // 不带守护参数时仍然识别
+        assert!(classify_dev_server("serve dist --port 3000", "node.exe").is_some());
+    }
+
+    #[test]
+    fn high_confidence_rules_still_win_over_token_rules() {
+        // vite 命令行里同时出现 serve 时，仍应判 Vite（先匹配强规则）
+        let (f, _) = classify_dev_server(
+            "node node_modules/vite/bin/vite.js --mode serve",
+            "node.exe",
+        )
+        .unwrap();
+        assert_eq!(f, "Vite");
     }
 
     #[test]

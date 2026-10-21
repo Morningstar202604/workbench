@@ -50,6 +50,35 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Model pricing editor** (Cost ledger page). The built-in price table (56
+  models, USD per 1M tokens) is listed with search; any model can be
+  overridden, new models can be added, and each row can be reset to the
+  built-in price. Saving is **whole-table validated**: one invalid entry rejects
+  the entire write and shows every reason, because a partially applied price
+  table makes the UI and the disk disagree. Invalid entries already sitting in
+  `pricing_overrides.json` are now reported instead of being silently ignored.
+  Two new IPC commands (`get_pricing` / `save_pricing`) with ts-rs generated
+  types.
+- **Real desktop E2E** (`scripts/e2e-desktop.mjs`): connects to the packaged exe
+  over the WebView2 debugging port and exercises the real Tauri commands —
+  pricing read/write/reject/reset plus UI rendering. This is the first test that
+  runs against real IPC rather than the browser demo build.
+
+### Fixed
+
+- **Dev-server detection flagged dozens of false positives.** The `serve`
+  rule was a substring match and `server` contains `serve`, so on this machine
+  42 node processes (`dist-server/server/main.js`, `apps/server/main.js`) were
+  reported as dev servers. Short words now require a standalone command token,
+  plus a `node_modules/serve/` path check. Real run: 42 → 29.
+- **A daemon was counted as a dev server.** `opencode-cli.exe serve --service`
+  is opencode's own local API, not a user project. Commands carrying
+  `--service` / `--daemon` / `--background` are excluded; the real machine now
+  reports 29 entries, all genuine `vite` / `uvicorn` processes.
+- Removed two unused theme variables (`--toward-light` / `--toward-dark`).
+- Added the two missing i18n keys (`settings.widgetsShow` / `widgetsHide`) that
+  the widget manager already referenced — they were rendering the raw key.
+
 
 - **Design language rebuilt around "precision instrument"**, benchmarked against
   Apple / Tesla / Qoder / Linear / Vercel / Raycast / Stripe style modern product

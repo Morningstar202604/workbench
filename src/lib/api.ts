@@ -10,6 +10,7 @@ import type {
   ModelBreakdownRow,
   OpencodeSessionsResult,
   PortEntry,
+  PricingView,
   ProcInfo,
   ScanCostResult,
   SessionDetail,
@@ -191,6 +192,16 @@ export async function saveCostSettings(settings: CostSettings): Promise<void> {
 }
 
 /** 清空全部成本记录 */
+export async function getPricing(): Promise<PricingView> {
+  return invoke<PricingView>("get_pricing");
+}
+
+export async function savePricing(
+  overrides: Record<string, [number, number]>
+): Promise<PricingView> {
+  return invoke<PricingView>("save_pricing", { overrides });
+}
+
 export async function clearCostRecords(): Promise<void> {
   return invoke("clear_cost_records");
 }

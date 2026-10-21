@@ -382,7 +382,7 @@ Done and planned. Vote or propose new ideas in the Issues.
 - [x] Multilingual UI (English / 简体中文 / 日本語)
 - [ ] Cross-platform support (Linux done and verified; macOS not built)
 - [ ] Installer code signing
-- [ ] UI editor for `pricing_overrides.json`
+- [x] Model pricing editor (edit / add / reset overrides from the UI)
 - [ ] Sharded cost ledger (100k+ records)
 - [ ] Page-level end-to-end tests (visual + structural covered; agent and
       import/export flows are not)

@@ -14,9 +14,9 @@
 | 三语界面 | 完成 | `src/lib/i18n/*`，默认简体中文；`dict.test.ts` 强制三语 key/占位符对齐 |
 | 跨平台（macOS） | **未做** | 只验证过 Windows + Linux；macOS 未构建、未测试 |
 | 安装包代码签名 | **未做** | 需要证书，当前 NSIS 未签名，SmartScreen 会拦 |
-| `pricing_overrides.json` 的 UI 编辑器 | **未做** | 目前只读，需手工放文件 |
+| `pricing_overrides.json` 的 UI 编辑器 | **本轮完成** | 成本页内置编辑器：可搜索、逐条改价、新增型号、恢复内置价、保存前整表校验 |
 | 分片成本账本（10 万条以上） | **未做** | 单文件 `cost_data.json`，全量读写在记录极多时会变慢 |
-| 页面级端到端测试 | 部分完成 | Playwright 覆盖：5 布局 × 8 主题 × 3 外壳 + 4 个关键页 + 设置页 + 窄屏；**未**覆盖 Agent 对话、导入导出等交互流程 |
+| 页面级端到端测试 | 部分完成 | Playwright（浏览器构建）覆盖 5 布局 × 8 主题 × 3 外壳 + 4 个关键页 + 设置页 + 窄屏；**新增** `scripts/e2e-desktop.mjs` 在真实打包 exe 上跑真实 IPC；仍未覆盖 Agent 对话全流程与导入导出 |
 
 ## 二、本轮发现的「假实现」（代码说做了，实际没生效）
 
@@ -33,6 +33,9 @@
 | 7 | 打包后的 exe 用新图标 | `tauri-build` 不跟踪 `icon.ico`，换图标后 exe 仍嵌旧图标（白角） | 已在 `build.rs` 声明图标为构建输入 |
 | 8 | 组件「可自定义」 | 无任何自定义能力：页面结构写死在 `Overview.tsx` 的 JSX 里 | 概览拆成 9 个独立组件 + 布局引擎 + 排序/隐藏/持久化 |
 | 9 | 视觉基线可靠 | 截图用 `mask` 遮时间戳，`mask` 会把整块区域涂成品红，基线里看不到那部分的真实排版；且时钟不冻结，同一份代码两次截图不同（第一次跑假失败、重跑又绿） | 改用 `visibility:hidden` + `page.clock.install()` 冻结时钟；连续三次复跑全绿 |
+| 10 | 开发服务器识别 | `serve` 规则是**子串**匹配，而 `server` 里含 `serve`：真机上 42 个 node 进程被全部标成「开发服务器」（`dist-server/server/main.js`、`apps/server/main.js` 全中） | 改为按「独立命令词」匹配 + 排除 `node_modules/serve/` 路径；真机复测 42 → 29，只剩真实 `vite` / `uvicorn` |
+| 11 | 开发服务器识别（二） | 排除子串后仍有一条：`opencode-cli.exe serve --service` —— opencode 自带的常驻 API，不是用户项目 | 增加守护进程标记（`--service` / `--daemon` / `--background`）直接排除；真机复测 29 条全部为真实项目 |
+| 12 | 定价可自定义 | 只能手工把 `pricing_overrides.json` 放进数据目录，界面上完全不可见；坏条目被静默忽略（用户以为改价生效了） | 新增 `get_pricing` / `save_pricing` 两个 IPC + 成本页编辑器；坏条目逐条报原因；保存整表校验 |
 
 ## 三、本轮新增能力
 
@@ -90,9 +93,39 @@
 
 1. **macOS 构建**：需要真机或 CI runner，代码层面 `cfg` 分支已按平台分开，但没有验证过。
 2. **代码签名 / 自动更新**：需要证书与发布通道。
-3. **`pricing_overrides.json` 编辑器**：目前只读；一个表单 + 校验即可，属于低成本补齐项。
-4. **分片成本账本**：10 万条以上需要按日分片 + 增量索引。
-5. **Agent / 导入导出等交互的 E2E**：现有 Playwright 覆盖的是视觉与结构性契约。
-6. **主题市场**：当前只支持导入导出单个 JSON；可扩展为本地主题库 + 一键分享链接。
-7. **更多版面**：已留出扩展点（`lib/layout.ts` 的 `OverviewLayoutId` 与 `orbitSlots`），
+3. **分片成本账本**：10 万条以上需要按日分片 + 增量索引。
+4. **Agent 对话全流程 E2E**：桌面 E2E 已覆盖 IPC 与定价；对话需要真实模型，尚未脚本化。
+5. **导入导出 E2E**：需要文件选择器，WebView2 下自动化成本高。
+5. **主题市场**：当前只支持导入导出单个 JSON；可扩展为本地主题库 + 一键分享链接。
+6. **更多版面**：已留出扩展点（`lib/layout.ts` 的 `OverviewLayoutId` 与 `orbitSlots`），
    可加「时间轴」「看板式分区」等编排。
+
+## 五、真实环境验证（不是浏览器演示）
+
+`scripts/e2e-desktop.mjs` 连接**打包后的 exe**（WebView2 远程调试端口），跑真实 Tauri 命令：
+
+```
+ok   运行在真实 Tauri 窗口内
+ok   定价表返回 56 个型号，gpt-4o = 2.5 / 10
+ok   覆盖文件路径：%APPDATA%\com.workbench.desktop\pricing_overrides.json
+ok   save_pricing 写入覆盖并回读生效
+ok   非法单价被拒绝：bad: 单价必须是有限的非负数
+ok   非法保存是整表拒绝，之前的覆盖仍在
+ok   成本页渲染定价编辑器，并显示已覆盖状态
+ok   清空覆盖回到内置价
+```
+
+这条验证抓到两个只有真机才暴露的问题（#10、#11），浏览器演示数据永远测不出来。
+
+用法：
+
+```bash
+# 1. 构建打包版
+npm run tauri build
+# 2. 带调试端口启动
+WEBVIEW2_USER_DATA_FOLDER=%TEMP%\wb-ud ^
+  WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=21777 ^
+  src-tauri\target\release\workbench.exe
+# 3. 跑脚本
+node scripts/e2e-desktop.mjs 21777
+```

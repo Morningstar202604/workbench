@@ -16,6 +16,8 @@ import { useT } from "../../lib/i18n";
 import { Btn, Card, ConfirmDialog, SectionTitle, Spinner, StatCard } from "../../ui";
 import { formatTokens, formatUsd } from "../../lib/util";
 import { isPieWorthRendering } from "../../lib/aggregate";
+import { PricingEditor } from "./PricingEditor";
+import { usePricingSummary } from "./usePricingSummary";
 
 /**
  * 成本仪表盘：预算告警、四项统计、预算进度条、趋势/模型分解图。
@@ -24,6 +26,7 @@ import { isPieWorthRendering } from "../../lib/aggregate";
 export function CostDashboard() {
   const t = useT();
   const [confirmClear, setConfirmClear] = useState(false);
+  const pricing = usePricingSummary();
 
   const {
     theme,
@@ -256,6 +259,12 @@ export function CostDashboard() {
           >
             <Trash2 size={12} /> {t("ai.clear")}
           </Btn>
+          {/* 定价改过几个型号：改价会直接影响账单，必须在成本页可见 */}
+          {pricing.count !== null && pricing.count > 0 && (
+            <span className="text-[10.5px] text-warn">
+              {t("ai.pricingOverrides", { count: pricing.count })}
+            </span>
+          )}
         </div>
       </div>
 
@@ -334,6 +343,8 @@ export function CostDashboard() {
           void clearCosts();
         }}
       />
+
+      <PricingEditor />
     </div>
   );
 }

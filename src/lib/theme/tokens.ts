@@ -165,8 +165,6 @@ export function buildTheme(input: ThemeInput): ThemeTokens {
   const warn = input.warn ?? (input.dark ? "#f5b544" : "#a86400");
   const danger = input.danger ?? (input.dark ? "#ff6b6b" : "#c02b2b");
 
-  const toward = input.dark ? "#ffffff" : "#000000";
-  const away = input.dark ? "#000000" : "#ffffff";
   const strength = LINE_STRENGTH[input.density];
 
   const panel2 = mix(input.panel, input.bg, 0.45);
@@ -215,9 +213,6 @@ export function buildTheme(input: ThemeInput): ThemeTokens {
     "--glow": input.material === "glass" ? "1" : "0",
     // 浅色底上给卡片加白色高光只会把它洗灰，所以浅色主题一律关掉
     "--card-sheen": input.dark ? "3.5" : "0",
-    // 直角主题的「硬边框」细节（方角激活线等）
-    "--toward-light": toward,
-    "--toward-dark": away,
   };
 
   return {
