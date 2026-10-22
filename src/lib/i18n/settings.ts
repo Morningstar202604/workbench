@@ -78,6 +78,7 @@ export const dict = {
     "settings.layoutOverview": "Overview layout",
     "settings.layoutHint":
       "Shell moves the navigation; layout re-arranges the overview. They are independent of the theme, so you can keep a palette and change the frame.",
+    "settings.layoutPreview": "Layout preview",
     "settings.widgetsSection": "Overview widgets",
     "settings.widgetsHint":
       "Drag to reorder, switch off what you never look at. The order is remembered per device and does not affect other pages.",
@@ -130,6 +131,19 @@ export const dict = {
     "settings.backupFailed": "Backup failed: {err}",
     "settings.openBackup": "Open backups",
     "settings.openBackupHint": "Open the backups folder in your file manager",
+    "settings.backupSection": "Backup & restore",
+    "settings.backupDesktopOnly": "Backup and restore need the desktop app.",
+    "settings.backupLoading": "Reading backup list…",
+    "settings.backupEmpty": "No backups yet — create one with “Back up now”.",
+    "settings.restore": "Restore",
+    "settings.restoreTitle": "Restore from backup",
+    "settings.restoreBody":
+      "Replace the current data with the backup from {time} ({files})?\\n\\nA safety backup of the current state is created first, so you can undo this.",
+    "settings.restoreConfirm": "Restore",
+    "settings.restoreCancel": "Cancel",
+    "settings.restored":
+      "Restored {count} file(s). A safety backup was created at {safety}.",
+
     "settings.importJson": "Import JSON",
     "settings.dataLocation": "Data location",
     "settings.dataDesktop": "desktop",
@@ -231,6 +245,7 @@ export const dict = {
     "settings.layoutOverview": "概览版面",
     "settings.layoutHint":
       "外壳决定导航在哪，版面重排概览页。两者与主题相互独立——可以保留配色只换骨架。",
+    "settings.layoutPreview": "版面预览",
     "settings.widgetsSection": "概览组件",
     "settings.widgetsHint": "拖动排序，关掉不看的组件。顺序按设备记忆，不影响其他页面。",
     "settings.widgetsReset": "恢复默认顺序",
@@ -280,6 +295,18 @@ export const dict = {
     "settings.backupFailed": "备份失败：{err}",
     "settings.openBackup": "打开备份",
     "settings.openBackupHint": "在文件管理器中打开备份目录",
+    "settings.backupSection": "备份与恢复",
+    "settings.backupDesktopOnly": "备份与恢复需要桌面端。",
+    "settings.backupLoading": "正在读取备份列表…",
+    "settings.backupEmpty": "还没有备份——点「立即备份」创建第一个。",
+    "settings.restore": "恢复",
+    "settings.restoreTitle": "从备份恢复",
+    "settings.restoreBody":
+      "用 {time} 的备份（{files}）覆盖当前数据？\\n\\n恢复前会先自动备份当前状态，选错了还能退回。",
+    "settings.restoreConfirm": "确认恢复",
+    "settings.restoreCancel": "取消",
+    "settings.restored": "已恢复 {count} 个文件。回退点已保存在 {safety}。",
+
     "settings.importJson": "导入 JSON",
     "settings.dataLocation": "数据存储位置：",
     "settings.dataDesktop": "桌面端",
@@ -379,6 +406,7 @@ export const dict = {
     "settings.layoutOverview": "概要レイアウト",
     "settings.layoutHint":
       "シェルはナビゲーションの位置、レイアウトは概要の並びを変えます。テーマとは独立です。",
+    "settings.layoutPreview": "レイアウトプレビュー",
     "settings.widgetsSection": "概要のウィジェット",
     "settings.widgetsHint":
       "ドラッグで並べ替え、不要なものはオフに。順序は端末ごとに記憶されます。",
@@ -429,6 +457,20 @@ export const dict = {
     "settings.backupFailed": "バックアップに失敗しました: {err}",
     "settings.openBackup": "バックアップを開く",
     "settings.openBackupHint": "ファイルマネージャーでバックアップフォルダを開きます",
+    "settings.backupSection": "バックアップと復元",
+    "settings.backupDesktopOnly": "バックアップと復元はデスクトップ版のみです。",
+    "settings.backupLoading": "バックアップ一覧を読み込み中…",
+    "settings.backupEmpty":
+      "バックアップはまだありません — 「今すぐバックアップ」で作成してください。",
+    "settings.restore": "復元",
+    "settings.restoreTitle": "バックアップから復元",
+    "settings.restoreBody":
+      "{time} のバックアップ（{files}）で現在のデータを置き換えますか？\\n\\n復元前に現在の状態を自動バックアップするため、元に戻せます。",
+    "settings.restoreConfirm": "復元する",
+    "settings.restoreCancel": "キャンセル",
+    "settings.restored":
+      "{count} 件のファイルを復元しました。復元前の状態は {safety} に保存されています。",
+
     "settings.importJson": "JSON インポート",
     "settings.dataLocation": "データ保存先:",
     "settings.dataDesktop": "デスクトップ版",

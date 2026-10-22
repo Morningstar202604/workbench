@@ -50,6 +50,29 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Restore from backup.** `list_backups` / `restore_backup` join the existing
+  `backup_data`. Restore validates every file as parseable JSON *before*
+  touching anything, creates a safety backup of the current state, then replaces
+  files atomically. The backup id is a timestamp, never a path, so traversal is
+  rejected. Verified on the packaged exe: change data after a backup, restore,
+  data is back; both the source and safety backups exist afterwards.
+- Settings gained a Backup & restore panel listing every backup point with its
+  timestamp and file list, plus a layout wireframe so the five overview layouts
+  are distinguishable before clicking them.
+
+### Fixed
+
+- **Backups could overwrite themselves.** Directory names are second-precision,
+  and restore creates a safety backup in the same second as the source it is
+  restoring from — both landed in the same folder, so restore silently did
+  nothing and destroyed the backup it was reading. Now the directory is claimed
+  atomically and a collision waits for the next second.
+- Restore now validates the source backup before creating the safety backup, so
+  a corrupt backup no longer leaves a useless rollback point behind.
+- The appearance panel's two cards were stretched to equal height by the grid,
+  leaving a large blank area under the shorter one; the layout picker now shows
+  a wireframe preview and the grid uses `items-start`.
+
 - **Model pricing editor** (Cost ledger page). The built-in price table (56
   models, USD per 1M tokens) is listed with search; any model can be
   overridden, new models can be added, and each row can be reset to the

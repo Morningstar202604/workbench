@@ -120,6 +120,72 @@ async function main() {
   if (gpt4.override_input !== null) fail("清空覆盖后仍残留覆盖值");
   ok("清空覆盖回到内置价");
 
+  // ── 7. 备份 → 改数据 → 从备份恢复，验证真的回到了备份时状态 ──
+  const backupFlow = await p.evaluate(async () => {
+    const { invoke } = window.__TAURI_INTERNALS__;
+    const project = (id, name, status, created) => ({
+      id,
+      name,
+      path: "C:\\proj",
+      status,
+      tags: [],
+      pinned: false,
+      note: "",
+      created_at: created,
+    });
+    // 写入一个可识别的标记项目
+    await invoke("save_data", {
+      data: { projects: [project("e2e-marker", "E2E marker", "active", 1)], tasks: [] },
+    });
+    const made = await invoke("backup_data");
+    const points = await invoke("list_backups");
+    // 改掉数据
+    await invoke("save_data", {
+      data: {
+        projects: [project("e2e-other", "Changed after backup", "paused", 2)],
+        tasks: [],
+      },
+    });
+    const changed = await invoke("load_data");
+    const restored = await invoke("restore_backup", { id: points[0].id });
+    const after = await invoke("load_data");
+    return {
+      backupFiles: made.files,
+      pointCount: points.length,
+      changedName: changed.projects[0]?.name,
+      restoredFiles: restored.restored,
+      safety: restored.safety_backup,
+      afterName: after.projects[0]?.name,
+      afterCount: after.projects.length,
+    };
+  });
+  if (!backupFlow.backupFiles.includes("data.json")) fail("备份未包含 data.json");
+  ok(`备份包含 ${backupFlow.backupFiles.join(", ")}`);
+  if (backupFlow.pointCount < 1) fail("list_backups 没有返回备份点");
+  ok(`list_backups 返回 ${backupFlow.pointCount} 个备份点`);
+  if (backupFlow.changedName !== "Changed after backup") fail("备份后改写数据失败");
+  ok("备份后成功改写数据（用于验证恢复）");
+  if (backupFlow.afterName !== "E2E marker") {
+    fail(`恢复后数据不是备份时的状态：${backupFlow.afterName}`);
+  }
+  if (backupFlow.afterCount !== 1) fail(`恢复后项目数异常：${backupFlow.afterCount}`);
+  ok(`恢复后数据回到备份时状态（${backupFlow.afterName}）`);
+  if (!backupFlow.safety) fail("恢复时没有生成回退点");
+  ok(`恢复前自动生成回退点：${backupFlow.safety.split(/[\\/]/).pop()}`);
+
+  // ── 8. 非法 id 必须被拒绝 ──
+  const rejected = await p.evaluate(async () => {
+    const { invoke } = window.__TAURI_INTERNALS__;
+    try {
+      await invoke("restore_backup", { id: "../../../etc/passwd" });
+      return false;
+    } catch (e) {
+      return /非法/.test(String(e));
+    }
+  });
+  if (!rejected) fail("路径穿越 id 竟然被接受");
+  ok("非法备份 id 被拒绝（路径穿越防护）");
+
   await browser.close();
   console.log("\n全部通过（真实桌面应用 + 真实 IPC）");
 }

@@ -29,6 +29,8 @@ export type { ScanCostResult } from "./generated/ScanCostResult";
 export type { PricingRow } from "./generated/PricingRow";
 export type { PricingView } from "./generated/PricingView";
 export type { BackupResult } from "./generated/BackupResult";
+export type { BackupPoint } from "./generated/BackupPoint";
+export type { RestoreResult } from "./generated/RestoreResult";
 
 // ── Agent（模型 + 工具调用）──
 export type { ChatMessage } from "./generated/ChatMessage";

@@ -15,7 +15,8 @@ use workbench_lib::ai::{
     AiProcess, OpencodeSession, SessionDetail, SessionFile, SessionFilePreview,
 };
 use workbench_lib::commands::{
-    BackupResult, DiskInfo, OpencodeSessionsResult, PricingView, ScanCostResult, SystemInfo,
+    BackupPoint, BackupResult, DiskInfo, OpencodeSessionsResult, PricingView, RestoreResult,
+    ScanCostResult, SystemInfo,
 };
 use workbench_lib::cost_store::{CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow};
 use workbench_lib::data::{Project, Task, WorkbenchData};
@@ -52,6 +53,8 @@ fn export_ts_bindings() {
     PricingRow::export_all(&cfg).unwrap();
     PricingView::export_all(&cfg).unwrap();
     BackupResult::export_all(&cfg).unwrap();
+    BackupPoint::export_all(&cfg).unwrap();
+    RestoreResult::export_all(&cfg).unwrap();
     // ── Agent 契约 ──
     ToolSpec::export_all(&cfg).unwrap();
     ToolRisk::export_all(&cfg).unwrap();

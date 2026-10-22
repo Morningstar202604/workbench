@@ -590,11 +590,21 @@ pub struct ScanCostResult {
     pub model_breakdown: Vec<ModelBreakdownRow>,
 }
 
-/// 一次完整备份：把三份数据文件复制到用户选的目录，带时间戳。
-///
-/// 为什么需要：`data.json` / `cost_data.json` 目前只有「损坏时保全」这一层保护，
-/// 没有任何用户可用的显式备份。删除成本记录、清空数据都是不可逆的，
-/// 而备份只需要三次复制。
+/// 一个可恢复的备份点。
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct BackupPoint {
+    /// 备份目录名（时间戳），作为恢复时的 id
+    pub id: String,
+    /// 绝对路径，便于界面上显示
+    pub dir: String,
+    /// 该备份里包含的文件名
+    pub files: Vec<String>,
+    /// 目录修改时间（unix 秒）
+    #[ts(type = "number")]
+    pub created_at: u64,
+}
+
+/// 一次完整备份的结果。
 #[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
 pub struct BackupResult {
     pub dir: String,
@@ -603,57 +613,253 @@ pub struct BackupResult {
     pub skipped: Vec<String>,
 }
 
+/// 备份根目录（`<data dir>/backups`）。
+fn backups_root(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法定位数据目录: {e}"))?;
+    Ok(base.join("backups"))
+}
+
+/// 三份数据文件的 (名字, 真实路径) 列表。
+fn data_files(app: &AppHandle) -> Vec<(&'static str, Result<std::path::PathBuf, String>)> {
+    vec![
+        ("data.json", data::data_file_path(app)),
+        ("cost_data.json", cost_store::cost_data_path_public(app)),
+        (
+            "pricing_overrides.json",
+            cost_store::cost_data_path_overrides(app),
+        ),
+    ]
+}
+
+/// 备份目录名是否为 `YYYYMMDD-HHMMSS`。
+///
+/// 这个格式同时承担两个作用：排序键，以及「恢复时 id 不能是路径」的安全边界。
+fn is_backup_id(id: &str) -> bool {
+    id.len() == 15
+        && id.as_bytes()[8] == b'-'
+        && id
+            .chars()
+            .enumerate()
+            .all(|(i, c)| if i == 8 { c == '-' } else { c.is_ascii_digit() })
+}
+
+/// 一次完整备份：把三份数据文件复制到带时间戳的目录。
+///
+/// 为什么写到应用自己的数据目录：选目录需要额外的对话框插件（新依赖），
+/// 而备份的价值在于「一键且不丢」。固定目标也不会因为用户选到只读盘而失败。
 #[tauri::command(async)]
 pub async fn backup_data(app: AppHandle) -> Result<BackupResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        // 备份写到应用自己的数据目录下，而不是让用户选路径：
-        // 选目录需要额外的对话框插件（新依赖），而备份的价值在于「一键且不丢」。
-        // 目标目录固定 → 不需要权限对话框，也不会因为用户选到只读盘而失败。
-        let base = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("无法定位数据目录: {e}"))?;
-        let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
-        let out_dir = base.join("backups").join(&stamp);
-        std::fs::create_dir_all(&out_dir).map_err(|e| format!("创建备份目录失败: {e}"))?;
+    tauri::async_runtime::spawn_blocking(move || backup_now(&app))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}
 
-        let mut files = Vec::new();
-        let mut skipped = Vec::new();
-        let sources: Vec<(&str, Result<std::path::PathBuf, String>)> = vec![
-            ("data.json", data::data_file_path(&app)),
-            ("cost_data.json", cost_store::cost_data_path_public(&app)),
-            (
-                "pricing_overrides.json",
-                cost_store::cost_data_path_overrides(&app),
-            ),
-        ];
-        for (name, path) in sources {
-            match path {
-                Ok(src) if src.exists() => {
-                    // 先复制到临时名再改名：备份中途失败不会留下半个文件
-                    let dst = out_dir.join(name);
-                    let tmp = out_dir.join(format!("{name}.tmp"));
-                    std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
-                    std::fs::rename(&tmp, &dst).map_err(|e| format!("落盘 {name} 失败: {e}"))?;
-                    files.push(name.to_string());
-                }
-                Ok(_) => skipped.push(name.to_string()),
-                Err(e) => return Err(format!("定位 {name} 失败: {e}")),
+/// 同步版本：`restore_backup` 要在同一个阻塞线程里先备份再恢复。
+fn backup_now(app: &AppHandle) -> Result<BackupResult, String> {
+    let root = backups_root(app)?;
+    std::fs::create_dir_all(&root).map_err(|e| format!("创建备份目录失败: {e}"))?;
+
+    // 目录名精确到秒，但「恢复」会在同一秒内先做一次安全备份：
+    // 若直接 join(stamp)，两次会落进同一个目录，安全备份就把源备份覆盖了
+    // ——恢复等于什么都没做，还毁掉了可用的备份点（实测踩到）。
+    // 因此这里用 create_dir 的原子性占位，冲突就等到下一秒再试。
+    let mut stamp = String::new();
+    let mut out_dir = std::path::PathBuf::new();
+    for _ in 0..2100 {
+        let candidate = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+        let dir = root.join(&candidate);
+        match std::fs::create_dir(&dir) {
+            Ok(()) => {
+                stamp = candidate;
+                out_dir = dir;
+                break;
             }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                // 同一秒已被占用：等到下一秒（最多等 ~1 秒）
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                continue;
+            }
+            Err(e) => return Err(format!("创建备份目录失败: {e}")),
         }
-        log::info!(
-            "数据备份完成: {} 个文件 -> {}",
-            files.len(),
-            out_dir.display()
-        );
-        Ok(BackupResult {
-            dir: out_dir.to_string_lossy().to_string(),
-            files,
-            skipped,
-        })
+    }
+    if stamp.is_empty() {
+        return Err("无法创建唯一的备份目录（同一秒冲突过多）".to_string());
+    }
+
+    let mut files = Vec::new();
+    let mut skipped = Vec::new();
+    for (name, path) in data_files(app) {
+        match path {
+            Ok(src) if src.exists() => {
+                // 先复制到临时名再改名：备份中途失败不会留下半个文件
+                let dst = out_dir.join(name);
+                let tmp = out_dir.join(format!("{name}.tmp"));
+                std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
+                std::fs::rename(&tmp, &dst).map_err(|e| format!("落盘 {name} 失败: {e}"))?;
+                files.push(name.to_string());
+            }
+            Ok(_) => skipped.push(name.to_string()),
+            Err(e) => return Err(format!("定位 {name} 失败: {e}")),
+        }
+    }
+    if files.is_empty() {
+        // 一份都没备份出来：删掉空目录，否则备份列表里会出现空条目
+        let _ = std::fs::remove_dir(&out_dir);
+        return Err("没有可备份的数据文件".to_string());
+    }
+    log::info!(
+        "数据备份完成: {} 个文件 -> {}",
+        files.len(),
+        out_dir.display()
+    );
+    Ok(BackupResult {
+        dir: out_dir.to_string_lossy().to_string(),
+        files,
+        skipped,
+    })
+}
+
+/// 列出所有备份点（新的在前）。
+#[tauri::command(async)]
+pub async fn list_backups(app: AppHandle) -> Result<Vec<BackupPoint>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = backups_root(&app)?;
+        let mut out = Vec::new();
+        let entries = match std::fs::read_dir(&root) {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(out),
+            Err(e) => return Err(format!("读取备份目录失败: {e}")),
+        };
+        for entry in entries.flatten() {
+            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let id = entry.file_name().to_string_lossy().to_string();
+            // 只认我们自己的命名格式，避免把用户手放的目录当备份
+            if !is_backup_id(&id) {
+                continue;
+            }
+            let mut files = Vec::new();
+            if let Ok(inner) = std::fs::read_dir(entry.path()) {
+                for f in inner.flatten() {
+                    let n = f.file_name().to_string_lossy().to_string();
+                    if n.ends_with(".json") {
+                        files.push(n);
+                    }
+                }
+            }
+            if files.is_empty() {
+                continue;
+            }
+            files.sort();
+            let created_at = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            out.push(BackupPoint {
+                dir: entry.path().to_string_lossy().to_string(),
+                id,
+                files,
+                created_at,
+            });
+        }
+        out.sort_by(|a, b| b.id.cmp(&a.id));
+        Ok(out)
     })
     .await
     .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+/// 恢复结果。
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct RestoreResult {
+    /// 恢复前自动生成的备份目录（选错备份点时的回退位置）
+    pub safety_backup: String,
+    pub restored: Vec<String>,
+    /// 备份里没有、因此保持原样的文件
+    pub untouched: Vec<String>,
+}
+
+/// 从指定备份恢复。
+///
+/// 安全设计（缺一不可）：
+/// 1. **恢复前先自动备份当前状态**——恢复是破坏性操作，
+///    用户选错备份点时还能退回。
+/// 2. **id 只允许时间戳格式**，不接受路径，杜绝 `../../` 穿越。
+/// 3. **先校验每份 JSON 可解析再落盘**：把损坏的备份写回去等于毁掉好数据。
+#[tauri::command(async)]
+pub async fn restore_backup(app: AppHandle, id: String) -> Result<RestoreResult, String> {
+    tauri::async_runtime::spawn_blocking(move || restore_now(&app, &id))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
+    if !is_backup_id(id) {
+        return Err("非法的备份 id".to_string());
+    }
+    let src_dir = backups_root(app)?.join(id);
+    if !src_dir.is_dir() {
+        return Err(format!("备份不存在: {id}"));
+    }
+
+    // 1) 先校验源备份：合法 JSON 且顶层是对象。
+    //    顺序很重要——若先做安全备份再发现源备份坏了，会留下一个没用的
+    //    备份点，而用户以为恢复已经发生。这里只校验不落盘。
+    //    不反序列化到具体结构：旧版本备份可能缺新字段，硬反序列化会
+    //    拒绝掉本来可用的备份。
+    let mut plan: Vec<(&'static str, std::path::PathBuf, std::path::PathBuf)> = Vec::new();
+    let mut untouched = Vec::new();
+    for (name, dest) in data_files(app) {
+        let dest = dest?;
+        let src = src_dir.join(name);
+        if !src.exists() {
+            untouched.push(name.to_string());
+            continue;
+        }
+        let text =
+            std::fs::read_to_string(&src).map_err(|e| format!("读取备份 {name} 失败: {e}"))?;
+        let value: serde_json::Value =
+            serde_json::from_str(&text).map_err(|e| format!("备份 {name} 不是合法 JSON: {e}"))?;
+        if !value.is_object() {
+            return Err(format!("备份 {name} 顶层不是对象，拒绝恢复"));
+        }
+        plan.push((name, src, dest));
+    }
+    if plan.is_empty() {
+        return Err("该备份里没有可恢复的文件".to_string());
+    }
+
+    // 2) 校验通过后才备份当前状态（回退点）
+    let safety = backup_now(app)?;
+
+    // 3) 逐个原子替换（临时文件 + rename，避免写一半）
+    let mut restored = Vec::new();
+    for (name, src, dest) in plan {
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {e}"))?;
+        }
+        let tmp = dest.with_extension("restore-tmp");
+        std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
+        std::fs::rename(&tmp, &dest).map_err(|e| format!("替换 {name} 失败: {e}"))?;
+        restored.push(name.to_string());
+    }
+    log::info!(
+        "已从备份 {id} 恢复 {} 个文件（回退点 {}）",
+        restored.len(),
+        safety.dir
+    );
+    Ok(RestoreResult {
+        safety_backup: safety.dir,
+        restored,
+        untouched,
+    })
 }
 
 /// 打开备份目录（只允许应用数据目录下的 `backups`）。
@@ -763,4 +969,22 @@ pub fn build_pricing_table(app: &AppHandle) -> PricingTable {
         Err(e) => log::warn!("pricing_overrides.json 不可用，忽略覆盖价: {e}"),
     }
     table
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 备份 id 是「恢复」的唯一定位符，必须能拒绝路径穿越。
+    #[test]
+    fn backup_id_rejects_path_traversal() {
+        assert!(is_backup_id("20261022-114208"));
+        assert!(!is_backup_id("../../../etc/passwd"));
+        assert!(!is_backup_id(".."));
+        assert!(!is_backup_id("2026102-114208"), "长度不对必须拒绝");
+        assert!(!is_backup_id("20261022_114208"), "分隔符必须是 -");
+        assert!(!is_backup_id("20261022-11420a"), "必须全数字");
+        assert!(!is_backup_id(r"C:\Windows"), "盘符路径必须拒绝");
+        assert!(!is_backup_id(""));
+    }
 }

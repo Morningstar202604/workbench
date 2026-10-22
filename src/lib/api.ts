@@ -10,8 +10,10 @@ import type {
   ModelBreakdownRow,
   OpencodeSessionsResult,
   PortEntry,
+  BackupPoint,
   BackupResult,
   PricingView,
+  RestoreResult,
   ProcInfo,
   ScanCostResult,
   SessionDetail,
@@ -199,6 +201,14 @@ export async function backupData(): Promise<BackupResult> {
 
 export async function openBackupDir(): Promise<string> {
   return invoke<string>("open_backup_dir");
+}
+
+export async function listBackups(): Promise<BackupPoint[]> {
+  return invoke<BackupPoint[]>("list_backups");
+}
+
+export async function restoreBackup(id: string): Promise<RestoreResult> {
+  return invoke<RestoreResult>("restore_backup", { id });
 }
 
 export async function getPricing(): Promise<PricingView> {

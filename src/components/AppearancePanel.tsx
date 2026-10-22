@@ -316,7 +316,8 @@ export function AppearancePanel() {
         />
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      {/* items-start：两张卡各自按内容定高，否则栅格会把矮的那张拉伸到与高的一致 */}
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
         <Card>
           <SectionTitle>{t("settings.layoutSection")}</SectionTitle>
 
@@ -368,6 +369,15 @@ export function AppearancePanel() {
           <p className="text-[11px] leading-relaxed text-dim">
             {t("settings.layoutHint")}
           </p>
+
+          {/* 版面线框图：选之前就能看出五种编排放得不一样。
+              没有它时左卡比右卡矮一截，栅格里就是一片纯空白。 */}
+          <div className="mt-3 border-t border-line/60 pt-3">
+            <div className="mb-2 text-[10px] font-medium tracking-[0.06em] text-faint">
+              {t("settings.layoutPreview")}
+            </div>
+            <LayoutWireframe id={layout} />
+          </div>
         </Card>
 
         <Card>
@@ -459,6 +469,80 @@ export function AppearancePanel() {
 }
 
 // ── 主题编辑器 ─────────────────────────────────────────────
+
+/**
+ * 版面线框图：用几块灰阶矩形表达「组件怎么摆」。
+ *
+ * 为什么值得画：五种版面在文字描述上都是「重排概览」，用户点之前
+ * 分不出差别；而线框能在一眼之内说明 bento 是大小格、ledger 是通栏、
+ * orbit 是绕环、dense 是两列、zen 是一条主图。
+ */
+function LayoutWireframe({ id }: { id: string }) {
+  const rows: Record<string, React.ReactNode> = {
+    bento: (
+      <div className="flex h-full flex-col gap-1">
+        <div className="flex gap-1">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-3 flex-1 rounded-[2px] bg-current opacity-70" />
+          ))}
+        </div>
+        <div className="flex flex-1 gap-1">
+          <div className="w-2/3 rounded-[2px] bg-current opacity-45" />
+          <div className="flex-1 rounded-[2px] bg-current opacity-55" />
+        </div>
+        <div className="flex h-3 gap-1">
+          <div className="flex-1 rounded-[2px] bg-current opacity-35" />
+          <div className="flex-1 rounded-[2px] bg-current opacity-35" />
+        </div>
+      </div>
+    ),
+    ledger: (
+      <div className="flex h-full flex-col gap-1">
+        {[70, 55, 62, 48].map((w, i) => (
+          <div
+            key={i}
+            className="h-3 rounded-[2px] bg-current opacity-50"
+            style={{ width: `${w}%` }}
+          />
+        ))}
+      </div>
+    ),
+    orbit: (
+      <div className="relative h-full">
+        <div className="absolute left-1/2 top-1/2 h-3/4 w-3/4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-current opacity-30" />
+        <div className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current opacity-75" />
+        {[0, 60, 120, 180, 240, 300].map((deg) => (
+          <div
+            key={deg}
+            className="absolute h-2.5 w-2.5 rounded-[2px] bg-current opacity-50"
+            style={{
+              left: `calc(50% + ${Math.cos((deg * Math.PI) / 180) * 38}% - 5px)`,
+              top: `calc(50% + ${Math.sin((deg * Math.PI) / 180) * 34}% - 5px)`,
+            }}
+          />
+        ))}
+      </div>
+    ),
+    dense: (
+      <div className="grid h-full grid-cols-2 gap-1">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="rounded-[2px] bg-current opacity-45" />
+        ))}
+      </div>
+    ),
+    zen: (
+      <div className="flex h-full flex-col gap-1 items-center justify-center">
+        <div className="h-3 w-2/3 rounded-[2px] bg-current opacity-70" />
+        <div className="h-8 w-full rounded-[2px] bg-current opacity-40" />
+      </div>
+    ),
+  };
+  return (
+    <div className="h-20 rounded-[var(--radius-btn)] border border-line/70 bg-panel2/40 p-2 text-text">
+      {rows[id] ?? rows.bento}
+    </div>
+  );
+}
 
 /**
  * 在给定底色上取一个「尽量接近 text 但至少满足 minRatio」的颜色。

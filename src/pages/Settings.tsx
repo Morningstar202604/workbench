@@ -1,19 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Archive,
-  DollarSign,
-  Download,
-  Eraser,
-  FolderOpen,
-  RefreshCw,
-  Upload,
-} from "lucide-react";
+import { DollarSign, Download, Eraser, RefreshCw, Upload } from "lucide-react";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { backupData, isTauri, openBackupDir } from "../lib/api";
+import { isTauri } from "../lib/api";
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
 import { Badge, Btn, Card, Field, SectionTitle, inputCls } from "../ui";
 import { AppearancePanel } from "../components/AppearancePanel";
+import { BackupPanel } from "../components/BackupPanel";
 import { formatUsd } from "../lib/util";
 import type { CostSettings, WorkbenchData } from "../types";
 
@@ -171,261 +164,239 @@ export default function Settings() {
 
       <AppearancePanel />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {/* ── 语言 ── */}
-        <Card>
-          <SectionTitle>{t("settings.language")}</SectionTitle>
-          <div className="flex flex-wrap gap-2">
-            {LANG_OPTIONS.map((o) => (
-              <Btn
-                key={o.code}
-                variant={lang === o.code ? "primary" : "ghost"}
-                onClick={() => setLang(o.code)}
-              >
-                {o.label}
-              </Btn>
-            ))}
-          </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-dim">
-            {t("settings.languageHint")}
-          </p>
-        </Card>
-
-        {/* ── 刷新 ── */}
-        <Card className="">
-          <SectionTitle>{t("settings.refresh")}</SectionTitle>
-          <Field label={t("settings.refreshLabel")}>
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+        {/* 左列：语言、成本计量 */}
+        <div className="flex min-w-0 flex-col gap-4">
+          {/* ── 语言 ── */}
+          <Card>
+            <SectionTitle>{t("settings.language")}</SectionTitle>
             <div className="flex flex-wrap gap-2">
-              {REFRESH_OPTIONS.map((o) => (
+              {LANG_OPTIONS.map((o) => (
                 <Btn
-                  key={o.ms}
-                  variant={refreshMs === o.ms ? "primary" : "ghost"}
-                  onClick={() => {
-                    setRefreshMs(o.ms);
-                    refreshRuntime();
-                  }}
+                  key={o.code}
+                  variant={lang === o.code ? "primary" : "ghost"}
+                  onClick={() => setLang(o.code)}
                 >
-                  {t(o.key)}
+                  {o.label}
                 </Btn>
               ))}
             </div>
-          </Field>
-          <p className="text-[11px] leading-relaxed text-dim">
-            {t("settings.refreshHint")}
-          </p>
-        </Card>
+            <p className="mt-2 text-[11px] leading-relaxed text-dim">
+              {t("settings.languageHint")}
+            </p>
+          </Card>
 
-        {/* ── ⚡ 成本计量（新增主 section）── */}
-        <Card className="">
-          <SectionTitle
-            extra={costDirty && <Badge tone="warn">{t("settings.unsaved")}</Badge>}
-          >
-            <span className="flex items-center gap-1.5">
-              <DollarSign size={14} />
-              {t("settings.cost")}
-            </span>
-          </SectionTitle>
+          {/* ── ⚡ 成本计量（新增主 section）── */}
+          <Card className="">
+            <SectionTitle
+              extra={costDirty && <Badge tone="warn">{t("settings.unsaved")}</Badge>}
+            >
+              <span className="flex items-center gap-1.5">
+                <DollarSign size={14} />
+                {t("settings.cost")}
+              </span>
+            </SectionTitle>
 
-          <div className="flex flex-col gap-4">
-            {/* 预算设置 */}
-            <div>
-              <div className="mb-2 text-xs font-medium text-dim">
-                {t("settings.budgetLabel")}
+            <div className="flex flex-col gap-4">
+              {/* 预算设置 */}
+              <div>
+                <div className="mb-2 text-xs font-medium text-dim">
+                  {t("settings.budgetLabel")}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] text-dim">
+                      {t("settings.dailyBudget")}
+                    </span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      className={inputCls}
+                      value={costDraft.daily_budget}
+                      onChange={(e) =>
+                        updateCost({
+                          daily_budget: Math.max(0, Number(e.target.value) || 0),
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] text-dim">
+                      {t("settings.monthlyBudget")}
+                    </span>
+                    <input
+                      type="number"
+                      step="5"
+                      min="0"
+                      className={inputCls}
+                      value={costDraft.monthly_budget}
+                      onChange={(e) =>
+                        updateCost({
+                          monthly_budget: Math.max(0, Number(e.target.value) || 0),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="mb-1 block text-[11px] text-dim">
-                    {t("settings.dailyBudget")}
-                  </span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    className={inputCls}
-                    value={costDraft.daily_budget}
-                    onChange={(e) =>
-                      updateCost({
-                        daily_budget: Math.max(0, Number(e.target.value) || 0),
-                      })
-                    }
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-[11px] text-dim">
-                    {t("settings.monthlyBudget")}
-                  </span>
-                  <input
-                    type="number"
-                    step="5"
-                    min="0"
-                    className={inputCls}
-                    value={costDraft.monthly_budget}
-                    onChange={(e) =>
-                      updateCost({
-                        monthly_budget: Math.max(0, Number(e.target.value) || 0),
-                      })
-                    }
-                  />
-                </label>
+
+              {/* 告警阈值 */}
+              <Field label={t("settings.alertLabel")}>
+                <div className="flex flex-wrap gap-2">
+                  {ALERT_OPTIONS.map((o) => (
+                    <Btn
+                      key={o.value}
+                      variant={
+                        costDraft.alert_threshold_pct === o.value ? "primary" : "ghost"
+                      }
+                      onClick={() => updateCost({ alert_threshold_pct: o.value })}
+                    >
+                      {t(o.key)}
+                    </Btn>
+                  ))}
+                </div>
+              </Field>
+
+              {/* 计价偏好 */}
+              <Field label={t("settings.pricingLabel")}>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={costDraft.include_estimated}
+                      onChange={(e) =>
+                        updateCost({ include_estimated: e.target.checked })
+                      }
+                      className="rounded border-line accent-accent"
+                    />
+                    <span>{t("settings.includeEstimated")}</span>
+                  </label>
+                </div>
+              </Field>
+
+              {/* 当前状态展示 */}
+              {costOverview && (
+                <div className="rounded-[var(--radius-btn)] border border-line/80 bg-panel2/50 p-3">
+                  <div className="mb-2 text-xs font-medium text-dim">
+                    {t("settings.statusTitle")}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+                    <div>
+                      <div className="text-dim">{t("settings.recordCount")}</div>
+                      <div className="font-mono font-medium">
+                        {costOverview.record_count}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-dim">{t("settings.measuredEstimated")}</div>
+                      <div className="font-mono font-medium">
+                        {costOverview.measured_count} / {costOverview.estimated_count}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-dim">{t("settings.totalCost")}</div>
+                      <div className="font-mono font-medium">
+                        {formatUsd(costOverview.total_cost)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 操作按钮 */}
+              <div className="flex gap-2">
+                <Btn variant="primary" onClick={saveCostConfig} disabled={!costDirty}>
+                  <RefreshCw size={14} /> {t("settings.applyCost")}
+                </Btn>
+                <Btn
+                  onClick={() =>
+                    updateCost({
+                      daily_budget: 5,
+                      monthly_budget: 50,
+                      alert_threshold_pct: 80,
+                      include_estimated: true,
+                    })
+                  }
+                >
+                  <Eraser size={14} /> {t("settings.restoreDefaults")}
+                </Btn>
               </div>
             </div>
 
-            {/* 告警阈值 */}
-            <Field label={t("settings.alertLabel")}>
+            <p className="mt-3 text-[11px] leading-relaxed text-dim">
+              {t("settings.costNote")}
+            </p>
+          </Card>
+        </div>
+
+        {/* 右列：运行时刷新、数据与备份 */}
+        <div className="flex min-w-0 flex-col gap-4">
+          {/* ── 刷新 ── */}
+          <Card className="">
+            <SectionTitle>{t("settings.refresh")}</SectionTitle>
+            <Field label={t("settings.refreshLabel")}>
               <div className="flex flex-wrap gap-2">
-                {ALERT_OPTIONS.map((o) => (
+                {REFRESH_OPTIONS.map((o) => (
                   <Btn
-                    key={o.value}
-                    variant={
-                      costDraft.alert_threshold_pct === o.value ? "primary" : "ghost"
-                    }
-                    onClick={() => updateCost({ alert_threshold_pct: o.value })}
+                    key={o.ms}
+                    variant={refreshMs === o.ms ? "primary" : "ghost"}
+                    onClick={() => {
+                      setRefreshMs(o.ms);
+                      refreshRuntime();
+                    }}
                   >
                     {t(o.key)}
                   </Btn>
                 ))}
               </div>
             </Field>
-
-            {/* 计价偏好 */}
-            <Field label={t("settings.pricingLabel")}>
-              <div className="flex flex-col gap-2">
-                <label className="flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={costDraft.include_estimated}
-                    onChange={(e) => updateCost({ include_estimated: e.target.checked })}
-                    className="rounded border-line accent-accent"
-                  />
-                  <span>{t("settings.includeEstimated")}</span>
-                </label>
+            <p className="text-[11px] leading-relaxed text-dim">
+              {t("settings.refreshHint")}
+            </p>
+          </Card>
+          {/* ── 数据：导出/导入 + 备份恢复，同一列纵向排列 ── */}
+          <div className="flex flex-col gap-4">
+            <Card>
+              <SectionTitle>{t("settings.data")}</SectionTitle>
+              <div className="flex flex-wrap gap-2">
+                <Btn onClick={exportJson}>
+                  <Download size={14} /> {t("settings.exportJson")}
+                </Btn>
+                <Btn onClick={() => fileRef.current?.click()}>
+                  <Upload size={14} /> {t("settings.importJson")}
+                </Btn>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) importJson(f);
+                    e.target.value = "";
+                  }}
+                />
               </div>
-            </Field>
-
-            {/* 当前状态展示 */}
-            {costOverview && (
-              <div className="rounded-[var(--radius-btn)] border border-line/80 bg-panel2/50 p-3">
-                <div className="mb-2 text-xs font-medium text-dim">
-                  {t("settings.statusTitle")}
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
-                  <div>
-                    <div className="text-dim">{t("settings.recordCount")}</div>
-                    <div className="font-mono font-medium">
-                      {costOverview.record_count}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-dim">{t("settings.measuredEstimated")}</div>
-                    <div className="font-mono font-medium">
-                      {costOverview.measured_count} / {costOverview.estimated_count}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-dim">{t("settings.totalCost")}</div>
-                    <div className="font-mono font-medium">
-                      {formatUsd(costOverview.total_cost)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 操作按钮 */}
-            <div className="flex gap-2">
-              <Btn variant="primary" onClick={saveCostConfig} disabled={!costDirty}>
-                <RefreshCw size={14} /> {t("settings.applyCost")}
-              </Btn>
-              <Btn
-                onClick={() =>
-                  updateCost({
-                    daily_budget: 5,
-                    monthly_budget: 50,
-                    alert_threshold_pct: 80,
-                    include_estimated: true,
-                  })
-                }
-              >
-                <Eraser size={14} /> {t("settings.restoreDefaults")}
-              </Btn>
-            </div>
-          </div>
-
-          <p className="mt-3 text-[11px] leading-relaxed text-dim">
-            {t("settings.costNote")}
-          </p>
-        </Card>
-
-        {/* ── 数据备份（右列，与刷新/外观同排） ── */}
-        <Card className="xl:row-span-2">
-          <SectionTitle>{t("settings.data")}</SectionTitle>
-          <div className="flex flex-wrap gap-2">
-            <Btn onClick={exportJson}>
-              <Download size={14} /> {t("settings.exportJson")}
-            </Btn>
-            <Btn
-              onClick={async () => {
-                try {
-                  const r = await backupData();
-                  setToast(
-                    t("settings.backupDone", {
-                      files: r.files.length,
-                      dir: r.dir,
-                    })
-                  );
-                } catch (e) {
-                  setToast(t("settings.backupFailed", { err: String(e) }));
-                }
-              }}
-              disabled={!isTauri()}
-              title={t("settings.backupHint")}
-            >
-              <Archive size={14} /> {t("settings.backup")}
-            </Btn>
-            <Btn
-              onClick={async () => {
-                try {
-                  await openBackupDir();
-                } catch (e) {
-                  setToast(t("settings.backupFailed", { err: String(e) }));
-                }
-              }}
-              disabled={!isTauri()}
-              title={t("settings.openBackupHint")}
-            >
-              <FolderOpen size={14} /> {t("settings.openBackup")}
-            </Btn>
-            <Btn onClick={() => fileRef.current?.click()}>
-              <Upload size={14} /> {t("settings.importJson")}
-            </Btn>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) importJson(f);
-                e.target.value = "";
-              }}
-            />
-          </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-dim">
-            {t("settings.dataLocation")}:
-            {isTauri() ? (
-              <>
-                {" "}
-                {t("settings.dataDesktop")}{" "}
-                <span className="font-mono">
-                  %APPDATA%\com.workbench.desktop\data.json
-                </span>
-                {t("settings.dataLocalNote")}
-              </>
-            ) : (
-              <> {t("settings.dataBrowserNote")}</>
-            )}
-          </p>
-        </Card>
+              <p className="mt-2 text-[11px] leading-relaxed text-dim">
+                {t("settings.dataLocation")}:
+                {isTauri() ? (
+                  <>
+                    {" "}
+                    {t("settings.dataDesktop")}{" "}
+                    <span className="font-mono">
+                      %APPDATA%\com.workbench.desktop\data.json
+                    </span>
+                    {t("settings.dataLocalNote")}
+                  </>
+                ) : (
+                  <> {t("settings.dataBrowserNote")}</>
+                )}
+              </p>
+            </Card>
+            <BackupPanel />
+          </div>{" "}
+        </div>
       </div>
 
       {/* ── 关于 ── */}
