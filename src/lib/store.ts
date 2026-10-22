@@ -119,6 +119,9 @@ interface RuntimeState {
   disks: DiskInfo[];
   gitBranches: Record<string, string>;
   loading: boolean;
+  /** 最近一次运行时采集的失败原因；成功时清空。
+   *  与 toast 并存：toast 会消失，页面内联错误态需要持久状态。 */
+  runtimeError: string;
   lastRefreshAt: number;
   history: { cpu: number; memGb: number; t: number }[];
   // ── 成本计量 ──
@@ -242,6 +245,7 @@ export const useStore = create<Store>()(
       disks: [],
       gitBranches: {},
       loading: false,
+      runtimeError: "",
       lastRefreshAt: 0,
       history: [],
       costOverview: null,
@@ -431,10 +435,15 @@ export const useStore = create<Store>()(
               disks: dk,
               history,
               loading: false,
+              runtimeError: "",
               lastRefreshAt: Date.now(),
             });
           } catch (e) {
-            set({ loading: false, toast: t("store.refreshFailed", { err: String(e) }) });
+            set({
+              loading: false,
+              runtimeError: String(e),
+              toast: t("store.refreshFailed", { err: String(e) }),
+            });
           }
         };
 

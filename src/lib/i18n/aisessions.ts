@@ -2,6 +2,9 @@
 // 由页面转换时填充；插值用 {name} 占位。
 export const dict = {
   en: {
+    "ai.costOverviewTitle": "Cost overview",
+    "ai.scanFailedInline": "Cost scan failed: {err}",
+    "ai.emptyAction": "Scan costs now",
     "ai.budgetExceeded":
       "Budget alert: today {daily}% / this month {monthly}% exceeded the limit",
     "ai.budgetNearLimit":
@@ -78,6 +81,9 @@ export const dict = {
     "ai.fileLabel": "File: {path}",
   },
   zh: {
+    "ai.costOverviewTitle": "成本总览",
+    "ai.scanFailedInline": "成本扫描失败：{err}",
+    "ai.emptyAction": "立即扫描成本",
     "ai.budgetExceeded": "预算告警：今日 {daily}% / 本月 {monthly}% 已超限额",
     "ai.budgetNearLimit":
       "预算提醒：今日 {daily}% / 本月 {monthly}% 接近 {threshold}% 阈值",
@@ -150,6 +156,9 @@ export const dict = {
     "ai.fileLabel": "文件: {path}",
   },
   ja: {
+    "ai.costOverviewTitle": "コスト概要",
+    "ai.scanFailedInline": "コストスキャンに失敗しました: {err}",
+    "ai.emptyAction": "今すぐコストをスキャン",
     "ai.budgetExceeded":
       "予算アラート：今日 {daily}% / 今月 {monthly}% が上限を超えました",
     "ai.budgetNearLimit":

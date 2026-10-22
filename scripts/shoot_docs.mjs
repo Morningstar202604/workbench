@@ -34,10 +34,12 @@ const PAGES = [
   { key: "processes", file: "02-processes.png" },
   { key: "servers", file: "03-servers.png" },
   { key: "ai", file: "04-ai-sessions.png" },
-  { key: "projects", file: "05-projects.png" },
-  { key: "tasks", file: "06-tasks.png" },
-  { key: "settings", file: "07-settings.png" },
-  { key: "logs", file: "08-logs.png" },
+  { key: "costs", file: "05-costs.png" },
+  { key: "agent", file: "06-agent.png" },
+  { key: "projects", file: "07-projects.png" },
+  { key: "tasks", file: "08-tasks.png" },
+  { key: "settings", file: "09-settings.png" },
+  { key: "logs", file: "10-logs.png" },
 ];
 
 function httpJson(pathname) {

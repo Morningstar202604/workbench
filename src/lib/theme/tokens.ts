@@ -177,26 +177,42 @@ export function ensureTextContrast(
   //
   // 只朝一个方向走是错的：浅色底上的浅灰文字朝白色混永远不达标
   // （白与白 1:1），一路混到纯白，等于把用户的文字色洗没了。
+  const best = firstReaching(color, worst, minRatio, maxMix);
+  if (best) return best;
+
+  // 两个方向都不达标（表面之间本身跨度极大）：返回对比度最高的那一档，
+  // 而不是随便返回一个 —— 至少保证可读性最大化。
+  return highestContrast(color, worst);
+}
+
+/** 朝白/朝黑逐档混合，返回第一个达标的颜色（取混合量最小的方向）。 */
+function firstReaching(
+  color: string,
+  ratioOf: (c: string) => number,
+  minRatio: number,
+  maxMix: number
+): string | null {
   let best: { color: string; steps: number } | null = null;
   for (const target of ["#ffffff", "#000000"]) {
     for (let i = 1; i <= Math.round(maxMix * 100); i++) {
       const c = mix(color, target, i / 100);
-      if (worst(c) >= minRatio) {
+      if (ratioOf(c) >= minRatio) {
         if (!best || i < best.steps) best = { color: c, steps: i };
         break;
       }
     }
   }
-  if (best) return best.color;
+  return best ? best.color : null;
+}
 
-  // 两个方向都不达标（表面之间本身跨度极大）：返回对比度最高的那一档，
-  // 而不是随便返回一个 —— 至少保证可读性最大化。
+/** 无解时取对比度最高的一档（用于极端自定义配色）。 */
+function highestContrast(color: string, ratioOf: (c: string) => number): string {
   let fallback = color;
-  let bestRatio = worst(color);
+  let bestRatio = ratioOf(color);
   for (let i = 1; i <= 100; i++) {
     for (const target of ["#ffffff", "#000000"]) {
       const c = mix(color, target, i / 100);
-      const r = worst(c);
+      const r = ratioOf(c);
       if (r > bestRatio) {
         bestRatio = r;
         fallback = c;
@@ -270,91 +286,30 @@ const FONTS: Record<FontChoice, { sans: string; display: string; mono: string }>
  * 且推导是单调的——改 accent 不会破坏对比度层级。
  */
 export function buildTheme(input: ThemeInput): ThemeTokens {
-  const ok = input.ok ?? (input.dark ? "#3ecf8e" : "#0b7a54");
-  const warn = input.warn ?? (input.dark ? "#f5b544" : "#a86400");
-  const danger = input.danger ?? (input.dark ? "#ff6b6b" : "#c02b2b");
-
-  const strength = LINE_STRENGTH[input.density];
-
+  const semantic = resolveSemantic(input);
   // dim / faint 都由「对比度下限」求解，而不是写死混合比例：
   // 同一比例在深色底和浅色底上的实际对比度差很多（浅色主题上会掉到 4.3:1）。
-  // 目标：dim ≥ 6.0:1、faint ≥ 4.7:1（高于 WCAG AA 的 4.5，留一点抗渲染误差余量），
-  // 两者都要同时满足「页面底色」与「面板底色」两个表面。
+  // 目标：dim ≥ 6.0:1、faint ≥ 4.7:1（高于 WCAG AA 的 4.5，留一点抗渲染误差余量）。
   // 文字可能落在页面底、面板底、次级面板底（表格斑马纹）三种表面上。
-  const panel2Preview = mix(input.panel, input.bg, 0.45);
-  const surfaces = [input.bg, input.panel, panel2Preview];
-  // 用户可能把文字色选得和底色几乎一样（浅灰配白、深灰配黑）。
-  // 正文是唯一不允许降级的元素：先用它自己过一遍对比度门槛，
-  // 后续 dim/faint 都以这个「可读的正文色」为基准往外淡。
-  const text = ensureTextContrast(
-    input.text,
-    surfaces,
-    input.dark ? "#ffffff" : "#000000",
-    4.6
-  );
-  const dim = mixUntilContrast(text, input.bg, surfaces, 6.0).color;
-  const faint = mixUntilContrast(text, input.bg, surfaces, 4.7).color;
+  const { text, dim, faint, accent, okSafe, warnSafe, dangerSafe } = semantic;
   const panel2 = mix(input.panel, input.bg, 0.45);
-  const line = mix(text, input.bg, 1 - strength);
-  // 强调色同时承担「填充」与「小字」两种角色，必须两者都成立：
-  // 填充看的是它与背景的辨识度，小字看的是 4.5:1。这里只调明度、不动色相。
-  const toward = input.dark ? "#ffffff" : "#000000";
-  // 4.6 而不是 4.5：给不同渲染后端（DirectWrite / Skia）留一点抗锯齿误差。
-  const accent = ensureTextContrast(input.accent, surfaces, toward, 4.6);
-  // 语义色同样会当小字用（徽章、状态文字），一起过同一道门槛。
-  const okSafe = ensureTextContrast(ok, surfaces, toward, 4.6);
-  const warnSafe = ensureTextContrast(warn, surfaces, toward, 4.6);
-  const dangerSafe = ensureTextContrast(danger, surfaces, toward, 4.6);
+  const line = mix(text, input.bg, 1 - LINE_STRENGTH[input.density]);
   const accentsoft = mix(input.panel, accent, input.dark ? 0.18 : 0.12);
-  // 主按钮的文字色：必须在 accent 填充上可读，且与主题深浅无关。
-  // 写死 #04120f 在浅色主题（accent 变深）上会变成深字压深底。
-  const onAccent =
-    ensureTextContrast("#ffffff", [accent], accent, 4.5) === "#ffffff"
-      ? "#ffffff"
-      : ensureTextContrast("#000000", [accent], accent, 4.5);
-
   const fonts = FONTS[input.font];
-  const radiusCard = `${input.radiusCard}px`;
-  const radiusBtn = `${input.radiusBtn}px`;
-  const shadow =
-    input.material === "flat"
-      ? "none"
-      : input.dark
-        ? `0 1px 2px ${withAlpha("#000000", 0.5)}, 0 18px 40px -24px ${withAlpha("#000000", 0.9)}`
-        : `0 1px 2px ${withAlpha("#101828", 0.06)}, 0 14px 30px -22px ${withAlpha("#101828", 0.28)}`;
 
-  const vars: Record<string, string> = {
-    "--color-bg": input.bg,
-    "--color-panel": input.panel,
-    "--color-panel2": panel2,
-    "--color-line": line,
-    "--color-text": text,
-    "--color-dim": dim,
-    "--color-faint": faint,
-    "--color-accent": accent,
-    "--color-on-accent": onAccent,
-    "--color-accentsoft": accentsoft,
-    "--color-ok": okSafe,
-    "--color-warn": warnSafe,
-    "--color-danger": dangerSafe,
-    "--font-sans": fonts.sans,
-    "--font-display": fonts.display,
-    "--font-mono": fonts.mono,
-    "--radius-card": radiusCard,
-    "--radius-btn": radiusBtn,
-    "--shadow-card": shadow,
-    "--space-card": SPACE[input.density],
-    "--line-height-body": LINE_HEIGHT[input.density],
-    "--tracking-heading": input.font === "serif" ? "0.005em" : "-0.02em",
-    "--hairline": withAlpha(input.text, input.dark ? 0.08 : 0.1),
-    "--hairline-strong": withAlpha(input.text, input.dark ? 0.14 : 0.18),
-    "--panel-opacity": String(Math.max(0.2, Math.min(1, input.panelOpacity))),
-    "--panel-blur": input.material === "glass" ? "20px" : "0px",
-    "--grid-strength": String(Math.max(0, Math.min(1, input.grid))),
-    "--glow": input.material === "glass" ? "1" : "0",
-    // 浅色底上给卡片加白色高光只会把它洗灰，所以浅色主题一律关掉
-    "--card-sheen": input.dark ? "3.5" : "0",
-  };
+  const vars = themeVars(input, {
+    panel2,
+    line,
+    text,
+    dim,
+    faint,
+    accent,
+    accentsoft,
+    okSafe,
+    warnSafe,
+    dangerSafe,
+    fonts,
+  });
 
   return {
     id: input.id,
@@ -375,4 +330,94 @@ export function buildTheme(input: ThemeInput): ThemeTokens {
       series: [accent, "#a78bfa", okSafe, warnSafe, dangerSafe, "#60a5fa", "#e879f9"],
     },
   };
+}
+
+/**
+ * 语义色 + 正文/辅助文字的对比度求解。
+ *
+ * 正文是唯一不允许降级的元素：先用它自己过一遍门槛，dim/faint 再以这个
+ * 「可读的正文色」为基准往外淡。强调色与语义色同时承担填充与小字两种角色，
+ * 一起过同一道 4.6 的门槛（4.5 + 抗锯齿余量）。
+ */
+function resolveSemantic(input: ThemeInput) {
+  const ok = input.ok ?? (input.dark ? "#3ecf8e" : "#0b7a54");
+  const warn = input.warn ?? (input.dark ? "#f5b544" : "#a86400");
+  const danger = input.danger ?? (input.dark ? "#ff6b6b" : "#c02b2b");
+  const toward = input.dark ? "#ffffff" : "#000000";
+  const surfaces = [input.bg, input.panel, mix(input.panel, input.bg, 0.45)];
+  const text = ensureTextContrast(input.text, surfaces, toward, 4.6);
+  return {
+    surfaces,
+    text,
+    dim: mixUntilContrast(text, input.bg, surfaces, 6.0).color,
+    faint: mixUntilContrast(text, input.bg, surfaces, 4.7).color,
+    accent: ensureTextContrast(input.accent, surfaces, toward, 4.6),
+    okSafe: ensureTextContrast(ok, surfaces, toward, 4.6),
+    warnSafe: ensureTextContrast(warn, surfaces, toward, 4.6),
+    dangerSafe: ensureTextContrast(danger, surfaces, toward, 4.6),
+  };
+}
+
+interface DerivedColors {
+  panel2: string;
+  line: string;
+  text: string;
+  dim: string;
+  faint: string;
+  accent: string;
+  accentsoft: string;
+  okSafe: string;
+  warnSafe: string;
+  dangerSafe: string;
+  fonts: { sans: string; display: string; mono: string };
+}
+
+/** 26 个 CSS 变量。抽成纯函数：buildTheme 的圈复杂度原本 19，红线 10。 */
+function themeVars(input: ThemeInput, c: DerivedColors): Record<string, string> {
+  // 主按钮的文字色：必须在 accent 填充上可读，且与主题深浅无关。
+  // 写死 #04120f 在浅色主题（accent 变深）上会变成深字压深底。
+  const onAccent =
+    ensureTextContrast("#ffffff", [c.accent], c.accent, 4.5) === "#ffffff"
+      ? "#ffffff"
+      : ensureTextContrast("#000000", [c.accent], c.accent, 4.5);
+  return {
+    "--color-bg": input.bg,
+    "--color-panel": input.panel,
+    "--color-panel2": c.panel2,
+    "--color-line": c.line,
+    "--color-text": c.text,
+    "--color-dim": c.dim,
+    "--color-faint": c.faint,
+    "--color-accent": c.accent,
+    "--color-on-accent": onAccent,
+    "--color-accentsoft": c.accentsoft,
+    "--color-ok": c.okSafe,
+    "--color-warn": c.warnSafe,
+    "--color-danger": c.dangerSafe,
+    "--font-sans": c.fonts.sans,
+    "--font-display": c.fonts.display,
+    "--font-mono": c.fonts.mono,
+    "--radius-card": `${input.radiusCard}px`,
+    "--radius-btn": `${input.radiusBtn}px`,
+    "--shadow-card": cardShadow(input),
+    "--space-card": SPACE[input.density],
+    "--line-height-body": LINE_HEIGHT[input.density],
+    "--tracking-heading": input.font === "serif" ? "0.005em" : "-0.02em",
+    "--hairline": withAlpha(input.text, input.dark ? 0.08 : 0.1),
+    "--hairline-strong": withAlpha(input.text, input.dark ? 0.14 : 0.18),
+    "--panel-opacity": String(Math.max(0.2, Math.min(1, input.panelOpacity))),
+    "--panel-blur": input.material === "glass" ? "20px" : "0px",
+    "--grid-strength": String(Math.max(0, Math.min(1, input.grid))),
+    "--glow": input.material === "glass" ? "1" : "0",
+    // 浅色底上给卡片加白色高光只会把它洗灰，所以浅色主题一律关掉
+    "--card-sheen": input.dark ? "3.5" : "0",
+  };
+}
+
+function cardShadow(input: ThemeInput): string {
+  if (input.material === "flat") return "none";
+  if (input.dark) {
+    return `0 1px 2px ${withAlpha("#000000", 0.5)}, 0 18px 40px -24px ${withAlpha("#000000", 0.9)}`;
+  }
+  return `0 1px 2px ${withAlpha("#101828", 0.06)}, 0 14px 30px -22px ${withAlpha("#101828", 0.28)}`;
 }

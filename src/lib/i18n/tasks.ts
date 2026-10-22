@@ -2,6 +2,7 @@
 // 由页面转换时填充；插值用 {name} 占位。
 export const dict = {
   en: {
+    "tasks.emptyColumnHint": "No tasks here yet",
     "tasks.priorityDist": "Priority distribution",
     "tasks.emptyTasks": "No tasks",
     "tasks.completionRate": "Completion rate",
@@ -29,6 +30,7 @@ export const dict = {
     "tasks.delete": "Delete",
   },
   zh: {
+    "tasks.emptyColumnHint": "这一列还没有任务",
     "tasks.priorityDist": "优先级分布",
     "tasks.emptyTasks": "暂无任务",
     "tasks.completionRate": "完成率",
@@ -56,6 +58,7 @@ export const dict = {
     "tasks.delete": "删除",
   },
   ja: {
+    "tasks.emptyColumnHint": "この列にはまだタスクがありません",
     "tasks.priorityDist": "優先度分布",
     "tasks.emptyTasks": "タスクはありません",
     "tasks.completionRate": "完了率",

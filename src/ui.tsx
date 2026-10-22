@@ -173,26 +173,7 @@ export function Modal({
       if (event.key !== "Tab") return;
       const node = dialogRef.current;
       if (!node) return;
-      const focusable = Array.from(
-        node.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-
-      if (!active || !node.contains(active)) {
-        event.preventDefault();
-        (event.shiftKey ? last : first).focus();
-        return;
-      }
-      if (event.shiftKey && active === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      }
+      trapTab(event, node);
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
@@ -369,17 +350,92 @@ export function StatCard({
   );
 }
 
+/**
+ * 空状态。
+ *
+ * `action` 是可选的下一步操作：只说「还没有数据」而不给按钮，
+ * 用户得自己去找入口（Raycast/Datadog 的空状态都带引导）。
+ */
 export function Empty({
   children,
   icon: Icon,
+  action,
 }: {
   children: ReactNode;
   icon?: typeof Inbox;
+  action?: ReactNode;
 }) {
   return (
     <div className="flex h-32 flex-col items-center justify-center gap-2.5 rounded-[6px] border border-dashed border-line/80 text-[12px] text-faint">
       {Icon && <Icon size={18} className="opacity-50" />}
-      {children}
+      <span className="max-w-[46ch] px-3 text-center">{children}</span>
+      {action}
+    </div>
+  );
+}
+
+/**
+ * 错误状态：页面内联，而不是只弹一个会自动消失的 toast。
+ *
+ * 后端失败时（数据文件损坏、IPC 超时）用户需要看到「哪块坏了 + 重试」，
+ * 而不是几秒后 toast 消失、页面继续显示空白。
+ */
+export function ErrorState({
+  children,
+  onRetry,
+  retryLabel,
+}: {
+  children: ReactNode;
+  onRetry?: () => void;
+  retryLabel?: string;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex h-32 flex-col items-center justify-center gap-2.5 rounded-[6px] border border-danger/40 bg-danger/8 px-4 text-[12px] text-danger"
+    >
+      <AlertTriangle size={18} className="opacity-80" />
+      <span className="max-w-[52ch] text-center leading-relaxed">{children}</span>
+      {onRetry && (
+        <Btn variant="danger" onClick={onRetry} className="!px-2.5 !py-1 !text-[11px]">
+          {retryLabel}
+        </Btn>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 骨架占位：形状与真实内容一致，避免「加载时一片空白、数据到了突然跳动」。
+ *
+ * 只在首次加载时用（数据已存在就不再显示），否则每次轮询都会闪一下。
+ */
+export function Skeleton({
+  className = "",
+  lines = 3,
+}: {
+  className?: string;
+  lines?: number;
+}) {
+  return (
+    <div className={`animate-pulse space-y-2 ${className}`} aria-hidden="true">
+      {Array.from({ length: lines }).map((_, i) => (
+        <div
+          key={i}
+          className="h-3 rounded-[3px] bg-line/70"
+          style={{ width: `${100 - (i % 3) * 18}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** 卡片级骨架：标题条 + 若干行。 */
+export function SkeletonCard({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="t-card t-panel border border-line/90">
+      <div className="mb-3 h-3 w-24 animate-pulse rounded-[3px] bg-line/80" />
+      <Skeleton lines={rows} />
     </div>
   );
 }
@@ -464,4 +520,33 @@ export function Td({
       {children}
     </td>
   );
+}
+
+/**
+ * 把 Tab / Shift+Tab 圈在对话框内。
+ *
+ * 三种情况：焦点跑到对话框外（点了正文）拉回第一个/最后一个；
+ * 在末元素按 Tab 回绕到首元素；在首元素按 Shift+Tab 回绕到末元素。
+ * 抽成函数是因为内联版本让 Modal 的复杂度到 11，而这段逻辑本身
+ * 与 React 无关，tests 直接调用即可覆盖三个分支。
+ */
+function trapTab(event: KeyboardEvent, node: HTMLElement) {
+  const focusable = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement as HTMLElement | null;
+
+  if (!active || !node.contains(active)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+    return;
+  }
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }

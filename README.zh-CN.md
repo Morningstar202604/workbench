@@ -145,13 +145,13 @@
 | 💰 **成本计量** | token 消耗统计、按日/月趋势、预算告警、Anthropic 缓存折扣计价 |
 | 📁 **项目** | 本地项目管理、Git 分支自动检测 |
 | ✅ **任务** | 看板式任务板（拖拽切换） |
-| ⚙ **设置** | 主题/刷新间隔可调、预算告警自定义、JSON 数据导入导出 |
+| ⚙ **设置** | 主题编辑器、外壳 / 版面 / 组件摆放、刷新间隔、预算告警、JSON 导入导出、数据备份恢复、开机自启 |
 | 📋 **运行日志** | 内置日志查看器、自动刷新 |
 
 ## 成本计量
 
 - **三级降级**：measured（API 上报 usage）→ estimated（字符数启发式）→ zero_pricing
-- **40+ 模型价格内置**；`pricing_overrides.json` 覆盖当前**只读**（需手工放置文件，UI 未提供编辑入口）
+- **40+ 模型价格内置**；成本页内置价格覆盖编辑器，可改单价、新增型号、一键恢复内置价（写入 `pricing_overrides.json`，非法价格整表拒绝）
 - **Anthropic 缓存语义**：`input_tokens` 不含缓存，`cache_read_input_tokens` 按 0.1×、`cache_creation_input_tokens` 按 1.25× 独立计价
 - **按日归属**：measured 与 estimated 记录都按 JSONL 行级 `timestamp` 落到各自那一天（无时间戳时回退上一天 / 文件 mtime 日），会话追加只改最新一天，趋势图不会重写历史
 - **未定价不冒充消费**：型号推断失败标 `unknown` 并记为 `zero_pricing`，不会按某个具体型号编造单价
@@ -354,11 +354,10 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 
 ## 已知限制
 
-- 仅 Windows 验证：端口采集写死 `cmd /c netstat -ano`，`ports.rs` 的 POSIX 分支当前不会被执行
-- 前端渲染行为仍以人工验证为主：vitest 覆盖 util / store / 共享组件 / 错误边界，
-  8 个页面的交互路径尚无端到端测试
+- Windows 与 Linux 均已构建并启动验证；端口采集 Windows 走 `netstat -ano`、Linux 走 `ss -tulpn`（缺 iproute2 时回退 `netstat`）
+- 交互路径由 Playwright（10 页面 × 8 主题的结构/对比度回归）与打包版桌面 E2E（真实 IPC）覆盖；Agent 对话与导入导出尚未脚本化
 - 成本账本落在单个 `cost_data.json`（写操作已串行化），记录数很大时全量读写会开始吃力
-- `pricing_overrides.json` 只有读取路径，没有写入入口
+- 成本账本尚无分片存储；记录量到十万级时全量读写会明显变慢
 - 安装包未做代码签名，首次运行可能触发 SmartScreen 提示
 - 托盘菜单文案当前仅中文（前端界面已完整三语）
 
@@ -368,7 +367,7 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 |------|------|------|
 | `data.json` | 项目与任务 | `app data dir` |
 | `cost_data.json` | 成本记录 + 定价设置 | `app data dir` |
-| `pricing_overrides.json` | 用户自定义模型价格覆盖（只读，需手工放置） | `app data dir` |
+| `pricing_overrides.json` | 用户自定义模型价格覆盖（成本页可编辑） | `app data dir` |
 | `workbench.log` | 运行日志 | `app data dir` |
 | `*.corrupt-<时间戳>` | 数据文件解析失败时的原样备份（不会被下次保存覆盖） | `app data dir` |
 

@@ -237,7 +237,14 @@ export default function Projects() {
 
       {data.projects.length === 0 ? (
         <Card>
-          <Empty>
+          {/* 空状态必须给下一步动作：只写「还没有项目」用户得自己找按钮 */}
+          <Empty
+            action={
+              <Btn variant="primary" onClick={() => setDraft({ ...emptyDraft })}>
+                <Plus size={13} /> {t("projects.newFirst")}
+              </Btn>
+            }
+          >
             {t("projects.emptyHint", {
               newProject: t("projects.new"),
               running: t("projects.running"),

@@ -2,6 +2,8 @@
 // 由页面转换时填充；插值用 {name} 占位。
 export const dict = {
   en: {
+    "procs.clearFilter": "Clear filters",
+    "procs.loadFailed": "Failed to read process data: {err}",
     "procs.sortCpu": "CPU usage",
     "procs.sortMemory": "Memory usage",
     "procs.sortPid": "PID",
@@ -35,6 +37,8 @@ export const dict = {
       "Click a process row to expand details. The table uses virtual scrolling and only renders visible rows.",
   },
   zh: {
+    "procs.clearFilter": "清除筛选",
+    "procs.loadFailed": "读取进程数据失败：{err}",
     "procs.sortCpu": "CPU 占用",
     "procs.sortMemory": "内存占用",
     "procs.sortPid": "PID",
@@ -67,6 +71,8 @@ export const dict = {
     "procs.tableHint": "点击进程行展开详情。表格虚拟滚动，只渲染视口内的行。",
   },
   ja: {
+    "procs.clearFilter": "フィルタを解除",
+    "procs.loadFailed": "プロセスデータの読み取りに失敗しました: {err}",
     "procs.sortCpu": "CPU 使用率",
     "procs.sortMemory": "メモリ使用量",
     "procs.sortPid": "PID",

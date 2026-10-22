@@ -186,6 +186,46 @@ async function main() {
   if (!rejected) fail("路径穿越 id 竟然被接受");
   ok("非法备份 id 被拒绝（路径穿越防护）");
 
+  // ── 9. 开机自启：真实写入操作系统注册项，再删掉 ──
+  // 只走插件命令，不碰注册表内部键名：Windows 上由 auto-launch 写
+  // HKCU\...\Run，Linux 上写 ~/.config/autostart/*.desktop。
+  // 结束时必须关闭，否则测试机器重启就会自动拉起打包版。
+  const autostart = await p.evaluate(async () => {
+    const invoke = window.__TAURI_INTERNALS__.invoke;
+    const initial = await invoke("plugin:autostart|is_enabled");
+    await invoke("plugin:autostart|enable");
+    const afterEnable = await invoke("plugin:autostart|is_enabled");
+    await invoke("plugin:autostart|disable");
+    const afterDisable = await invoke("plugin:autostart|is_enabled");
+    return { initial, afterEnable, afterDisable };
+  });
+  if (autostart.afterEnable !== true) fail("开启开机自启后 is_enabled 仍为 false");
+  if (autostart.afterDisable !== false) fail("关闭开机自启后 is_enabled 仍为 true");
+  ok(`开机自启可写入并撤销（初始 ${autostart.initial}）`);
+
+  // ── 10. 设置页渲染自启开关，且状态来自真实 IPC ──
+  await p.evaluate(() => {
+    const btn = [...document.querySelectorAll("aside button")].find((b) =>
+      (b.getAttribute("title") || "").includes("设置")
+    );
+    btn?.click();
+  });
+  await p.waitForTimeout(1200);
+  const autostartUi = await p.evaluate(() => {
+    const sw = document.querySelector('button[role="switch"]');
+    return {
+      present: Boolean(sw),
+      checked: sw?.getAttribute("aria-checked"),
+      text: document.body.innerText.includes("开机自启"),
+    };
+  });
+  if (!autostartUi.present) fail("设置页没有渲染开机自启开关");
+  if (!autostartUi.text) fail("设置页缺少「开机自启」标题");
+  if (autostartUi.checked !== "false") {
+    fail(`自启开关状态不对（应为 false，实际 ${autostartUi.checked}）`);
+  }
+  ok("设置页渲染开机自启开关，状态与系统一致");
+
   await browser.close();
   console.log("\n全部通过（真实桌面应用 + 真实 IPC）");
 }

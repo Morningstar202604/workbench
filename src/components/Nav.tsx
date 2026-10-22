@@ -1,7 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 import { PAGE_GROUPS, pagesByGroup, type ViewKey } from "../pages/registry";
-import { useT } from "../lib/i18n";
+import { APP_VERSION, useT } from "../lib/i18n";
+import { isTauri } from "../lib/api";
 import { BrandMark } from "./BrandMark";
+import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 
 /**
  * 导航条目的两种形态。
@@ -137,5 +139,117 @@ export function BrandBlock({ compact }: { compact: boolean }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** 侧栏外壳：品牌块 + 分组导航 + 折叠开关 + 运行模式脚注。 */
+export function Sidebar(props: {
+  collapsed: boolean;
+  compact: boolean;
+  drawerOpen: boolean;
+  view: ViewKey;
+  onPick: (k: ViewKey) => void;
+  onToggleCollapse: () => void;
+  onCloseDrawer: () => void;
+}) {
+  const t = useT();
+  return (
+    <aside className={sideClass(props)}>
+      <div className={headClass(props.collapsed)}>
+        <BrandBlock compact={props.collapsed} />
+        {props.compact && (
+          <button
+            type="button"
+            className="ml-auto rounded p-1 text-dim hover:text-text"
+            onClick={props.onCloseDrawer}
+            aria-label={t("app.close")}
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+
+      <VerticalNav view={props.view} onPick={props.onPick} collapsed={props.collapsed} />
+
+      {!props.compact && (
+        <CollapseToggle collapsed={props.collapsed} onToggle={props.onToggleCollapse} />
+      )}
+
+      <div className={footClass(props.collapsed)}>
+        {!props.collapsed && <AppFooter />}
+      </div>
+    </aside>
+  );
+}
+
+/** 侧栏外框：窄屏是抽屉（位移显隐），桌面是固定宽度的栏。 */
+function sideClass({
+  compact,
+  drawerOpen,
+  collapsed,
+}: {
+  compact: boolean;
+  drawerOpen: boolean;
+  collapsed: boolean;
+}): string {
+  const base =
+    "z-40 flex shrink-0 flex-col border-r border-line/80 bg-panel/95 transition-[width,transform] duration-200";
+  if (compact) {
+    return `${base} fixed inset-y-0 left-0 w-60 ${
+      drawerOpen ? "translate-x-0" : "-translate-x-full"
+    }`;
+  }
+  return `${base} ${collapsed ? "w-[56px]" : "w-[212px]"}`;
+}
+
+function headClass(collapsed: boolean): string {
+  return `flex h-[52px] items-center border-b border-line/60 ${
+    collapsed ? "justify-center px-0" : "px-4"
+  }`;
+}
+
+function footClass(collapsed: boolean): string {
+  return `border-t border-line/60 py-2 text-[10px] leading-relaxed text-faint ${
+    collapsed ? "px-0 text-center" : "px-4"
+  }`;
+}
+
+/** 折叠开关。只在非窄屏出现：抽屉模式没有「折叠」概念。 */
+function CollapseToggle({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const t = useT();
+  const label = collapsed ? t("app.nav.expand") : t("app.nav.collapse");
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex h-9 items-center gap-2 border-t border-line/60 px-3 text-[11px] text-faint transition-colors hover:text-text"
+      title={label}
+    >
+      {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+      {!collapsed && <span className="truncate">{label}</span>}
+    </button>
+  );
+}
+
+/** 侧栏脚注：运行模式 + 版本号。 */
+function AppFooter() {
+  const t = useT();
+  const tauri = isTauri();
+  return (
+    <>
+      <div className="flex items-center gap-1.5">
+        <span className={`h-1.5 w-1.5 rounded-full ${tauri ? "bg-ok" : "bg-warn"}`} />
+        {tauri ? t("app.mode.desktop") : t("app.mode.browser")}
+      </div>
+      <div className="mt-0.5 opacity-70">
+        {t("app.versionLine", { version: APP_VERSION })}
+      </div>
+    </>
   );
 }

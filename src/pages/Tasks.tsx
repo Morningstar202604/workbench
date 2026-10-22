@@ -422,6 +422,7 @@ function Column({
       <div className="mt-2 flex gap-1.5">
         <input
           className={inputCls}
+          aria-label={`${label} — ${t("tasks.add")}`}
           placeholder={t("tasks.addPlaceholder")}
           value={draft}
           onChange={(e) => onDraft(e.target.value)}

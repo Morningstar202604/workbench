@@ -199,17 +199,51 @@ function Dense({ ids, render }: { ids: WidgetId[]; render: Renderer }) {
   );
 }
 
+/**
+ * 账本：通栏行，逐行往下读。
+ *
+ * 大组件（关键指标、资源曲线，span ≥ 8）独占一行；小面板两两并排 ——
+ * 否则一个 1146px 宽的行里放一个 168px 的环图，四周全是空白，
+ * 扫读节奏也被打散。配对不改变阅读顺序（仍是自上而下、自左而右）。
+ */
 function Ledger({ ids, render }: { ids: WidgetId[]; render: Renderer }) {
-  // 单列通栏：`resources` 这种图表仍然给固定高度，其余按内容自适应。
   return (
     <div className="flex flex-col gap-2.5">
-      {ids.map((id) => (
-        <div key={id} className={id === "resources" ? "min-h-[260px]" : ""}>
-          {render(id)}
+      {ledgerRows(ids).map((row, i) => (
+        <div
+          key={i}
+          className={row.length === 2 ? "grid grid-cols-1 gap-2.5 lg:grid-cols-2" : ""}
+        >
+          {row.map((id) => (
+            <div key={id} className={id === "resources" ? "min-h-[260px]" : ""}>
+              {render(id)}
+            </div>
+          ))}
         </div>
       ))}
     </div>
   );
+}
+
+/** 把通栏与小面板分组：span ≥ 8 独占一行，其余两个一行。 */
+function ledgerRows(ids: WidgetId[]): WidgetId[][] {
+  const rows: WidgetId[][] = [];
+  let pair: WidgetId[] = [];
+  for (const id of ids) {
+    if (widgetOf(id).span >= 8) {
+      if (pair.length) rows.push(pair);
+      pair = [];
+      rows.push([id]);
+      continue;
+    }
+    pair.push(id);
+    if (pair.length === 2) {
+      rows.push(pair);
+      pair = [];
+    }
+  }
+  if (pair.length) rows.push(pair);
+  return rows;
 }
 
 function Zen({ ids, render }: { ids: WidgetId[]; render: Renderer }) {

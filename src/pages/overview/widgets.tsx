@@ -19,7 +19,7 @@ import {
 } from "../../lib/chartTheme";
 import { useStore } from "../../lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { Badge, Card, Empty, StatCard, Table, Td, Tr } from "../../ui";
+import { Badge, Card, Empty, Skeleton, StatCard, Table, Td, Tr } from "../../ui";
 import {
   dueLabel,
   escapeHtml,
@@ -97,16 +97,30 @@ export function WidgetFrame({
 
 export function KpiWidget() {
   const t = useT();
-  const { procs, devs, ais, data } = useStore(
+  const { procs, devs, ais, data, loading } = useStore(
     useShallow((s) => ({
       procs: s.procs,
       devs: s.devs,
       ais: s.ais,
       data: s.data,
+      loading: s.loading,
     }))
   );
   const cpuTotal = procs.reduce((a, p) => a + (p.cpu ?? 0), 0);
   const doing = data.tasks.filter((x) => x.status === "doing").length;
+
+  // 首次采样还没回来：显示骨架，避免四个 0 一闪而过
+  if (procs.length === 0 && loading) {
+    return (
+      <div className="grid h-full grid-cols-2 gap-3 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Card key={i} className="px-4 py-3.5">
+            <Skeleton lines={2} />
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="grid h-full grid-cols-2 gap-3 xl:grid-cols-4">
@@ -570,7 +584,19 @@ export function ServicesWidget() {
       }
     >
       {devs.length === 0 && ais.length === 0 && (
-        <Empty icon={Server}>{t("overview.noServices")}</Empty>
+        <Empty
+          icon={Server}
+          action={
+            <button
+              className="text-[11px] text-accent hover:underline"
+              onClick={() => setView("servers")}
+            >
+              {t("overview.noServicesAction")}
+            </button>
+          }
+        >
+          {t("overview.noServices")}
+        </Empty>
       )}
       <ul className="flex flex-col gap-1.5">
         {devs.map((d) => (

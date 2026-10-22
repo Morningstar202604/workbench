@@ -44,8 +44,6 @@ export const dict = {
     "settings.themeCopied": "Copied as a new custom theme",
     "settings.themeExported": "Theme JSON exported",
     "settings.themeImported": "Theme imported",
-    "settings.themeBuiltinLocked":
-      "Built-in themes are read-only — duplicate one to edit",
     "settings.editorTitle": "Edit theme",
     "settings.editorName": "Name",
     "settings.editorColors": "Colors",
@@ -90,6 +88,14 @@ export const dict = {
     "settings.language": "Language",
     "settings.languageHint":
       "The UI language switches instantly and is remembered on this device.",
+    "settings.autostart": "Launch at login",
+    "settings.autostartHint":
+      "Starts Workbench when you sign in to this computer. The entry is registered with the operating system, so switching it off here also removes it from Task Manager / system startup.",
+    "settings.autostartDesktopOnly":
+      "Launch at login is available in the desktop app only.",
+    "settings.autostartOn": "Enabled",
+    "settings.autostartOff": "Disabled",
+    "settings.autostartFailed": "Could not change the startup entry: {err}",
     "settings.refresh": "Runtime refresh",
     "settings.refreshLabel":
       "Refresh interval for processes / ports / dev servers / AI processes",
@@ -212,7 +218,6 @@ export const dict = {
     "settings.themeCopied": "已复制为新主题",
     "settings.themeExported": "主题 JSON 已导出",
     "settings.themeImported": "主题已导入",
-    "settings.themeBuiltinLocked": "内置主题只读——复制一份再改",
     "settings.editorTitle": "编辑主题",
     "settings.editorName": "名称",
     "settings.editorColors": "配色",
@@ -255,6 +260,13 @@ export const dict = {
     "settings.widgetsHide": "从概览隐藏",
     "settings.language": "语言",
     "settings.languageHint": "界面语言即时切换，并在本设备记住。",
+    "settings.autostart": "开机自启",
+    "settings.autostartHint":
+      "登录本机时自动启动工作台。注册项写在操作系统里，因此在这里关闭会同时从任务管理器 / 系统启动项中移除。",
+    "settings.autostartDesktopOnly": "开机自启仅在桌面应用中可用。",
+    "settings.autostartOn": "已启用",
+    "settings.autostartOff": "未启用",
+    "settings.autostartFailed": "无法修改启动项：{err}",
     "settings.refresh": "运行时刷新",
     "settings.refreshLabel": "进程 / 端口 / 开发服务器 / AI 进程刷新间隔",
     "settings.refresh1s": "1 秒",
@@ -372,8 +384,6 @@ export const dict = {
     "settings.themeCopied": "カスタムテーマとして複製しました",
     "settings.themeExported": "テーマ JSON を書き出しました",
     "settings.themeImported": "テーマを読み込みました",
-    "settings.themeBuiltinLocked":
-      "組み込みテーマは読み取り専用です — 複製して編集してください",
     "settings.editorTitle": "テーマを編集",
     "settings.editorName": "名前",
     "settings.editorColors": "配色",
@@ -417,6 +427,14 @@ export const dict = {
     "settings.widgetsHide": "概要から隠す",
     "settings.language": "言語",
     "settings.languageHint": "UI 言語は即時に切り替わり、この端末に記憶されます。",
+    "settings.autostart": "ログイン時に起動",
+    "settings.autostartHint":
+      "このコンピューターへのサインイン時にワークベンチを起動します。登録は OS 側で行われるため、ここで無効にするとタスクマネージャー / スタートアップからも削除されます。",
+    "settings.autostartDesktopOnly":
+      "ログイン時の起動はデスクトップアプリでのみ利用できます。",
+    "settings.autostartOn": "有効",
+    "settings.autostartOff": "無効",
+    "settings.autostartFailed": "スタートアップ項目を変更できませんでした: {err}",
     "settings.refresh": "ランタイム更新",
     "settings.refreshLabel": "プロセス / ポート / 開発サーバー / AI プロセスの更新間隔",
     "settings.refresh1s": "1 秒",

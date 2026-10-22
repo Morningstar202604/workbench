@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * IPC 包装层：验证每个函数把正确的命令名与参数形状传给 invoke。
@@ -10,6 +10,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const invokeMock = vi.fn(async (..._args: unknown[]) => undefined as unknown);
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...a: unknown[]) => invokeMock(...a),
+}));
+
+// 桌面端分支会动态 import 这两个插件；在 jsdom 里它们会去调 IPC。
+const permissionGranted = vi.fn(async () => true);
+const requestPermission = vi.fn(async () => "granted");
+const sendNotification = vi.fn((_arg: unknown) => {});
+vi.mock("@tauri-apps/plugin-notification", () => ({
+  isPermissionGranted: () => permissionGranted(),
+  requestPermission: () => requestPermission(),
+  sendNotification,
+}));
+const openUrl = vi.fn(async (_url: string) => {});
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl,
 }));
 
 const api = await import("./api");
@@ -113,6 +127,23 @@ describe("命令名与参数", () => {
     await api.setAlwaysOnTop(true);
     expect(invokeMock).toHaveBeenLastCalledWith("set_always_on_top", { on: true });
   });
+
+  // 会话/日志/设置这三组命令原先只有调用点、没有契约测试：
+  // 命令名一旦与 Rust 的 `#[tauri::command]` 拼写不一致，
+  // 只有真机点开对应页面才会报 "command not found"。
+  it("会话与日志", async () => {
+    await api.opencodeSessions();
+    expect(invokeMock).toHaveBeenLastCalledWith("opencode_sessions");
+    await api.recentSessions();
+    expect(invokeMock).toHaveBeenLastCalledWith("recent_sessions_preview");
+    await api.clearLogs();
+    expect(invokeMock).toHaveBeenLastCalledWith("clear_logs");
+  });
+
+  it("成本设置读取命令带 _cmd 后缀", async () => {
+    await api.getCostSettings();
+    expect(invokeMock).toHaveBeenLastCalledWith("get_cost_settings_cmd");
+  });
 });
 
 describe("openExternal 分类", () => {
@@ -134,6 +165,53 @@ describe("openExternal 分类", () => {
   });
 });
 
+describe("备份与定价的新增命令", () => {
+  it("list_backups 无参数、restore_backup 传 id", async () => {
+    await api.listBackups();
+    expect(invokeMock).toHaveBeenLastCalledWith("list_backups");
+    await api.restoreBackup("20261022-101010");
+    expect(invokeMock).toHaveBeenLastCalledWith("restore_backup", {
+      id: "20261022-101010",
+    });
+  });
+});
+
+describe("通知", () => {
+  it("浏览器下未授权时不发送", async () => {
+    const perm = vi.fn();
+    vi.stubGlobal("Notification", perm);
+    Object.defineProperty(perm, "permission", { value: "denied", writable: true });
+    await api.notify("t", "b");
+    expect(invokeMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("浏览器下已授权时走 Notification 构造", async () => {
+    const Ctor = vi.fn();
+    Object.defineProperty(Ctor, "permission", { value: "granted", writable: true });
+    vi.stubGlobal("Notification", Ctor);
+    await api.notify("标题", "内容");
+    expect(Ctor).toHaveBeenCalledWith("标题", expect.objectContaining({ body: "内容" }));
+    vi.unstubAllGlobals();
+  });
+
+  it("没有 Notification 全局时安全返回 false", async () => {
+    vi.stubGlobal("Notification", undefined);
+    expect(await api.ensureNotificationPermission()).toBe(false);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("openExternal 的 URL 分支（浏览器）", () => {
+  it("http 链接在非 Tauri 下用 window.open", async () => {
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+    await api.openExternal("https://example.com");
+    expect(open).toHaveBeenCalledWith("https://example.com", "_blank", "noopener");
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("isTauri", () => {
   it("没有 __TAURI_INTERNALS__ 时为 false", () => {
     expect(api.isTauri()).toBe(false);
@@ -143,5 +221,50 @@ describe("isTauri", () => {
     (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
     expect(api.isTauri()).toBe(true);
     delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  });
+});
+
+describe("桌面端插件分支", () => {
+  beforeEach(() => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    openUrl.mockClear();
+    sendNotification.mockClear();
+    permissionGranted.mockClear();
+    requestPermission.mockClear();
+  });
+
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  });
+
+  it("http 链接走 opener 插件而不是 window.open", async () => {
+    const winOpen = vi.fn();
+    vi.stubGlobal("open", winOpen);
+    await api.openExternal("https://example.com/x");
+    expect(openUrl).toHaveBeenCalledWith("https://example.com/x");
+    expect(winOpen).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("已授权时不再申请权限", async () => {
+    expect(await api.ensureNotificationPermission()).toBe(true);
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+
+  it("未授权时申请并返回结果", async () => {
+    permissionGranted.mockResolvedValueOnce(false);
+    requestPermission.mockResolvedValueOnce("denied");
+    expect(await api.ensureNotificationPermission()).toBe(false);
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+  });
+
+  it("插件抛错时降级为 false 而不是让页面崩", async () => {
+    permissionGranted.mockRejectedValueOnce(new Error("ipc down"));
+    expect(await api.ensureNotificationPermission()).toBe(false);
+  });
+
+  it("桌面端通知走 sendNotification", async () => {
+    await api.notify("标题", "正文");
+    expect(sendNotification).toHaveBeenCalledWith({ title: "标题", body: "正文" });
   });
 });

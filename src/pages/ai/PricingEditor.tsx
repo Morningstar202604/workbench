@@ -241,93 +241,18 @@ export function PricingEditor({ onChanged }: { onChanged?: () => void }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => {
-              const draft = editing[r.model];
-              const overridden = r.override_input !== null;
-              return (
-                <tr key={r.model} className="border-b border-line/40">
-                  <td className="px-2 py-1 font-mono text-[11px]">{r.model}</td>
-                  <td className="px-2 py-1">
-                    {draft ? (
-                      <input
-                        className="w-20 rounded border border-line bg-panel2 px-1.5 py-0.5 text-right font-mono text-[11px] outline-none focus:border-accent"
-                        value={draft.input}
-                        inputMode="decimal"
-                        onChange={(e) => patchEdit(r.model, { input: e.target.value })}
-                      />
-                    ) : (
-                      <span className="num">
-                        {(r.override_input ?? r.builtin_input)?.toFixed(2) ?? "—"}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-2 py-1">
-                    {draft ? (
-                      <input
-                        className="w-20 rounded border border-line bg-panel2 px-1.5 py-0.5 text-right font-mono text-[11px] outline-none focus:border-accent"
-                        value={draft.output}
-                        inputMode="decimal"
-                        onChange={(e) => patchEdit(r.model, { output: e.target.value })}
-                      />
-                    ) : (
-                      <span className="num">
-                        {(r.override_output ?? r.builtin_output)?.toFixed(2) ?? "—"}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-2 py-1">
-                    {draft ? (
-                      <Badge tone="warn">{t("pricing.editing")}</Badge>
-                    ) : overridden ? (
-                      <Badge tone="accent">{t("pricing.overridden")}</Badge>
-                    ) : r.builtin_input !== null ? (
-                      <Badge tone="dim">{t("pricing.builtin")}</Badge>
-                    ) : (
-                      <Badge tone="danger">{t("pricing.unknown")}</Badge>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-1 text-right">
-                    {draft ? (
-                      <>
-                        <button
-                          className="rounded p-1 text-faint hover:text-text"
-                          title={t("pricing.cancel")}
-                          onClick={() => cancelEdit(r.model)}
-                        >
-                          <X size={11} />
-                        </button>
-                        <button
-                          className="rounded p-1 text-ok hover:text-text"
-                          title={t("pricing.apply")}
-                          onClick={() => void save()}
-                        >
-                          <Check size={11} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          className="rounded p-1 text-faint hover:text-text"
-                          title={t("pricing.edit")}
-                          onClick={() => startEdit(r)}
-                        >
-                          <Pencil size={11} />
-                        </button>
-                        {overridden && (
-                          <button
-                            className="rounded p-1 text-faint hover:text-warn"
-                            title={t("pricing.resetOne")}
-                            onClick={() => resetOne(r.model)}
-                          >
-                            <RotateCcw size={11} />
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {filtered.map((r) => (
+              <PriceRow
+                key={r.model}
+                row={r}
+                draft={editing[r.model]}
+                onPatch={patchEdit}
+                onStart={startEdit}
+                onCancel={cancelEdit}
+                onReset={resetOne}
+                onSave={save}
+              />
+            ))}
           </tbody>
         </table>
       </div>
@@ -376,5 +301,156 @@ export function PricingEditor({ onChanged }: { onChanged?: () => void }) {
         </p>
       )}
     </Card>
+  );
+}
+
+/** 一行价格：内置价 / 覆盖价 / 编辑态，右侧是编辑、重置、应用、取消。 */
+function PriceRow({
+  row: r,
+  draft,
+  onPatch,
+  onStart,
+  onCancel,
+  onReset,
+  onSave,
+}: {
+  row: PricingRow;
+  draft: { input: string; output: string } | undefined;
+  onPatch: (model: string, patch: { input?: string; output?: string }) => void;
+  onStart: (row: PricingRow) => void;
+  onCancel: (model: string) => void;
+  onReset: (model: string) => void;
+  onSave: () => void;
+}) {
+  const overridden = r.override_input !== null;
+  return (
+    <tr className="border-b border-line/40">
+      <td className="px-2 py-1 font-mono text-[11px]">{r.model}</td>
+      <PriceCell
+        value={draft ? Number(draft.input) : (r.override_input ?? r.builtin_input)}
+        editing={Boolean(draft)}
+        onChange={(v) => onPatch(r.model, { input: v })}
+      />
+      <PriceCell
+        value={draft ? Number(draft.output) : (r.override_output ?? r.builtin_output)}
+        editing={Boolean(draft)}
+        onChange={(v) => onPatch(r.model, { output: v })}
+      />
+      <td className="px-2 py-1">
+        <PriceStatus
+          draft={Boolean(draft)}
+          overridden={overridden}
+          known={r.builtin_input !== null}
+        />
+      </td>
+      <td className="whitespace-nowrap px-2 py-1 text-right">
+        {draft ? (
+          <EditingActions onCancel={() => onCancel(r.model)} onSave={onSave} />
+        ) : (
+          <RowActions
+            onEdit={() => onStart(r)}
+            onReset={overridden ? () => onReset(r.model) : undefined}
+          />
+        )}
+      </td>
+    </tr>
+  );
+}
+
+/** 单价单元格：编辑态是输入框，否则是保留两位的数字。 */
+function PriceCell({
+  value,
+  editing,
+  onChange,
+}: {
+  value: number | null;
+  editing: boolean;
+  onChange: (v: string) => void;
+}) {
+  if (editing) {
+    return (
+      <td className="px-2 py-1">
+        <input
+          className="w-20 rounded border border-line bg-panel2 px-1.5 py-0.5 text-right font-mono text-[11px] outline-none focus:border-accent"
+          value={Number.isFinite(value) ? String(value) : ""}
+          inputMode="decimal"
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </td>
+    );
+  }
+  return (
+    <td className="px-2 py-1">
+      <span className="num">{value?.toFixed(2) ?? "—"}</span>
+    </td>
+  );
+}
+
+/** 状态徽章：编辑中 / 已覆盖 / 内置 / 未知（无价格）。 */
+function PriceStatus({
+  draft,
+  overridden,
+  known,
+}: {
+  draft: boolean;
+  overridden: boolean;
+  known: boolean;
+}) {
+  const t = useT();
+  if (draft) return <Badge tone="warn">{t("pricing.editing")}</Badge>;
+  if (overridden) return <Badge tone="accent">{t("pricing.overridden")}</Badge>;
+  if (known) return <Badge tone="dim">{t("pricing.builtin")}</Badge>;
+  return <Badge tone="danger">{t("pricing.unknown")}</Badge>;
+}
+
+function EditingActions({
+  onSave,
+  onCancel,
+}: {
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  return (
+    <>
+      <button
+        className="rounded p-1 text-faint hover:text-text"
+        title={t("pricing.cancel")}
+        onClick={onCancel}
+      >
+        <X size={11} />
+      </button>
+      <button
+        className="rounded p-1 text-ok hover:text-text"
+        title={t("pricing.apply")}
+        onClick={onSave}
+      >
+        <Check size={11} />
+      </button>
+    </>
+  );
+}
+
+function RowActions({ onEdit, onReset }: { onEdit: () => void; onReset?: () => void }) {
+  const t = useT();
+  return (
+    <>
+      <button
+        className="rounded p-1 text-faint hover:text-text"
+        title={t("pricing.edit")}
+        onClick={onEdit}
+      >
+        <Pencil size={11} />
+      </button>
+      {onReset && (
+        <button
+          className="rounded p-1 text-faint hover:text-warn"
+          title={t("pricing.resetOne")}
+          onClick={onReset}
+        >
+          <RotateCcw size={11} />
+        </button>
+      )}
+    </>
   );
 }

@@ -39,6 +39,9 @@ version = "2"
 [dependencies.tauri-plugin-window-state]
 version = "2"
 
+[dependencies.tauri-plugin-autostart]
+version = "2"
+
 [dependencies.tauri-plugin-single-instance]
 version = "2"
 

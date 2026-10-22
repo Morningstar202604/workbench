@@ -162,15 +162,14 @@ data can never leak into the repo.
 | 💰 **Cost metering** | Token usage, daily trends, budget alerts, Anthropic cache pricing |
 | 📁 **Projects** | Local project registry, automatic Git branch detection |
 | ✅ **Tasks** | Kanban board (drag to change status) |
-| ⚙ **Settings** | Theme / refresh interval, budget thresholds, JSON import & export |
+| ⚙ **Settings** | Theme editor, shell / layout / widget arrangement, refresh interval, budget thresholds, JSON import & export, backup & restore, start at login |
 | 📋 **Logs** | Built-in viewer, auto refresh, tail reading |
 
 ## Cost metering
 
 - **Three-level confidence**: measured (API-reported usage) → estimated
   (character heuristic) → zero_pricing
-- **40+ model prices built in**; `pricing_overrides.json` overrides are
-  currently **read-only** (drop the file in manually, no UI editor yet)
+- **40+ model prices built in**; the Cost ledger ships a real price-override editor (edit a unit price, add a model, restore built-in prices; invalid prices reject the whole table)
 - **Anthropic cache semantics**: `input_tokens` excludes cache;
   `cache_read_input_tokens` billed at 0.1×, `cache_creation_input_tokens` at 1.25×
 - **Day attribution**: measured and estimated rows are bucketed per JSONL-line
@@ -407,11 +406,10 @@ Done and planned. Vote or propose new ideas in the Issues.
 - The AI assistant sends tool results (process command lines, project paths,
   task titles) to the model service **you configure**. If command lines may
   contain secrets, treat that provider as part of your trust boundary
-- Frontend interaction paths rely on manual verification: vitest covers util /
-  store / shared components / error boundary, but the 8 pages have no E2E tests
+- Interaction paths are covered by Playwright (structure and WCAG AA across 10 pages × 8 themes) plus a packaged-exe desktop E2E over real IPC; the agent conversation and import/export flows are not scripted yet
 - The cost ledger is a single `cost_data.json` (writes are serialized); very
   large histories will make full read/write sluggish
-- `pricing_overrides.json` is read-only by design for now, no write path
+- The cost ledger has no sharded storage yet; very large histories make full read/write sluggish
 - The installer is unsigned; first launch may trigger a SmartScreen prompt
 - The tray menu text is currently Chinese only (frontend UI is fully
   trilingual)
@@ -422,7 +420,7 @@ Done and planned. Vote or propose new ideas in the Issues.
 |------|---------|----------|
 | `data.json` | Projects & tasks | app data dir |
 | `cost_data.json` | Cost records + pricing settings | app data dir |
-| `pricing_overrides.json` | User price overrides (read-only, drop in manually) | app data dir |
+| `pricing_overrides.json` | User price overrides (editable on the Cost ledger page) | app data dir |
 | `workbench.log` | Runtime logs | app data dir |
 | `*.corrupt-<timestamp>` | Untouched backup of a data file that failed to parse (never overwritten by the next save) | app data dir |
 

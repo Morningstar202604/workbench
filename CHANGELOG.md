@@ -5,6 +5,26 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Start at login**, backed by the real OS registration (`tauri-plugin-autostart`):
+  HKCU\…\Run on Windows, a `.desktop` file under `~/.config/autostart` on
+  Linux, a LaunchAgent on macOS. The toggle reads `is_enabled` from the OS on
+  every mount instead of storing a local flag, so an entry removed in Task
+  Manager shows as off. Browser preview renders a "desktop only" card and
+  never calls IPC.
+- **Inline page states**: `ErrorState` (role=alert, retry button), `Skeleton` /
+  `SkeletonCard`, and `Empty.action`. Processes, Servers, Projects, Tasks, the
+  cost dashboard and the overview widgets now show a skeleton on first load, an
+  in-page error with retry on failure, and an actionable empty state, instead of
+  four zeroed cards or a toast that disappears.
+- **Theme editor** extracted from the settings page: colour fields, shape
+  sliders (radius / grid / opacity), density-typeface-material groups and a live
+  preview card. Editing a built-in theme now automatically duplicates it first
+  (`editableTheme`) — previously the editor wrote a built-in id into the custom
+  list, where `findTheme` kept returning the built-in and every edit looked like
+  it did nothing.
+
 ### Changed
 
 - **Themes are data now, not CSS.** A theme is six colours plus six shape knobs
@@ -29,6 +49,17 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Widgets can be reordered and hidden** from Settings or dragged directly on
   the overview page; order and visibility persist per device.
 
+- **Charts load on demand.** ECharts (550 KB) used to sit in a shared chunk that
+  every page imported; it now has its own `echarts` chunk behind a lazy `EChart`
+  wrapper, so Settings / Logs / Projects never download it. Measured on the
+  production build: first-contentful-paint 292 ms, chart chunk requested only
+  after the overview paints.
+- **Complexity pass**: every function in `src/` is now at or below cyclomatic
+  complexity 10 (was: `App` 43, `CostDashboard` 32, `parseTheme` 22,
+  `buildTheme` 19, `Processes` 14, `Agent` 17). Extracted modules:
+  `useAppRuntime`, `useShellLayout`, `pages/processFilter`, `pages/processes/
+  ProcessTable`, `pages/servers/DevServerList`, `pages/ai/costCharts`.
+
 ### Fixed
 
 - **Density never applied.** `--space-card` had five values but 23 of 39 cards
@@ -47,6 +78,14 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   passed.
 - Four dead i18n keys (`settings.dark` / `light` / `styleHint` /
   `appearanceHint`) had no references anywhere; removed.
+- **`readableOn` mixed the wrong way.** It blended the text colour towards the
+  background, which lowers contrast monotonically — on light themes it never
+  reached the 4.5:1 target and silently returned the original 2.78:1 grey. It
+  now solves towards black/white first and only then fades back, with a test
+  that asserts the measured ratio.
+- **README claimed the pricing overrides file was read-only** in all three
+  languages, two releases after the in-app editor shipped. Corrected, together
+  with the claim that Linux port collection was Windows-only.
 
 ### Added
 

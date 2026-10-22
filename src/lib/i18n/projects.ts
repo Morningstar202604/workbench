@@ -2,6 +2,7 @@
 // 由页面转换时填充；插值用 {name} 占位。
 export const dict = {
   en: {
+    "projects.newFirst": "Create the first project",
     "projects.statusActive": "Active",
     "projects.statusPaused": "Paused",
     "projects.statusArchived": "Archived",
@@ -42,6 +43,7 @@ export const dict = {
     "projects.pinLabel": "Pin to top",
   },
   zh: {
+    "projects.newFirst": "新建第一个项目",
     "projects.statusActive": "活跃",
     "projects.statusPaused": "暂停",
     "projects.statusArchived": "归档",
@@ -81,6 +83,7 @@ export const dict = {
     "projects.pinLabel": "置顶显示",
   },
   ja: {
+    "projects.newFirst": "最初のプロジェクトを作成",
     "projects.statusActive": "アクティブ",
     "projects.statusPaused": "一時停止",
     "projects.statusArchived": "アーカイブ",

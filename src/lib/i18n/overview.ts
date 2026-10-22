@@ -2,6 +2,7 @@
 // 由页面转换时填充；插值用 {name} 占位。
 export const dict = {
   en: {
+    "overview.noServicesAction": "Open Servers & ports",
     "overview.heroTitle": "Workbench",
     "overview.dragHint": "Drag to reorder",
     "overview.allHidden":
@@ -68,6 +69,7 @@ export const dict = {
     "overview.noSessionFiles": "No sessions found in ~/.claude or ~/.codex",
   },
   zh: {
+    "overview.noServicesAction": "查看服务与端口",
     "overview.heroTitle": "工作台",
     "overview.dragHint": "拖动排序",
     "overview.allHidden": "概览组件全部隐藏了——可在设置 → 外观里重新打开。",
@@ -131,6 +133,7 @@ export const dict = {
     "overview.noSessionFiles": "未检测到 ~/.claude 或 ~/.codex 会话",
   },
   ja: {
+    "overview.noServicesAction": "サーバーとポートを開く",
     "overview.heroTitle": "ワークベンチ",
     "overview.dragHint": "ドラッグで並べ替え",
     "overview.allHidden": "概要ウィジェットがすべて非表示です — 設定 → 外観で戻せます。",

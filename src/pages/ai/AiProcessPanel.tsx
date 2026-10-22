@@ -27,7 +27,8 @@ import {
   Tr,
 } from "../../ui";
 import { formatBytes, formatDuration, formatTime, fromNow } from "../../lib/util";
-import { totalMessageCount, toolUsageDistribution } from "../../lib/aggregate";
+import { totalMessageCount } from "../../lib/aggregate";
+import type { OpencodeSession, SessionDetail } from "../../types";
 
 /** AI 进程 + 在线会话 + 本地会话文件统计。 */
 export function AiProcessPanel() {
@@ -193,10 +194,6 @@ export function OpencodeSessionsPanel() {
     loadSessionDetail(port, id);
   };
 
-  const toolsFromDetail = sessionDetail
-    ? toolUsageDistribution(sessionDetail.tools_used)
-    : [];
-
   return (
     <Card className="">
       <SectionTitle
@@ -223,90 +220,17 @@ export function OpencodeSessionsPanel() {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {sessions.map((s) => {
-            const expanded = expandedSession === s.id;
-            return (
-              <div
-                key={s.id}
-                className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-panel2 transition-all"
-              >
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accentsoft/30"
-                  onClick={() => openSessionDetail(opencodePort, s.id)}
-                >
-                  {expanded ? (
-                    <ChevronDown size={14} className="shrink-0 text-accent" />
-                  ) : (
-                    <ChevronRight size={14} className="shrink-0 text-dim" />
-                  )}
-                  <MessageSquare size={14} className="shrink-0 text-accent" />
-                  <span className="flex-1 truncate font-medium">{s.title}</span>
-                  <span className="hidden font-mono text-xs text-dim sm:block">
-                    {s.id.slice(0, 8)}
-                  </span>
-                  <span className="text-xs text-dim">
-                    {s.created ? formatTime(s.created) : ""}
-                  </span>
-                  {sessionDetailLoading && expanded && <Spinner />}
-                </button>
-
-                {expanded && sessionDetail && sessionDetail.id === s.id && (
-                  <div className="space-y-3 border-t border-line bg-panel/50 px-4 py-4 text-sm">
-                    {sessionDetail.error && !sessionDetail.message_count && (
-                      <div className="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
-                        {sessionDetail.error}
-                      </div>
-                    )}
-                    <div className="flex flex-wrap gap-4 text-xs">
-                      <InfoChip
-                        icon={Hash}
-                        label={t("ai.messageCount")}
-                        value={String(sessionDetail.message_count)}
-                      />
-                      <InfoChip
-                        icon={Clock}
-                        label={t("ai.duration")}
-                        value={formatDuration(sessionDetail.duration_seconds)}
-                      />
-                      <InfoChip
-                        icon={Wrench}
-                        label={t("ai.toolsUsed")}
-                        value={String(toolsFromDetail.length)}
-                      />
-                    </div>
-                    {sessionDetail.first_message && (
-                      <MessageBlock
-                        label={t("ai.firstMessage")}
-                        text={sessionDetail.first_message}
-                      />
-                    )}
-                    {sessionDetail.last_message &&
-                      sessionDetail.last_message !== sessionDetail.first_message && (
-                        <MessageBlock
-                          label={t("ai.lastMessage")}
-                          text={sessionDetail.last_message}
-                        />
-                      )}
-                    {toolsFromDetail.length > 0 && (
-                      <div>
-                        <div className="mb-1 text-xs font-medium text-dim">
-                          {t("ai.toolDistTitle")}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {toolsFromDetail.map(([tool, count]) => (
-                            <Badge key={tool} tone="accent">
-                              {tool} <span className="ml-1 opacity-60">×{count}</span>
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {sessions.map((s) => (
+            <SessionRow
+              key={s.id}
+              session={s}
+              expanded={expandedSession === s.id}
+              loading={sessionDetailLoading}
+              detail={sessionDetail}
+              port={opencodePort}
+              onOpen={openSessionDetail}
+            />
+          ))}
         </div>
       )}
     </Card>
@@ -340,4 +264,120 @@ export function InfoChip({
       <span className="font-mono font-medium text-text">{value}</span>
     </div>
   );
+}
+
+/** 一条在线会话：折叠时只有标题与时间，展开后拉取并显示详情。 */
+function SessionRow({
+  session: s,
+  expanded,
+  loading,
+  detail,
+  port,
+  onOpen,
+}: {
+  session: OpencodeSession;
+  expanded: boolean;
+  loading: boolean;
+  detail: SessionDetail | null;
+  port: number;
+  onOpen: (port: number, id: string) => void;
+}) {
+  const toolCounts = useMemo(
+    () => countTools(detail?.tools_used ?? []),
+    [detail?.tools_used]
+  );
+  return (
+    <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-panel2 transition-all">
+      <button
+        type="button"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accentsoft/30"
+        onClick={() => onOpen(port, s.id)}
+      >
+        <Chevron expanded={expanded} />
+        <MessageSquare size={14} className="shrink-0 text-accent" />
+        <span className="flex-1 truncate font-medium">{s.title}</span>
+        <span className="hidden font-mono text-xs text-dim sm:block">
+          {s.id.slice(0, 8)}
+        </span>
+        <span className="text-xs text-dim">{s.created ? formatTime(s.created) : ""}</span>
+        {loading && expanded && <Spinner />}
+      </button>
+
+      {expanded && detail && detail.id === s.id && (
+        <SessionDetailBody detail={detail} tools={toolCounts} />
+      )}
+    </div>
+  );
+}
+
+function Chevron({ expanded }: { expanded: boolean }) {
+  return expanded ? (
+    <ChevronDown size={14} className="shrink-0 text-accent" />
+  ) : (
+    <ChevronRight size={14} className="shrink-0 text-dim" />
+  );
+}
+
+/** 展开的会话详情：错误提示、三个读数、首末消息、工具分布。 */
+function SessionDetailBody({
+  detail,
+  tools,
+}: {
+  detail: SessionDetail;
+  tools: [string, number][];
+}) {
+  const t = useT();
+  return (
+    <div className="space-y-3 border-t border-line bg-panel/50 px-4 py-4 text-sm">
+      {detail.error && !detail.message_count && (
+        <div className="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+          {detail.error}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-4 text-xs">
+        <InfoChip
+          icon={Hash}
+          label={t("ai.messageCount")}
+          value={String(detail.message_count)}
+        />
+        <InfoChip
+          icon={Clock}
+          label={t("ai.duration")}
+          value={formatDuration(detail.duration_seconds)}
+        />
+        <InfoChip icon={Wrench} label={t("ai.toolsUsed")} value={String(tools.length)} />
+      </div>
+      {detail.first_message && (
+        <MessageBlock label={t("ai.firstMessage")} text={detail.first_message} />
+      )}
+      {detail.last_message && detail.last_message !== detail.first_message && (
+        <MessageBlock label={t("ai.lastMessage")} text={detail.last_message} />
+      )}
+      {tools.length > 0 && <ToolBadges tools={tools} />}
+    </div>
+  );
+}
+
+/** 工具使用次数徽章。 */
+function ToolBadges({ tools }: { tools: [string, number][] }) {
+  const t = useT();
+  return (
+    <div>
+      <div className="mb-1 text-xs font-medium text-dim">{t("ai.toolDistTitle")}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {tools.map(([tool, count]) => (
+          <Badge key={tool} tone="accent">
+            {tool} <span className="ml-1 opacity-60">×{count}</span>
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** 工具名计数（保留首次出现顺序）。 */
+function countTools(tools: string[]): [string, number][] {
+  const m = new Map<string, number>();
+  for (const tool of tools) m.set(tool, (m.get(tool) ?? 0) + 1);
+  return [...m.entries()];
 }

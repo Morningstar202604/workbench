@@ -1,0 +1,399 @@
+import { useState } from "react";
+import { useT } from "../lib/i18n";
+import {
+  buildTheme,
+  type Density,
+  type FontChoice,
+  type Material,
+  type ThemeInput,
+} from "../lib/theme/tokens";
+import { Btn, Field, Modal, inputCls } from "../ui";
+
+// ── 主题编辑器 ─────────────────────────────────────────────
+
+/**
+ * 版面线框图：用几块灰阶矩形表达「组件怎么摆」。
+ *
+ * 为什么值得画：五种版面在文字描述上都是「重排概览」，用户点之前
+ * 分不出差别；而线框能在一眼之内说明 bento 是大小格、ledger 是通栏、
+ * orbit 是绕环、dense 是两列、zen 是一条主图。
+ */
+export function LayoutWireframe({ id }: { id: string }) {
+  const rows: Record<string, React.ReactNode> = {
+    bento: (
+      <div className="flex h-full flex-col gap-1">
+        <div className="flex gap-1">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-3 flex-1 rounded-[2px] bg-current opacity-70" />
+          ))}
+        </div>
+        <div className="flex flex-1 gap-1">
+          <div className="w-2/3 rounded-[2px] bg-current opacity-45" />
+          <div className="flex-1 rounded-[2px] bg-current opacity-55" />
+        </div>
+        <div className="flex h-3 gap-1">
+          <div className="flex-1 rounded-[2px] bg-current opacity-35" />
+          <div className="flex-1 rounded-[2px] bg-current opacity-35" />
+        </div>
+      </div>
+    ),
+    ledger: (
+      <div className="flex h-full flex-col gap-1">
+        {[70, 55, 62, 48].map((w, i) => (
+          <div
+            key={i}
+            className="h-3 rounded-[2px] bg-current opacity-50"
+            style={{ width: `${w}%` }}
+          />
+        ))}
+      </div>
+    ),
+    orbit: (
+      <div className="relative h-full">
+        <div className="absolute left-1/2 top-1/2 h-3/4 w-3/4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-current opacity-30" />
+        <div className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current opacity-75" />
+        {[0, 60, 120, 180, 240, 300].map((deg) => (
+          <div
+            key={deg}
+            className="absolute h-2.5 w-2.5 rounded-[2px] bg-current opacity-50"
+            style={{
+              left: `calc(50% + ${Math.cos((deg * Math.PI) / 180) * 38}% - 5px)`,
+              top: `calc(50% + ${Math.sin((deg * Math.PI) / 180) * 34}% - 5px)`,
+            }}
+          />
+        ))}
+      </div>
+    ),
+    dense: (
+      <div className="grid h-full grid-cols-2 gap-1">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="rounded-[2px] bg-current opacity-45" />
+        ))}
+      </div>
+    ),
+    zen: (
+      <div className="flex h-full flex-col gap-1 items-center justify-center">
+        <div className="h-3 w-2/3 rounded-[2px] bg-current opacity-70" />
+        <div className="h-8 w-full rounded-[2px] bg-current opacity-40" />
+      </div>
+    ),
+  };
+  return (
+    <div className="h-20 rounded-[var(--radius-btn)] border border-line/70 bg-panel2/40 p-2 text-text">
+      {rows[id] ?? rows.bento}
+    </div>
+  );
+}
+
+const DENSITIES: { id: Density; key: string }[] = [
+  { id: "compact", key: "settings.densityCompact" },
+  { id: "cozy", key: "settings.densityCozy" },
+  { id: "roomy", key: "settings.densityRoomy" },
+];
+
+const FONTS: { id: FontChoice; key: string }[] = [
+  { id: "sans", key: "settings.fontSans" },
+  { id: "serif", key: "settings.fontSerif" },
+  { id: "mono", key: "settings.fontMono" },
+];
+
+const MATERIALS: { id: Material; key: string }[] = [
+  { id: "flat", key: "settings.materialFlat" },
+  { id: "line", key: "settings.materialLine" },
+  { id: "glass", key: "settings.materialGlass" },
+];
+
+export function ThemeEditor({
+  draft,
+  onSave,
+  onCancel,
+}: {
+  draft: ThemeInput | null;
+  onSave: (t: ThemeInput) => void;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  // 草稿状态放在这一层：Modal 的 footer 按钮和主体编辑的是同一份数据。
+  // 用 draft.id 作为 key 让每次打开重置草稿——比 effect 同步更简单，
+  // 也避免了「编辑到一半被外部 props 覆盖」这类经典问题。
+  const [local, setLocal] = useState<ThemeInput | null>(draft);
+  const [editingId, setEditingId] = useState<string | null>(draft?.id ?? null);
+
+  if ((draft?.id ?? null) !== editingId) {
+    setEditingId(draft?.id ?? null);
+    setLocal(draft);
+  }
+
+  const patch = (p: Partial<ThemeInput>) => setLocal((d) => (d ? { ...d, ...p } : d));
+
+  return (
+    <Modal
+      open={!!draft}
+      title={t("settings.editorTitle")}
+      onClose={onCancel}
+      wide
+      footer={
+        <>
+          <Btn onClick={onCancel}>{t("settings.editorCancel")}</Btn>
+          <Btn variant="primary" onClick={() => local && onSave(local)}>
+            {t("settings.editorSave")}
+          </Btn>
+        </>
+      }
+    >
+      {local && <ThemeEditorBody draft={local} onPatch={patch} />}
+    </Modal>
+  );
+}
+
+/**
+ * 颜色编辑区。
+ *
+ * 拆成独立组件的原因：整个编辑器 228 行，颜色/形状/预览三块互不依赖，
+ * 拆开后每块都能单独看、单独测（也才过得了"单函数≤120 行"的门禁）。
+ */
+function ColorFields({
+  local,
+  patch,
+}: {
+  local: ThemeInput;
+  patch: (p: Partial<ThemeInput>) => void;
+}) {
+  const t = useT();
+  const row = (key: keyof ThemeInput, label: string) => (
+    <label className="flex items-center gap-2">
+      <input
+        type="color"
+        aria-label={label}
+        value={String(local[key] ?? "#000000")}
+        onChange={(e) => patch({ [key]: e.target.value } as Partial<ThemeInput>)}
+        className="h-7 w-9 shrink-0 cursor-pointer rounded border border-line bg-transparent"
+      />
+      <span className="min-w-0 flex-1 truncate text-[11.5px] text-dim">{label}</span>
+      <span className="num shrink-0 text-[10.5px] text-faint">
+        {String(local[key] ?? "")}
+      </span>
+    </label>
+  );
+
+  return (
+    <div>
+      <div className="mb-1.5 text-[11px] font-medium text-dim">
+        {t("settings.editorColors")}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {row("bg", t("settings.editorBg"))}
+        {row("panel", t("settings.editorPanel"))}
+        {row("text", t("settings.editorText"))}
+        {row("accent", t("settings.editorAccent"))}
+      </div>
+      <label className="mt-2 flex items-center gap-2 text-[11.5px] text-dim">
+        <input
+          type="checkbox"
+          checked={local.dark}
+          onChange={(e) => patch({ dark: e.target.checked })}
+        />
+        {t("settings.editorDark")}
+      </label>
+    </div>
+  );
+}
+
+/** 形状与排版：圆角 / 网格 / 不透明度滑杆 + 密度、字体、材质三组开关。 */
+function ShapeFields({
+  local,
+  patch,
+}: {
+  local: ThemeInput;
+  patch: (p: Partial<ThemeInput>) => void;
+}) {
+  const t = useT();
+  const slider = (
+    key: "radiusCard" | "radiusBtn",
+    label: string,
+    max: number,
+    suffix = "px"
+  ) => (
+    <label className="mb-2 block text-[11px] text-dim">
+      {label} — {local[key]}
+      {suffix}
+      <input
+        type="range"
+        min={0}
+        max={max}
+        value={local[key]}
+        onChange={(e) => patch({ [key]: Number(e.target.value) } as Partial<ThemeInput>)}
+        className="mt-1 w-full"
+      />
+    </label>
+  );
+
+  return (
+    <div>
+      <div className="mb-1.5 text-[11px] font-medium text-dim">
+        {t("settings.editorShape")}
+      </div>
+      {slider("radiusCard", t("settings.editorRadius"), 24)}
+      {slider("radiusBtn", t("settings.editorRadiusBtn"), 20)}
+      <label className="mb-2 block text-[11px] text-dim">
+        {t("settings.editorGrid")} — {Math.round(local.grid * 100)}%
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(local.grid * 100)}
+          onChange={(e) => patch({ grid: Number(e.target.value) / 100 })}
+          className="mt-1 w-full"
+        />
+      </label>
+      <label className="mb-2 block text-[11px] text-dim">
+        {t("settings.editorOpacity")} — {Math.round(local.panelOpacity * 100)}%
+        <input
+          type="range"
+          min={20}
+          max={100}
+          value={Math.round(local.panelOpacity * 100)}
+          onChange={(e) => patch({ panelOpacity: Number(e.target.value) / 100 })}
+          className="mt-1 w-full"
+        />
+      </label>
+      {(
+        [
+          [DENSITIES, "density", "settings.editorDensity"],
+          [FONTS, "font", "settings.editorFont"],
+          [MATERIALS, "material", "settings.editorMaterial"],
+        ] as const
+      ).map(([options, field, labelKey]) => (
+        <div key={field} className="mt-2">
+          <div className="mb-1 text-[10px] tracking-[0.06em] text-faint">
+            {t(labelKey)}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {options.map((o) => (
+              <Btn
+                key={o.id}
+                variant={local[field] === o.id ? "primary" : "ghost"}
+                className="!px-2 !py-0.5 !text-[11px]"
+                onClick={() => patch({ [field]: o.id } as Partial<ThemeInput>)}
+              >
+                {t(o.key)}
+              </Btn>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * 编辑器主体。所有改动都先写进本地草稿（受控），
+ * 只有「保存并应用」才落到 store —— 用户在调色时不该被半成品主题闪屏。
+ */
+function ThemeEditorBody({
+  draft: local,
+  onPatch: patch,
+}: {
+  draft: ThemeInput;
+  onPatch: (p: Partial<ThemeInput>) => void;
+}) {
+  const t = useT();
+  const tokens = buildTheme(local);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label={t("settings.editorName")}>
+        <input
+          className={inputCls}
+          value={local.name}
+          onChange={(e) => patch({ name: e.target.value })}
+        />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <ColorFields local={local} patch={patch} />
+        <ShapeFields local={local} patch={patch} />
+      </div>
+
+      <div
+        className="overflow-hidden rounded-[var(--radius-card)] border p-3"
+        style={{
+          background: local.bg,
+          borderColor: tokens.vars["--color-line"],
+          color: local.text,
+          fontFamily: tokens.vars["--font-sans"],
+        }}
+      >
+        <div
+          className="mb-2 text-[10px] tracking-[0.1em]"
+          style={{ color: tokens.vars["--color-faint"] }}
+        >
+          PREVIEW
+        </div>
+        <div className="flex gap-2">
+          <div
+            className="flex-1 p-2"
+            style={{
+              background: local.panel,
+              borderRadius: local.radiusCard,
+              border: `1px solid ${tokens.vars["--color-line"]}`,
+            }}
+          >
+            <div className="text-[10.5px]" style={{ color: tokens.vars["--color-dim"] }}>
+              {t("overview.statRunningProcs")}
+            </div>
+            <div
+              className="num mt-1 text-[20px] font-semibold"
+              style={{ color: local.accent, fontFamily: tokens.vars["--font-mono"] }}
+            >
+              42
+            </div>
+          </div>
+          <div
+            className="flex-1 p-2"
+            style={{
+              background: local.panel,
+              borderRadius: local.radiusCard,
+              border: `1px solid ${tokens.vars["--color-line"]}`,
+            }}
+          >
+            <div className="text-[10.5px]" style={{ color: tokens.vars["--color-dim"] }}>
+              {t("overview.statDevServers")}
+            </div>
+            <div
+              className="num mt-1 text-[20px] font-semibold"
+              style={{
+                color: tokens.vars["--color-ok"],
+                fontFamily: tokens.vars["--font-mono"],
+              }}
+            >
+              3
+            </div>
+          </div>
+        </div>
+        <div className="mt-2 flex gap-1.5">
+          <span
+            className="px-2 py-0.5 text-[10.5px]"
+            style={{
+              background: local.accent,
+              color: local.bg,
+              borderRadius: local.radiusBtn,
+            }}
+          >
+            Primary
+          </span>
+          <span
+            className="px-2 py-0.5 text-[10.5px]"
+            style={{
+              border: `1px solid ${tokens.vars["--color-line"]}`,
+              color: local.text,
+              borderRadius: local.radiusBtn,
+            }}
+          >
+            Secondary
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}

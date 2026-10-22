@@ -6,6 +6,7 @@ import { isTauri } from "../lib/api";
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
 import { Badge, Btn, Card, Field, SectionTitle, inputCls } from "../ui";
 import { AppearancePanel } from "../components/AppearancePanel";
+import { AutostartCard } from "../components/AutostartCard";
 import { BackupPanel } from "../components/BackupPanel";
 import { formatUsd } from "../lib/util";
 import type { CostSettings, WorkbenchData } from "../types";
@@ -117,24 +118,7 @@ export default function Settings() {
 
   const importJson = async (file: File) => {
     try {
-      const parsed = JSON.parse(await file.text()) as WorkbenchData;
-      if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.tasks)) {
-        throw new Error(t("settings.importBadStructure"));
-      }
-      // Schema 字段校验
-      for (const p of parsed.projects) {
-        if (typeof p.id !== "string" || typeof p.name !== "string") {
-          throw new Error(t("settings.importBadProject"));
-        }
-      }
-      for (const task of parsed.tasks) {
-        if (typeof task.id !== "string" || typeof task.title !== "string") {
-          throw new Error(t("settings.importBadTask"));
-        }
-        if (!["todo", "doing", "done"].includes(task.status)) {
-          throw new Error(t("settings.importBadStatus"));
-        }
-      }
+      const parsed = parseBackup(await file.text(), t);
       persistData(parsed);
       setToast(
         t("settings.imported", {
@@ -355,6 +339,7 @@ export default function Settings() {
               {t("settings.refreshHint")}
             </p>
           </Card>
+          <AutostartCard />
           {/* ── 数据：导出/导入 + 备份恢复，同一列纵向排列 ── */}
           <div className="flex flex-col gap-4">
             <Card>
@@ -370,6 +355,7 @@ export default function Settings() {
                   ref={fileRef}
                   type="file"
                   accept="application/json,.json"
+                  aria-label={t("settings.importJson")}
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
@@ -416,4 +402,32 @@ export default function Settings() {
       </Card>
     </div>
   );
+}
+
+/**
+ * 导入的 JSON 来自外部，必须整份校验后再落库。
+ *
+ * 「只检查顶层两个数组」是不够的：缺 id 的项目会让列表 key 变成 undefined，
+ * 非法状态的任务会从看板上消失（三列里都不匹配）。这里逐字段校验，
+ * 任一不合规就整份拒绝，并给出具体原因。
+ */
+function parseBackup(text: string, t: (key: string) => string): WorkbenchData {
+  const parsed = JSON.parse(text) as WorkbenchData;
+  if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.tasks)) {
+    throw new Error(t("settings.importBadStructure"));
+  }
+  for (const p of parsed.projects) {
+    if (typeof p.id !== "string" || typeof p.name !== "string") {
+      throw new Error(t("settings.importBadProject"));
+    }
+  }
+  for (const task of parsed.tasks) {
+    if (typeof task.id !== "string" || typeof task.title !== "string") {
+      throw new Error(t("settings.importBadTask"));
+    }
+    if (!["todo", "doing", "done"].includes(task.status)) {
+      throw new Error(t("settings.importBadStatus"));
+    }
+  }
+  return parsed;
 }

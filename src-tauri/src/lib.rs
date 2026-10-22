@@ -63,6 +63,11 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        // 开机自启：注册项由各平台自己管理（Windows 是 HKCU Run，Linux 是
+        // ~/.config/autostart 下的 .desktop，macOS 是 LaunchAgent）。
+        // 「是否已启用」每次向操作系统查询，本地不存布尔 —— 用户可能在
+        // 任务管理器 / 系统设置里手动关掉，只信本地标志会显示成错的。
+        .plugin(tauri_plugin_autostart::Builder::new().build())
         .setup(|app| {
             logging_setup::init_logging(app.handle());
             log::info!("工作台 v{} 启动", app.package_info().version);

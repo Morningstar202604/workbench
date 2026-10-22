@@ -20,20 +20,15 @@ import {
   allThemes,
   deriveTheme,
   describeTheme,
+  editableTheme,
   findTheme,
   swatchOf,
 } from "../lib/theme/presets";
-import {
-  buildTheme,
-  contrastRatio,
-  mix,
-  type Density,
-  type FontChoice,
-  type Material,
-  type ThemeInput,
-} from "../lib/theme/tokens";
+import { mix, type ThemeInput } from "../lib/theme/tokens";
 import { LAYOUTS, SHELLS, normalizeOrder, widgetOf, type WidgetId } from "../lib/layout";
-import { Badge, Btn, Card, Field, Modal, SectionTitle, inputCls } from "../ui";
+import { LayoutWireframe, ThemeEditor } from "./ThemeEditorPanel";
+import { readableOn } from "../lib/theme/readable";
+import { Badge, Btn, Card, Field, SectionTitle } from "../ui";
 
 /**
  * 外观面板：主题（含自定义与导入导出）、外壳、概览版面、组件摆放。
@@ -95,6 +90,16 @@ export function AppearancePanel() {
     const id = `custom-${Math.random().toString(36).slice(2, 8)}`;
     const copy = deriveTheme({ ...base, builtin: false }, `${base.name} copy`, id);
     setEditing(copy);
+  };
+
+  /** 编辑内置主题 = 自动复制一份再改；编辑自定义主题 = 原地改。 */
+  const edit = (source: ThemeInput) => {
+    const { theme: editable, copied } = editableTheme(
+      source,
+      () => `custom-${Math.random().toString(36).slice(2, 8)}`
+    );
+    if (copied) setToast(t("settings.themeCopied"));
+    setEditing(editable);
   };
 
   const exportTheme = () => {
@@ -172,132 +177,23 @@ export function AppearancePanel() {
         </SectionTitle>
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-          {themes.map((th) => {
-            const active = theme === th.id;
-            const [bg, panel, accent, text] = swatchOf(th);
-            return (
-              <div
-                key={th.id}
-                className={`group relative overflow-hidden rounded-[var(--radius-btn)] border text-left transition-colors ${
-                  active ? "border-accent" : "border-line hover:border-accent/40"
-                }`}
-                style={{ background: panel }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setTheme(th.id)}
-                  aria-pressed={active}
-                  aria-label={th.name}
-                  className="block w-full text-left"
-                >
-                  {/* 迷你预览：三种形状直接反映主题的圆角与材质 */}
-                  <div className="flex h-12 gap-1 p-1.5" style={{ background: bg }}>
-                    <div
-                      className="w-1/4"
-                      style={{
-                        background: panel,
-                        borderRadius: Math.min(6, th.radiusBtn),
-                        border: `1px solid ${mix(accent, bg, 0.7)}`,
-                      }}
-                    />
-                    <div className="flex flex-1 flex-col justify-center gap-1">
-                      <div
-                        className="h-1 w-3/4"
-                        style={{ background: text, opacity: 0.5, borderRadius: 2 }}
-                      />
-                      <div className="flex gap-1">
-                        <div
-                          className="h-4 flex-1"
-                          style={{
-                            background: panel,
-                            border: `1px solid ${mix(accent, bg, 0.75)}`,
-                            borderRadius: Math.min(8, th.radiusCard),
-                          }}
-                        />
-                        <div
-                          className="h-4 w-1/3"
-                          style={{
-                            background: accent,
-                            opacity: 0.85,
-                            borderRadius: Math.min(8, th.radiusBtn),
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="px-2 py-1.5" style={{ background: panel }}>
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="truncate text-[11.5px] font-semibold"
-                        style={{ color: text }}
-                      >
-                        {th.name}
-                      </span>
-                      {th.builtin ? (
-                        <span
-                          className="ml-auto h-1 w-1 rounded-full"
-                          style={{ background: accent }}
-                        />
-                      ) : (
-                        <span
-                          className="ml-auto text-[9px]"
-                          style={{ color: readableOn(text, panel, 4.6) }}
-                        >
-                          {t("settings.themeCustom")}
-                        </span>
-                      )}
-                    </div>
-                    <div
-                      className="mt-0.5 truncate text-[9.5px]"
-                      style={{ color: readableOn(text, panel, 4.6) }}
-                    >
-                      {describeTheme(th)}
-                    </div>
-                  </div>
-                </button>
-
-                <div className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                  <button
-                    type="button"
-                    title={t("settings.themeEdit")}
-                    aria-label={t("settings.themeEdit")}
-                    className="rounded bg-black/45 p-1 text-white backdrop-blur hover:bg-black/70"
-                    onClick={() => setEditing({ ...th, builtin: false })}
-                  >
-                    <Pencil size={10} />
-                  </button>
-                  <button
-                    type="button"
-                    title={t("settings.themeNew")}
-                    aria-label={t("settings.themeNew")}
-                    className="rounded bg-black/45 p-1 text-white backdrop-blur hover:bg-black/70"
-                    onClick={() => {
-                      const id = `custom-${Math.random().toString(36).slice(2, 8)}`;
-                      setEditing(
-                        deriveTheme({ ...th, builtin: false }, `${th.name} copy`, id)
-                      );
-                    }}
-                  >
-                    <Copy size={10} />
-                  </button>
-                  {!th.builtin && (
-                    <button
-                      type="button"
-                      title={t("settings.themeDelete")}
-                      aria-label={t("settings.themeDelete")}
-                      className="rounded bg-black/45 p-1 text-white backdrop-blur hover:bg-red-600/80"
-                      onClick={() => {
-                        deleteTheme(th.id);
-                        setToast(t("settings.themeDeleted"));
-                      }}
-                    >
-                      <Trash2 size={10} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {themes.map((th) => (
+            <ThemeCard
+              key={th.id}
+              theme={th}
+              active={theme === th.id}
+              onPick={() => setTheme(th.id)}
+              onEdit={() => edit(th)}
+              onCopy={() => {
+                const id = `custom-${Math.random().toString(36).slice(2, 8)}`;
+                setEditing(deriveTheme({ ...th, builtin: false }, `${th.name} copy`, id));
+              }}
+              onDelete={() => {
+                deleteTheme(th.id);
+                setToast(t("settings.themeDeleted"));
+              }}
+            />
+          ))}
         </div>
 
         <p className="mt-2.5 text-[11px] leading-relaxed text-dim">
@@ -307,6 +203,7 @@ export function AppearancePanel() {
           ref={fileRef}
           type="file"
           accept="application/json,.json"
+          aria-label={t("settings.themeImport")}
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -468,384 +365,138 @@ export function AppearancePanel() {
   );
 }
 
-// ── 主题编辑器 ─────────────────────────────────────────────
-
 /**
- * 版面线框图：用几块灰阶矩形表达「组件怎么摆」。
+ * 一张主题卡：迷你预览 + 名称 + 悬停时的编辑/复制/删除。
  *
- * 为什么值得画：五种版面在文字描述上都是「重排概览」，用户点之前
- * 分不出差别；而线框能在一眼之内说明 bento 是大小格、ledger 是通栏、
- * orbit 是绕环、dense 是两列、zen 是一条主图。
+ * 抽出来的原因：AppearancePanel 原本 425 行，其中这个卡片的内联 JSX
+ * 就占 120+ 行（三套按钮 + 预览结构），拆开后父组件只剩编排。
  */
-function LayoutWireframe({ id }: { id: string }) {
-  const rows: Record<string, React.ReactNode> = {
-    bento: (
-      <div className="flex h-full flex-col gap-1">
-        <div className="flex gap-1">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-3 flex-1 rounded-[2px] bg-current opacity-70" />
-          ))}
-        </div>
-        <div className="flex flex-1 gap-1">
-          <div className="w-2/3 rounded-[2px] bg-current opacity-45" />
-          <div className="flex-1 rounded-[2px] bg-current opacity-55" />
-        </div>
-        <div className="flex h-3 gap-1">
-          <div className="flex-1 rounded-[2px] bg-current opacity-35" />
-          <div className="flex-1 rounded-[2px] bg-current opacity-35" />
-        </div>
-      </div>
-    ),
-    ledger: (
-      <div className="flex h-full flex-col gap-1">
-        {[70, 55, 62, 48].map((w, i) => (
-          <div
-            key={i}
-            className="h-3 rounded-[2px] bg-current opacity-50"
-            style={{ width: `${w}%` }}
-          />
-        ))}
-      </div>
-    ),
-    orbit: (
-      <div className="relative h-full">
-        <div className="absolute left-1/2 top-1/2 h-3/4 w-3/4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-current opacity-30" />
-        <div className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current opacity-75" />
-        {[0, 60, 120, 180, 240, 300].map((deg) => (
-          <div
-            key={deg}
-            className="absolute h-2.5 w-2.5 rounded-[2px] bg-current opacity-50"
-            style={{
-              left: `calc(50% + ${Math.cos((deg * Math.PI) / 180) * 38}% - 5px)`,
-              top: `calc(50% + ${Math.sin((deg * Math.PI) / 180) * 34}% - 5px)`,
-            }}
-          />
-        ))}
-      </div>
-    ),
-    dense: (
-      <div className="grid h-full grid-cols-2 gap-1">
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="rounded-[2px] bg-current opacity-45" />
-        ))}
-      </div>
-    ),
-    zen: (
-      <div className="flex h-full flex-col gap-1 items-center justify-center">
-        <div className="h-3 w-2/3 rounded-[2px] bg-current opacity-70" />
-        <div className="h-8 w-full rounded-[2px] bg-current opacity-40" />
-      </div>
-    ),
-  };
-  return (
-    <div className="h-20 rounded-[var(--radius-btn)] border border-line/70 bg-panel2/40 p-2 text-text">
-      {rows[id] ?? rows.bento}
-    </div>
-  );
-}
-
-/**
- * 在给定底色上取一个「尽量接近 text 但至少满足 minRatio」的颜色。
- * 主题卡片的副标题用的是每套主题自己的底色，写死混合比例必然有主题不达标。
- */
-function readableOn(text: string, bg: string, minRatio: number): string {
-  if (contrastRatio(text, bg) >= minRatio) return text;
-  for (let i = 70; i >= 0; i--) {
-    const c = mix(text, bg, i / 100);
-    if (contrastRatio(c, bg) >= minRatio) return c;
-  }
-  return text;
-}
-
-const DENSITIES: { id: Density; key: string }[] = [
-  { id: "compact", key: "settings.densityCompact" },
-  { id: "cozy", key: "settings.densityCozy" },
-  { id: "roomy", key: "settings.densityRoomy" },
-];
-
-const FONTS: { id: FontChoice; key: string }[] = [
-  { id: "sans", key: "settings.fontSans" },
-  { id: "serif", key: "settings.fontSerif" },
-  { id: "mono", key: "settings.fontMono" },
-];
-
-const MATERIALS: { id: Material; key: string }[] = [
-  { id: "flat", key: "settings.materialFlat" },
-  { id: "line", key: "settings.materialLine" },
-  { id: "glass", key: "settings.materialGlass" },
-];
-
-function ThemeEditor({
-  draft,
-  onSave,
-  onCancel,
+function ThemeCard({
+  theme,
+  active,
+  onPick,
+  onEdit,
+  onCopy,
+  onDelete,
 }: {
-  draft: ThemeInput | null;
-  onSave: (t: ThemeInput) => void;
-  onCancel: () => void;
+  theme: ThemeInput;
+  active: boolean;
+  onPick: () => void;
+  onEdit: () => void;
+  onCopy: () => void;
+  onDelete: () => void;
 }) {
   const t = useT();
-  // 草稿状态放在这一层：Modal 的 footer 按钮和主体编辑的是同一份数据。
-  // 用 draft.id 作为 key 让每次打开重置草稿——比 effect 同步更简单，
-  // 也避免了「编辑到一半被外部 props 覆盖」这类经典问题。
-  const [local, setLocal] = useState<ThemeInput | null>(draft);
-  const [editingId, setEditingId] = useState<string | null>(draft?.id ?? null);
-
-  if ((draft?.id ?? null) !== editingId) {
-    setEditingId(draft?.id ?? null);
-    setLocal(draft);
-  }
-
-  const patch = (p: Partial<ThemeInput>) => setLocal((d) => (d ? { ...d, ...p } : d));
-
+  const [bg, panel, accent, text] = swatchOf(theme);
   return (
-    <Modal
-      open={!!draft}
-      title={t("settings.editorTitle")}
-      onClose={onCancel}
-      wide
-      footer={
-        <>
-          <Btn onClick={onCancel}>{t("settings.editorCancel")}</Btn>
-          <Btn variant="primary" onClick={() => local && onSave(local)}>
-            {t("settings.editorSave")}
-          </Btn>
-        </>
-      }
+    <div
+      className={`group relative overflow-hidden rounded-[var(--radius-btn)] border text-left transition-colors ${
+        active ? "border-accent" : "border-line hover:border-accent/40"
+      }`}
+      style={{ background: panel }}
     >
-      {local && <ThemeEditorBody draft={local} onPatch={patch} />}
-    </Modal>
-  );
-}
-
-/**
- * 编辑器主体。所有改动都先写进本地草稿（受控），
- * 只有「保存并应用」才落到 store —— 用户在调色时不该被半成品主题闪屏。
- */
-function ThemeEditorBody({
-  draft: local,
-  onPatch: patch,
-}: {
-  draft: ThemeInput;
-  onPatch: (p: Partial<ThemeInput>) => void;
-}) {
-  const t = useT();
-  const tokens = buildTheme(local);
-
-  const colorRow = (key: keyof ThemeInput, label: string) => (
-    <label className="flex items-center gap-2">
-      <input
-        type="color"
-        aria-label={label}
-        value={String(local[key] ?? "#000000")}
-        onChange={(e) => patch({ [key]: e.target.value } as Partial<ThemeInput>)}
-        className="h-7 w-9 shrink-0 cursor-pointer rounded border border-line bg-transparent"
-      />
-      <span className="min-w-0 flex-1 truncate text-[11.5px] text-dim">{label}</span>
-      <span className="num shrink-0 text-[10.5px] text-faint">
-        {String(local[key] ?? "")}
-      </span>
-    </label>
-  );
-
-  return (
-    <div className="flex flex-col gap-4">
-      <Field label={t("settings.editorName")}>
-        <input
-          className={inputCls}
-          value={local.name}
-          onChange={(e) => patch({ name: e.target.value })}
-        />
-      </Field>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <div className="mb-1.5 text-[11px] font-medium text-dim">
-            {t("settings.editorColors")}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            {colorRow("bg", t("settings.editorBg"))}
-            {colorRow("panel", t("settings.editorPanel"))}
-            {colorRow("text", t("settings.editorText"))}
-            {colorRow("accent", t("settings.editorAccent"))}
-          </div>
-          <label className="mt-2 flex items-center gap-2 text-[11.5px] text-dim">
-            <input
-              type="checkbox"
-              checked={local.dark}
-              onChange={(e) => patch({ dark: e.target.checked })}
-            />
-            {t("settings.editorDark")}
-          </label>
-        </div>
-
-        <div>
-          <div className="mb-1.5 text-[11px] font-medium text-dim">
-            {t("settings.editorShape")}
-          </div>
-
-          <label className="mb-2 block text-[11px] text-dim">
-            {t("settings.editorRadius")} — {local.radiusCard}px
-            <input
-              type="range"
-              min={0}
-              max={24}
-              value={local.radiusCard}
-              onChange={(e) => patch({ radiusCard: Number(e.target.value) })}
-              className="mt-1 w-full"
-            />
-          </label>
-          <label className="mb-2 block text-[11px] text-dim">
-            {t("settings.editorRadiusBtn")} — {local.radiusBtn}px
-            <input
-              type="range"
-              min={0}
-              max={20}
-              value={local.radiusBtn}
-              onChange={(e) => patch({ radiusBtn: Number(e.target.value) })}
-              className="mt-1 w-full"
-            />
-          </label>
-          <label className="mb-2 block text-[11px] text-dim">
-            {t("settings.editorGrid")} — {Math.round(local.grid * 100)}%
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={Math.round(local.grid * 100)}
-              onChange={(e) => patch({ grid: Number(e.target.value) / 100 })}
-              className="mt-1 w-full"
-            />
-          </label>
-          <label className="mb-2 block text-[11px] text-dim">
-            {t("settings.editorOpacity")} — {Math.round(local.panelOpacity * 100)}%
-            <input
-              type="range"
-              min={20}
-              max={100}
-              value={Math.round(local.panelOpacity * 100)}
-              onChange={(e) => patch({ panelOpacity: Number(e.target.value) / 100 })}
-              className="mt-1 w-full"
-            />
-          </label>
-
-          <div className="mt-2 flex flex-wrap gap-1">
-            {DENSITIES.map((d) => (
-              <Btn
-                key={d.id}
-                variant={local.density === d.id ? "primary" : "ghost"}
-                className="!px-2 !py-0.5 !text-[11px]"
-                onClick={() => patch({ density: d.id })}
-              >
-                {t(d.key)}
-              </Btn>
-            ))}
-          </div>
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {FONTS.map((f) => (
-              <Btn
-                key={f.id}
-                variant={local.font === f.id ? "primary" : "ghost"}
-                className="!px-2 !py-0.5 !text-[11px]"
-                onClick={() => patch({ font: f.id })}
-              >
-                {t(f.key)}
-              </Btn>
-            ))}
-          </div>
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {MATERIALS.map((m) => (
-              <Btn
-                key={m.id}
-                variant={local.material === m.id ? "primary" : "ghost"}
-                className="!px-2 !py-0.5 !text-[11px]"
-                onClick={() => patch({ material: m.id })}
-              >
-                {t(m.key)}
-              </Btn>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="overflow-hidden rounded-[var(--radius-card)] border p-3"
-        style={{
-          background: local.bg,
-          borderColor: tokens.vars["--color-line"],
-          color: local.text,
-          fontFamily: tokens.vars["--font-sans"],
-        }}
+      <button
+        type="button"
+        onClick={onPick}
+        aria-pressed={active}
+        aria-label={theme.name}
+        className="block w-full text-left"
       >
-        <div
-          className="mb-2 text-[10px] tracking-[0.1em]"
-          style={{ color: tokens.vars["--color-faint"] }}
+        <div className="flex h-12 gap-1 p-1.5" style={{ background: bg }}>
+          <div
+            className="w-1/4"
+            style={{
+              background: panel,
+              borderRadius: Math.min(6, theme.radiusBtn),
+              border: `1px solid ${mix(accent, bg, 0.7)}`,
+            }}
+          />
+          <div className="flex flex-1 flex-col justify-center gap-1">
+            <div
+              className="h-1 w-3/4"
+              style={{ background: text, opacity: 0.5, borderRadius: 2 }}
+            />
+            <div className="flex gap-1">
+              <div
+                className="h-4 flex-1"
+                style={{
+                  background: panel,
+                  border: `1px solid ${mix(accent, bg, 0.75)}`,
+                  borderRadius: Math.min(8, theme.radiusCard),
+                }}
+              />
+              <div
+                className="h-4 w-1/3"
+                style={{
+                  background: accent,
+                  opacity: 0.85,
+                  borderRadius: Math.min(8, theme.radiusBtn),
+                }}
+              />
+            </div>
+          </div>
+        </div>
+        <div className="px-2 py-1.5" style={{ background: panel }}>
+          <div className="flex items-center gap-1.5">
+            <span
+              className="truncate text-[11.5px] font-semibold"
+              style={{ color: text }}
+            >
+              {theme.name}
+            </span>
+            {theme.builtin ? (
+              <span
+                className="ml-auto h-1 w-1 rounded-full"
+                style={{ background: accent }}
+              />
+            ) : (
+              <span
+                className="ml-auto text-[9px]"
+                style={{ color: readableOn(text, panel, 4.6) }}
+              >
+                {t("settings.themeCustom")}
+              </span>
+            )}
+          </div>
+          <div
+            className="mt-0.5 truncate text-[9.5px]"
+            style={{ color: readableOn(text, panel, 4.6) }}
+          >
+            {describeTheme(theme)}
+          </div>
+        </div>
+      </button>
+
+      <div className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        <button
+          type="button"
+          title={t("settings.themeEdit")}
+          aria-label={t("settings.themeEdit")}
+          className="rounded bg-black/45 p-1 text-white backdrop-blur hover:bg-black/70"
+          onClick={onEdit}
         >
-          PREVIEW
-        </div>
-        <div className="flex gap-2">
-          <div
-            className="flex-1 p-2"
-            style={{
-              background: local.panel,
-              borderRadius: local.radiusCard,
-              border: `1px solid ${tokens.vars["--color-line"]}`,
-            }}
+          <Pencil size={10} />
+        </button>
+        <button
+          type="button"
+          title={t("settings.themeNew")}
+          aria-label={t("settings.themeNew")}
+          className="rounded bg-black/45 p-1 text-white backdrop-blur hover:bg-black/70"
+          onClick={onCopy}
+        >
+          <Copy size={10} />
+        </button>
+        {!theme.builtin && (
+          <button
+            type="button"
+            title={t("settings.themeDelete")}
+            aria-label={t("settings.themeDelete")}
+            className="rounded bg-black/45 p-1 text-white backdrop-blur hover:bg-red-600/80"
+            onClick={onDelete}
           >
-            <div className="text-[10.5px]" style={{ color: tokens.vars["--color-dim"] }}>
-              {t("overview.statRunningProcs")}
-            </div>
-            <div
-              className="num mt-1 text-[20px] font-semibold"
-              style={{ color: local.accent, fontFamily: tokens.vars["--font-mono"] }}
-            >
-              42
-            </div>
-          </div>
-          <div
-            className="flex-1 p-2"
-            style={{
-              background: local.panel,
-              borderRadius: local.radiusCard,
-              border: `1px solid ${tokens.vars["--color-line"]}`,
-            }}
-          >
-            <div className="text-[10.5px]" style={{ color: tokens.vars["--color-dim"] }}>
-              {t("overview.statDevServers")}
-            </div>
-            <div
-              className="num mt-1 text-[20px] font-semibold"
-              style={{
-                color: tokens.vars["--color-ok"],
-                fontFamily: tokens.vars["--font-mono"],
-              }}
-            >
-              3
-            </div>
-          </div>
-        </div>
-        <div className="mt-2 flex gap-1.5">
-          <span
-            className="px-2 py-0.5 text-[10.5px]"
-            style={{
-              background: local.accent,
-              color: local.bg,
-              borderRadius: local.radiusBtn,
-            }}
-          >
-            Primary
-          </span>
-          <span
-            className="px-2 py-0.5 text-[10.5px]"
-            style={{
-              border: `1px solid ${tokens.vars["--color-line"]}`,
-              color: local.text,
-              borderRadius: local.radiusBtn,
-            }}
-          >
-            Secondary
-          </span>
-        </div>
+            <Trash2 size={10} />
+          </button>
+        )}
       </div>
     </div>
   );

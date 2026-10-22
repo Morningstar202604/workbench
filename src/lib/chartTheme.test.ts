@@ -98,3 +98,24 @@ describe("horizontalBarOption", () => {
     expect(horizontalBarOption({ ...base, inverse: true }).yAxis.inverse).toBe(true);
   });
 });
+
+/**
+ * 不传主题时的 DOM 分支。
+ *
+ * 这两个函数在页面里多数是「不传 theme」调用的（图表在 hover/重绘时取当前
+ * 主题），所以 document.dataset 分支才是主路径；原先只测了显式传参。
+ */
+describe("未传主题时跟随 data-chart-theme", () => {
+  it("浅色标记下取 LIGHT 的面板与分隔线", () => {
+    document.documentElement.dataset.chartTheme = "light";
+    expect(chartGapColor()).toBe(LIGHT.panel);
+    expect(chartLineColor()).toBe(LIGHT.line);
+    delete document.documentElement.dataset.chartTheme;
+  });
+
+  it("默认（深色）取 DARK", () => {
+    delete document.documentElement.dataset.chartTheme;
+    expect(chartGapColor()).toBe(DARK.panel);
+    expect(chartLineColor()).toBe(DARK.line);
+  });
+});

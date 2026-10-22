@@ -2,6 +2,8 @@
 // 由页面转换时填充；插值用 {name} 占位。
 export const dict = {
   en: {
+    "servers.emptyAction": "Refresh now",
+    "servers.loadFailed": "Failed to read port data: {err}",
     "servers.stats.devServers": "Development servers",
     "servers.stats.tcpListening": "TCP listening",
     "servers.stats.frameworkKinds": "Frameworks",
@@ -33,6 +35,8 @@ export const dict = {
     "servers.portRange.dynamic": "Dynamic ports 49152+",
   },
   zh: {
+    "servers.emptyAction": "立即刷新",
+    "servers.loadFailed": "读取端口数据失败：{err}",
     "servers.stats.devServers": "开发服务",
     "servers.stats.tcpListening": "TCP 监听",
     "servers.stats.frameworkKinds": "框架种类",
@@ -64,6 +68,8 @@ export const dict = {
     "servers.portRange.dynamic": "动态端口 49152+",
   },
   ja: {
+    "servers.emptyAction": "今すぐ更新",
+    "servers.loadFailed": "ポートデータの読み取りに失敗しました: {err}",
     "servers.stats.devServers": "開発サーバー",
     "servers.stats.tcpListening": "TCP リッスン",
     "servers.stats.frameworkKinds": "フレームワーク種別",

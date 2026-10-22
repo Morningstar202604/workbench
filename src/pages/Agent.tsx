@@ -77,38 +77,11 @@ export default function Agent() {
   const [tools, setTools] = useState<ToolSpec[]>([]);
 
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [tick, setTick] = useState(0);
+  const { busy, setBusy, elapsed, reset } = useRunClock();
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 运行计时：让用户看到「还在跑」而不是界面卡死
-  useEffect(() => {
-    if (!busy) return;
-    const id = setInterval(() => setTick((n) => n + 1), 1000);
-    return () => clearInterval(id);
-  }, [busy]);
-  const elapsed = busy ? tick : 0;
-
-  useEffect(() => {
-    if (!isTauri()) return;
-    void agentGetProvider()
-      .then((view) => {
-        setProvider(view);
-        // 已配置的备用服务回填到编辑态（密钥留空表示沿用）
-        setFallbacks(
-          view.fallbacks.map((f) => ({
-            base_url: f.base_url,
-            model: f.model,
-            api_key: "",
-          }))
-        );
-      })
-      .catch(() => {});
-    void agentListTools()
-      .then(setTools)
-      .catch(() => {});
-  }, []);
+  useProviderBootstrap(setProvider, setFallbacks, setTools);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -146,40 +119,10 @@ export default function Agent() {
    * 就会把同一件事重做一遍。这里按协议顺序重建
    * `assistant(tool_calls)` → `tool(tool_call_id, content)`。
    */
-  const buildMessages = useCallback((turnsToSend: ChatTurn[]): ChatMessage[] => {
-    const out: ChatMessage[] = [];
-    for (const turn of turnsToSend) {
-      if (turn.role === "user") {
-        if (turn.text.trim()) out.push({ role: "user", content: turn.text });
-        continue;
-      }
-      const toolSteps = (turn.steps ?? []).filter((s) => s.kind === "tool" && s.call_id);
-      if (toolSteps.length > 0) {
-        out.push({
-          role: "assistant",
-          content: turn.text || null,
-          tool_calls: toolSteps.map((s) => ({
-            id: s.call_id,
-            type: "function",
-            function: { name: s.tool, arguments: s.arguments || "{}" },
-          })),
-        });
-        for (const s of toolSteps) {
-          out.push({
-            role: "tool",
-            tool_call_id: s.call_id,
-            content: s.ok ? s.content : `ERROR: ${s.content}`,
-          });
-        }
-        // 纯工具轮次若没有文字总结，就不再追加一条空 assistant
-        if (!turn.text.trim()) continue;
-      }
-      if (turn.text.trim()) {
-        out.push({ role: "assistant", content: turn.text, tool_calls: null });
-      }
-    }
-    return out;
-  }, []);
+  const buildMessages = useCallback(
+    (turnsToSend: ChatTurn[]): ChatMessage[] => turnsToSend.flatMap(toMessages),
+    []
+  );
 
   const send = useCallback(async () => {
     const text = input.trim();
@@ -192,7 +135,7 @@ export default function Agent() {
     setTurns(nextTurns);
     setInput("");
     setBusy(true);
-    setTick(0);
+    reset();
     try {
       const result = await agentRun(buildMessages(nextTurns));
       // 收集需要审批的步骤：AgentStep 带后端生成的 call_id，
@@ -221,7 +164,17 @@ export default function Agent() {
     } finally {
       setBusy(false);
     }
-  }, [input, busy, configured, turns, buildMessages, setTurns, setPending]);
+  }, [
+    input,
+    busy,
+    configured,
+    turns,
+    buildMessages,
+    setTurns,
+    setPending,
+    setBusy,
+    reset,
+  ]);
 
   const approve = useCallback(
     async (approval: PendingApproval) => {
@@ -281,41 +234,19 @@ export default function Agent() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      {/* 顶部：状态 + 配置入口 */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Bot size={16} className="text-accent" />
-        <span className="text-sm font-medium">{t("agent.title")}</span>
-        {configured ? (
-          <Badge tone="ok">{provider.model || t("agent.notConfigured")}</Badge>
-        ) : (
-          <Badge tone="warn">{t("agent.notConfigured")}</Badge>
-        )}
-        {busy && (
-          <span className="flex items-center gap-1.5 text-xs text-dim">
-            <Loader2 size={12} className="animate-spin" />
-            {t("agent.running", { seconds: elapsed })}
-          </span>
-        )}
-        {turns.length > 0 && (
-          <Btn
-            className="ml-auto !py-1 !text-xs"
-            title={t("agent.clearChat")}
-            onClick={() => {
-              // 先撤销后端待批记录，再清 UI：只清 UI 的话，
-              // 后端留着的待批调用仍可在 5 分钟内被执行
-              void agentClearChat().finally(() => clearChat());
-            }}
-          >
-            <Trash2 size={12} />
-          </Btn>
-        )}
-        <Btn
-          className={`${turns.length > 0 ? "" : "ml-auto"} !py-1 !text-xs`}
-          onClick={() => setShowSettings(true)}
-        >
-          <Settings2 size={12} /> {t("agent.configure")}
-        </Btn>
-      </div>
+      <AgentHeader
+        configured={configured}
+        model={provider.model}
+        busy={busy}
+        elapsed={elapsed}
+        hasTurns={turns.length > 0}
+        onClear={() => {
+          // 先撤销后端待批记录，再清 UI：只清 UI 的话，
+          // 后端留着的待批调用仍可在 5 分钟内被执行
+          void agentClearChat().finally(() => clearChat());
+        }}
+        onConfigure={() => setShowSettings(true)}
+      />
 
       {/* 对话区 */}
       <Card className="flex min-h-0 flex-1 flex-col p-0">
@@ -350,43 +281,7 @@ export default function Agent() {
           )}
         </div>
 
-        {/* 待审批提示 */}
-        {pending.length > 0 && (
-          <div className="border-t border-warn/40 bg-warn/10 px-4 py-2 text-xs text-warn">
-            <div className="flex items-center gap-1.5 font-medium">
-              <ShieldAlert size={13} />
-              {t("agent.pendingApproval", { count: pending.length })}
-            </div>
-            <div className="mt-1 flex flex-col gap-1.5">
-              {pending.map((p) => (
-                <span key={p.callId} className="flex items-center gap-2">
-                  <code className="rounded bg-bg px-1.5 py-0.5">{p.tool}</code>
-                  {/* 危险工具必须让用户看到具体目标（pid/路径），否则是盲批 */}
-                  <code
-                    className="max-w-[420px] truncate rounded bg-bg px-1.5 py-0.5 text-[11px]"
-                    title={p.arguments}
-                  >
-                    {p.arguments}
-                  </code>
-                  <Btn
-                    variant="primary"
-                    className="!px-2 !py-0.5 !text-[10px]"
-                    onClick={() => void approve(p)}
-                  >
-                    <Check size={10} /> {t("agent.approve")}
-                  </Btn>
-                  <Btn
-                    variant="danger"
-                    className="!px-2 !py-0.5 !text-[10px]"
-                    onClick={() => void reject(p)}
-                  >
-                    <X size={10} /> {t("agent.reject")}
-                  </Btn>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+        <PendingApprovals pending={pending} onApprove={approve} onReject={reject} />
 
         {/* 输入区 */}
         <div className="flex items-end gap-2 border-t border-line p-3">
@@ -414,7 +309,12 @@ export default function Agent() {
               <Square size={14} />
             </Btn>
           ) : (
-            <Btn variant="primary" onClick={() => void send()} disabled={!input.trim()}>
+            <Btn
+              variant="primary"
+              onClick={() => void send()}
+              disabled={!input.trim()}
+              title={t("agent.send")}
+            >
               <Send size={14} />
             </Btn>
           )}
@@ -620,4 +520,194 @@ function ToolStepView({ step }: { step: AgentStep }) {
       </pre>
     </details>
   );
+}
+
+/**
+ * 一轮对话转成协议消息。
+ *
+ * 工具轨迹必须一起回传：用户批准一次 Mutate 工具后往往接着说「继续」，
+ * 若只发纯文本，模型对新一轮毫无记忆（不知道刚查过什么、批准了什么），
+ * 就会把同一件事重做一遍。这里按协议顺序重建
+ * `assistant(tool_calls)` → `tool(tool_call_id, content)`。
+ */
+function toMessages(turn: ChatTurn): ChatMessage[] {
+  if (turn.role === "user") {
+    return turn.text.trim() ? [{ role: "user", content: turn.text }] : [];
+  }
+  const toolSteps = (turn.steps ?? []).filter((s) => s.kind === "tool" && s.call_id);
+  if (toolSteps.length === 0) {
+    return turn.text.trim()
+      ? [{ role: "assistant", content: turn.text, tool_calls: null }]
+      : [];
+  }
+  const out: ChatMessage[] = [
+    {
+      role: "assistant",
+      content: turn.text || null,
+      tool_calls: toolSteps.map((s) => ({
+        id: s.call_id,
+        type: "function",
+        function: { name: s.tool, arguments: s.arguments || "{}" },
+      })),
+    },
+  ];
+  for (const s of toolSteps) {
+    out.push({
+      role: "tool",
+      tool_call_id: s.call_id,
+      content: s.ok ? s.content : `ERROR: ${s.content}`,
+    });
+  }
+  // 纯工具轮次若没有文字总结，就不再追加一条空 assistant
+  if (turn.text.trim()) {
+    out.push({ role: "assistant", content: turn.text, tool_calls: null });
+  }
+  return out;
+}
+
+/** 顶栏：状态徽章、运行计时、清空与配置入口。 */
+function AgentHeader({
+  configured,
+  model,
+  busy,
+  elapsed,
+  hasTurns,
+  onClear,
+  onConfigure,
+}: {
+  configured: boolean;
+  model: string;
+  busy: boolean;
+  elapsed: number;
+  hasTurns: boolean;
+  onClear: () => void;
+  onConfigure: () => void;
+}) {
+  const t = useT();
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Bot size={16} className="text-accent" />
+      <span className="text-sm font-medium">{t("agent.title")}</span>
+      <Badge tone={configured ? "ok" : "warn"}>
+        {configured ? model || t("agent.notConfigured") : t("agent.notConfigured")}
+      </Badge>
+      {busy && (
+        <span className="flex items-center gap-1.5 text-xs text-dim">
+          <Loader2 size={12} className="animate-spin" />
+          {t("agent.running", { seconds: elapsed })}
+        </span>
+      )}
+      <div className="ml-auto flex items-center gap-2">
+        {hasTurns && (
+          <Btn className="!py-1 !text-xs" title={t("agent.clearChat")} onClick={onClear}>
+            <Trash2 size={12} />
+          </Btn>
+        )}
+        <Btn className="!py-1 !text-xs" onClick={onConfigure}>
+          <Settings2 size={12} /> {t("agent.configure")}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+/** 待审批面板。危险工具必须显示具体目标（pid/路径），否则是盲批。 */
+function PendingApprovals({
+  pending,
+  onApprove,
+  onReject,
+}: {
+  pending: PendingApproval[];
+  onApprove: (p: PendingApproval) => void;
+  onReject: (p: PendingApproval) => void;
+}) {
+  const t = useT();
+  if (pending.length === 0) return null;
+  return (
+    <div className="border-t border-warn/40 bg-warn/10 px-4 py-2 text-xs text-warn">
+      <div className="flex items-center gap-1.5 font-medium">
+        <ShieldAlert size={13} />
+        {t("agent.pendingApproval", { count: pending.length })}
+      </div>
+      <div className="mt-1 flex flex-col gap-1.5">
+        {pending.map((p) => (
+          <span key={p.callId} className="flex items-center gap-2">
+            <code className="rounded bg-bg px-1.5 py-0.5">{p.tool}</code>
+            <code
+              className="max-w-[420px] truncate rounded bg-bg px-1.5 py-0.5 text-[11px]"
+              title={p.arguments}
+            >
+              {p.arguments}
+            </code>
+            <Btn
+              variant="primary"
+              className="!px-2 !py-0.5 !text-[10px]"
+              onClick={() => onApprove(p)}
+            >
+              <Check size={10} /> {t("agent.approve")}
+            </Btn>
+            <Btn
+              variant="danger"
+              className="!px-2 !py-0.5 !text-[10px]"
+              onClick={() => onReject(p)}
+            >
+              <X size={10} /> {t("agent.reject")}
+            </Btn>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** 运行计时：让用户看到「还在跑」而不是界面卡死。 */
+function useRunClock() {
+  const [busy, setBusy] = useState(false);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!busy) return;
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [busy]);
+  return {
+    busy,
+    setBusy,
+    elapsed: busy ? tick : 0,
+    // 稳定引用：send 的 useCallback 依赖它，不能每次渲染换新函数
+    reset: useCallback(() => setTick(0), []),
+  };
+}
+
+type FallbackDraft = { base_url: string; model: string; api_key: string };
+
+/**
+ * 首屏拉取 provider 配置与工具清单。
+ *
+ * 浏览器预览没有 IPC：isTauri() 为假时整段跳过，providers 保持空壳，
+ * 设置弹窗仍能渲染（这比 null 崩掉好）。
+ */
+function useProviderBootstrap(
+  setProvider: (v: ProviderView) => void,
+  setFallbacks: (v: FallbackDraft[]) => void,
+  setTools: (v: ToolSpec[]) => void
+) {
+  useEffect(() => {
+    if (!isTauri()) return;
+    void agentGetProvider()
+      .then((view) => {
+        setProvider(view);
+        // 已配置的备用服务回填到编辑态（密钥留空表示沿用）
+        setFallbacks(
+          view.fallbacks.map((f) => ({
+            base_url: f.base_url,
+            model: f.model,
+            api_key: "",
+          }))
+        );
+      })
+      .catch(() => {});
+    void agentListTools()
+      .then(setTools)
+      .catch(() => {});
+  }, [setProvider, setFallbacks, setTools]);
 }

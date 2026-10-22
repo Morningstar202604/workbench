@@ -175,6 +175,25 @@ export function deriveTheme(base: ThemeInput, name: string, id: string): ThemeIn
   return { ...base, id, name, builtin: false };
 }
 
+/**
+ * 把「用户想编辑的主题」变成一个可以安全保存的主题。
+ *
+ * 内置主题不能原地改：`allThemes()` 把内置放在最前面，`findTheme()` 取第一个
+ * 匹配 id，所以若把内置的 id 原样写进自定义列表，用户改完看到的是同名但
+ * 被内置挡住的影子主题 —— 编辑框回读旧色值，界面纹丝不动。这里改成
+ * 「编辑内置 = 自动复制一份并换新 id」，返回 `copied` 让调用方给出提示。
+ */
+export function editableTheme(
+  theme: ThemeInput,
+  makeId: () => string
+): { theme: ThemeInput; copied: boolean } {
+  if (!theme.builtin) return { theme: { ...theme, builtin: false }, copied: false };
+  return {
+    theme: deriveTheme(theme, `${theme.name} copy`, makeId()),
+    copied: true,
+  };
+}
+
 /** 设置页色卡预览用的四个色块：底、面板、强调、文字。 */
 export function swatchOf(input: ThemeInput): [string, string, string, string] {
   return [input.bg, input.panel, input.accent, input.text];
@@ -186,52 +205,75 @@ export function swatchOf(input: ThemeInput): [string, string, string, string] {
  * 半修好的主题会在界面上产生不可读的低对比文本。
  */
 export function parseTheme(raw: unknown): ThemeInput | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
-  const num = (v: unknown, lo: number, hi: number, dflt: number) =>
-    typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt;
+  const o = asRecord(raw);
+  if (!o) return null;
 
-  const id = str(o.id);
-  const name = str(o.name);
-  const bg = str(o.bg);
-  const panel = str(o.panel);
-  const text = str(o.text);
-  const accent = str(o.accent);
-  if (!id || !name || !bg || !panel || !text || !accent) return null;
-  const isColor = (v: string) => /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v);
-  if (![bg, panel, text, accent].every(isColor)) return null;
+  const base = readCore(o);
+  if (!base) return null;
 
-  const density = o.density;
-  const font = o.font;
-  const material = o.material;
+  const density = pick(o.density, DENSITIES, "cozy");
+  const font = pick(o.font, FONTS, "sans");
+  const material = pick(o.material, MATERIALS, "line");
 
   return {
-    id,
-    name,
-    dark: typeof o.dark === "boolean" ? o.dark : luminanceOf(bg) < 0.4,
-    bg,
-    panel,
-    text,
-    accent,
-    ok: str(o.ok) ?? undefined,
-    warn: str(o.warn) ?? undefined,
-    danger: str(o.danger) ?? undefined,
-    radiusCard: num(o.radiusCard, 0, 40, 10),
-    radiusBtn: num(o.radiusBtn, 0, 24, 7),
-    density:
-      density === "compact" || density === "cozy" || density === "roomy"
-        ? density
-        : "cozy",
-    font: font === "serif" || font === "mono" ? font : "sans",
-    material:
-      material === "flat" || material === "glass" || material === "line"
-        ? material
-        : "line",
-    grid: num(o.grid, 0, 1, 0),
-    panelOpacity: num(o.panelOpacity, 0.2, 1, 1),
+    ...base,
+    dark: typeof o.dark === "boolean" ? o.dark : luminanceOf(base.bg) < 0.4,
+    ok: nonEmpty(o.ok),
+    warn: nonEmpty(o.warn),
+    danger: nonEmpty(o.danger),
+    radiusCard: clamp(o.radiusCard, 0, 40, 10),
+    radiusBtn: clamp(o.radiusBtn, 0, 24, 7),
+    density,
+    font,
+    material,
+    grid: clamp(o.grid, 0, 1, 0),
+    panelOpacity: clamp(o.panelOpacity, 0.2, 1, 1),
     builtin: false,
   };
+}
+
+const DENSITIES = ["compact", "cozy", "roomy"] as const;
+const FONTS = ["sans", "serif", "mono"] as const;
+const MATERIALS = ["flat", "glass", "line"] as const;
+
+function asRecord(raw: unknown): Record<string, unknown> | null {
+  return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+}
+
+function nonEmpty(v: unknown): string | undefined {
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+function clamp(v: unknown, lo: number, hi: number, dflt: number): number {
+  return typeof v === "number" && Number.isFinite(v)
+    ? Math.min(hi, Math.max(lo, v))
+    : dflt;
+}
+
+function pick<T extends string>(v: unknown, allowed: readonly T[], dflt: T): T {
+  return allowed.includes(v as T) ? (v as T) : dflt;
+}
+
+const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/** 六个必填字段（id/name/四个颜色）。任一缺失或不是合法颜色 → 整份拒绝。 */
+function readCore(o: Record<string, unknown>): {
+  id: string;
+  name: string;
+  bg: string;
+  panel: string;
+  text: string;
+  accent: string;
+} | null {
+  const id = nonEmpty(o.id);
+  const name = nonEmpty(o.name);
+  const bg = nonEmpty(o.bg);
+  const panel = nonEmpty(o.panel);
+  const text = nonEmpty(o.text);
+  const accent = nonEmpty(o.accent);
+  if (!id || !name || !bg || !panel || !text || !accent) return null;
+  if (![bg, panel, text, accent].every((c) => HEX.test(c))) return null;
+  return { id, name, bg, panel, text, accent };
 }
 
 function luminanceOf(hex: string): number {

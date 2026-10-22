@@ -3,6 +3,7 @@ import {
   BUILTIN_THEMES,
   allThemes,
   deriveTheme,
+  editableTheme,
   findTheme,
   migrateThemeId,
   parseTheme,
@@ -100,6 +101,23 @@ describe("主题列表与迁移", () => {
     expect(copy.name).toBe("Copy");
     expect(copy.builtin).toBe(false);
     expect(copy.bg).toBe(BUILTIN_THEMES[0].bg);
+  });
+
+  it("editableTheme 改内置主题时换 id，避免被内置项挡住", () => {
+    const { theme, copied } = editableTheme(BUILTIN_THEMES[0], () => "generated");
+    expect(copied).toBe(true);
+    expect(theme.id).toBe("generated");
+    expect(theme.builtin).toBe(false);
+    // 新 id 必须真的能命中这份副本，而不是回落到内置
+    expect(findTheme(theme.id, [theme]).id).toBe("generated");
+  });
+
+  it("editableTheme 对自定义主题原地返回同 id", () => {
+    const custom = deriveTheme(BUILTIN_THEMES[1], "Mine", "mine");
+    const { theme, copied } = editableTheme(custom, () => "unused");
+    expect(copied).toBe(false);
+    expect(theme.id).toBe("mine");
+    expect(theme.builtin).toBe(false);
   });
 
   it("swatchOf 返回底/面板/强调/文字四色", () => {
