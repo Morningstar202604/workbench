@@ -66,19 +66,24 @@ Release を指します。
 | ![概要](docs/screenshots/01-overview.png) | ![プロセス](docs/screenshots/02-processes.png) |
 | CPU / メモリ傾向、ディスク、プロセス分類 | 全プロセス snapshot、仮想スクロール、強制終了の確認 |
 
-| サーバー & ポート | AI セッション & コスト |
-|-------------------|------------------------|
+| サーバー & ポート | AI セッション |
+|-------------------|----------------|
 | ![サーバー](docs/screenshots/03-servers.png) | ![AI セッション](docs/screenshots/04-ai-sessions.png) |
-| netstat 解析、開発フレームワーク判定 | セッション一覧、トークン計測、予算アラート |
+| netstat 解析、開発フレームワーク判定 | セッションファイル、オンラインセッション、ツール分布 |
+
+| コスト台帳 | AI アシスタント |
+|------------|------------------|
+| ![コスト](docs/screenshots/05-costs.png) | ![アシスタント](docs/screenshots/06-agent.png) |
+| 予算進捗、推移、モデル内訳、価格エディタ | ツール呼び出しの記録、都度承認、例文 |
 
 | プロジェクト | タスク |
 |--------------|--------|
-| ![プロジェクト](docs/screenshots/05-projects.png) | ![タスク](docs/screenshots/06-tasks.png) |
+| ![プロジェクト](docs/screenshots/07-projects.png) | ![タスク](docs/screenshots/08-tasks.png) |
 | ローカルプロジェクト、Git ブランチ検出 | ドラッグ＆ドロップのカンバン |
 
 | 設定 | ログ |
 |------|------|
-| ![設定](docs/screenshots/07-settings.png) | ![ログ](docs/screenshots/08-logs.png) |
+| ![設定](docs/screenshots/09-settings.png) | ![ログ](docs/screenshots/10-logs.png) |
 | テーマ、更新間隔、予算、インポート/エクスポート | 内蔵ログビューア、末尾読み取り |
 
 ### ビジュアルシステム
@@ -90,18 +95,18 @@ Release を指します。
 
 | ブランドマーク（サイドバー） | ブランドマーク（マストヘッド） |
 |------------------------------|--------------------------------|
-| ![サイドバー](docs/screenshots/09-brand-sidebar.png) | ![マストヘッド](docs/screenshots/10-brand-hero.png) |
+| ![サイドバー](docs/screenshots/11-brand-sidebar.png) | ![マストヘッド](docs/screenshots/12-brand-hero.png) |
 
 マークは 4 本のベクターストローク（`currentColor`、底板なし）で、どの背景でも
 そのまま重なります。
 
 | 各サイズのアイコン | exe に埋め込まれたアイコン |
 |--------------------|----------------------------|
-| ![アイコンサイズ](docs/screenshots/11-icon-sizes.png) | ![exe アイコン](docs/screenshots/14-exe-icon.png) |
+| ![アイコンサイズ](docs/screenshots/13-icon-sizes.png) | ![exe アイコン](docs/screenshots/16-exe-icon.png) |
 
 | 折りたたみサイドバー | 狭い画面（ドロワー） |
 |----------------------|----------------------|
-| ![折りたたみ](docs/screenshots/13-sidebar-collapsed.png) | ![ドロワー](docs/screenshots/12-mobile-drawer.png) |
+| ![折りたたみ](docs/screenshots/15-sidebar-collapsed.png) | ![ドロワー](docs/screenshots/14-mobile-drawer.png) |
 
 スクリーンショットは自分で再生成できます: `npm run build` → `npm run preview`
 → ヘッドレス Chrome を `--remote-debugging-port=9222` で起動 →

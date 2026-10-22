@@ -60,20 +60,25 @@
 | ![概览](docs/screenshots/01-overview.png) | ![进程监控](docs/screenshots/02-processes.png) |
 | CPU / 内存趋势、磁盘与进程分类 | 全进程快照、虚拟滚动、杀进程二次确认 |
 
-| 服务与端口 | AI 会话与成本计量 |
-|------------|-------------------|
+| 服务与端口 | AI 会话 |
+|------------|----------|
 | ![服务与端口](docs/screenshots/03-servers.png) | ![AI 会话](docs/screenshots/04-ai-sessions.png) |
-| netstat 端口识别与开发框架标注 | 会话预览、token 计量、预算与模型分解 |
+| netstat 端口识别与开发框架标注 | 会话文件、在线会话、工具分布 |
+
+| 成本账本 | 智能助手 |
+|----------|----------|
+| ![成本账本](docs/screenshots/05-costs.png) | ![智能助手](docs/screenshots/06-agent.png) |
+| 预算进度、趋势、模型分解、价格覆盖编辑器 | 工具调用轨迹、逐次审批、示例问题 |
 
 | 项目管理 | 任务看板 |
 |----------|----------|
-| ![项目管理](docs/screenshots/05-projects.png) | ![任务看板](docs/screenshots/06-tasks.png) |
+| ![项目管理](docs/screenshots/07-projects.png) | ![任务看板](docs/screenshots/08-tasks.png) |
 | 本地项目、Git 分支检测、卡片/表格双视图 | 拖拽看板，待办 / 进行中 / 已完成 |
 
 | 设置 | 运行日志 |
 |------|----------|
-| ![设置](docs/screenshots/07-settings.png) | ![运行日志](docs/screenshots/08-logs.png) |
-| 主题、刷新间隔、预算与数据导入导出 | 内置日志查看器，按需尾部读取 |
+| ![设置](docs/screenshots/09-settings.png) | ![运行日志](docs/screenshots/10-logs.png) |
+| 主题编辑器、外壳/版面、组件管理、备份 | 内置日志查看器，按需尾部读取 |
 
 ### 视觉体系
 
@@ -84,18 +89,18 @@
 
 | 品牌字形（侧栏） | 品牌字形（报头） |
 |------------------|------------------|
-| ![侧栏品牌](docs/screenshots/09-brand-sidebar.png) | ![报头品牌](docs/screenshots/10-brand-hero.png) |
+| ![侧栏品牌](docs/screenshots/11-brand-sidebar.png) | ![报头品牌](docs/screenshots/12-brand-hero.png) |
 
 字形是四条矢量描边、`currentColor`、没有底板——直接贴在面板上，任何底色都不会
 出现白片。
 
 | 各尺寸图标 | 打进 exe 的图标 |
 |------------|-----------------|
-| ![图标尺寸](docs/screenshots/11-icon-sizes.png) | ![exe 图标](docs/screenshots/14-exe-icon.png) |
+| ![图标尺寸](docs/screenshots/13-icon-sizes.png) | ![exe 图标](docs/screenshots/16-exe-icon.png) |
 
 | 折叠侧栏 | 窄屏抽屉 |
 |----------|----------|
-| ![折叠](docs/screenshots/13-sidebar-collapsed.png) | ![抽屉](docs/screenshots/12-mobile-drawer.png) |
+| ![折叠](docs/screenshots/15-sidebar-collapsed.png) | ![抽屉](docs/screenshots/14-mobile-drawer.png) |
 
 ### 主题、外壳与版面
 
@@ -119,7 +124,10 @@
 - **组件**可以拖拽排序、逐个隐藏，与外壳和版面相互独立。
 
 完整的能力审计（含「声明了但从未生效」的功能清单）见
-[docs/plan-audit.md](docs/plan-audit.md)。
+[docs/plan-audit.md](docs/plan-audit.md)；全维度审查（正确性 / 安全 /
+可靠性 / 性能 / 测试有效性，含 Raycast、Datadog、Warp、Linear、Zed 对标矩阵
+与实测覆盖率、复杂度数字）见
+[docs/audit-2026-10-22.md](docs/audit-2026-10-22.md)。
 
 截图可自行重生（需先 `npm run build` 并启动 `npm run preview`，另开一个
 `chrome --headless=new --remote-debugging-port=9222`，然后

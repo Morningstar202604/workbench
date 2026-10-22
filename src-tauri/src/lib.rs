@@ -214,6 +214,8 @@ pub fn run() {
             commands::get_cost_settings_cmd,
             commands::save_cost_settings_cmd,
             commands::clear_cost_records,
+            commands::backup_data,
+            commands::open_backup_dir,
             commands::get_pricing,
             commands::save_pricing,
             // ── Agent（模型 + 工具调用）──

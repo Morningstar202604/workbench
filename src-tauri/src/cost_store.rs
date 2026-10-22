@@ -163,6 +163,11 @@ pub struct CostData {
 }
 
 /// app_data_dir 下的成本数据文件路径
+/// 成本库文件路径（供备份命令使用）。
+pub fn cost_data_path_public(app: &AppHandle) -> Result<PathBuf, String> {
+    cost_data_path(app)
+}
+
 fn cost_data_path(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import {
+  BUILTIN_THEMES,
   DEFAULT_THEME_ID,
   allThemes,
   migrateThemeId,
@@ -267,10 +268,22 @@ export const useStore = create<Store>()(
         applyTheme(tokensFor(id, s.customThemes), s.shell, s.layout);
       },
       upsertTheme: (theme) => {
+        // 内置主题不进自定义列表：它们随版本升级一起更新，不该被用户副本覆盖。
+        // 但「选中一个内置主题」是合法操作 —— 直接走 setTheme，
+        // 否则会把 theme 设成一个在列表里不存在的 id（悬空引用，
+        // tokensFor 会回退到第一套主题，界面和状态对不上）。
+        if (theme.builtin) {
+          // 只有真实存在的内置主题才能被选中；否则保留当前主题，
+          // 避免 theme 指向一个列表里不存在的 id。
+          const known = BUILTIN_THEMES.some((t) => t.id === theme.id);
+          if (known) get().setTheme(theme.id);
+          return theme.id;
+        }
         const existing = get().customThemes;
-        const next = theme.builtin
-          ? existing
-          : [...existing.filter((t) => t.id !== theme.id), { ...theme, builtin: false }];
+        const next = [
+          ...existing.filter((t) => t.id !== theme.id),
+          { ...theme, builtin: false },
+        ];
         set({ customThemes: next, theme: theme.id });
         const s = get();
         applyTheme(tokensFor(theme.id, next), s.shell, s.layout);
@@ -304,7 +317,12 @@ export const useStore = create<Store>()(
         const s = get();
         applyTheme(tokensFor(s.theme, s.customThemes), shell, s.layout);
       },
-      setLayout: (layout) => set({ layout }),
+      setLayout: (layout) => {
+        set({ layout });
+        // 布局也要写进 dataset：CSS 与测试都按 data-layout 判断当前版面，
+        // 只改 store 会让属性永远停在初始值（实测切换后仍是 bento）。
+        document.documentElement.dataset.layout = layout;
+      },
       setWidgetOrder: (widgetOrder) => set({ widgetOrder: normalizeOrder(widgetOrder) }),
       setWidgetHidden: (widgetHidden) =>
         set({ widgetHidden: normalizeHidden(widgetHidden) }),

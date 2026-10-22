@@ -60,10 +60,10 @@ export default function Overview() {
       onDragStart={() => setDragging(id)}
       onDragEnd={() => setDragging(null)}
       title={t("overview.dragHint")}
-      className="cursor-grab select-none rounded px-1 text-[10px] text-faint/60 hover:text-faint active:cursor-grabbing"
+      className="cursor-grab select-none rounded px-1 text-[11px] text-dim hover:text-text active:cursor-grabbing"
       aria-hidden="true"
     >
-      ⠿
+      ⣿
     </span>
   );
 
@@ -103,7 +103,9 @@ export default function Overview() {
           ids={ids}
           render={render}
           compact={bp === "compact"}
-          kpis={WIDGET_COMPONENTS.kpis()}
+          // 关键指标只在用户没隐藏时才渲染：环仪不是例外，
+          // 组件可见性对所有布局必须一致（否则「隐藏了又出现」）。
+          kpis={ids.includes("kpis") ? WIDGET_COMPONENTS.kpis() : null}
         />
       )}
       {layout === "zen" && <Zen ids={ids} render={render} />}
@@ -240,9 +242,12 @@ function Orbit({
   ids: WidgetId[];
   render: Renderer;
   compact: boolean;
-  kpis: ReactNode;
+  kpis: ReactNode | null;
 }) {
   const satellites = ids.filter((id) => id !== "kpis");
+  // 关键指标被隐藏时，圆心仪表仍然保留（它是布局本身的一部分），
+  // 但不再额外渲染 kpis 卡片。
+
   const slots = orbitSlots(satellites, satellites.length);
 
   if (compact) {

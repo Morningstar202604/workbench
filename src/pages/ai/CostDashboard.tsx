@@ -14,7 +14,7 @@ import { useStore } from "../../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../../lib/i18n";
 import { Btn, Card, ConfirmDialog, SectionTitle, Spinner, StatCard } from "../../ui";
-import { formatTokens, formatUsd } from "../../lib/util";
+import { escapeHtml, formatTokens, formatUsd } from "../../lib/util";
 import { isPieWorthRendering } from "../../lib/aggregate";
 import { PricingEditor } from "./PricingEditor";
 import { usePricingSummary } from "./usePricingSummary";
@@ -81,7 +81,9 @@ export function CostDashboard() {
           params: { name: string; value: number; seriesName: string; marker: string }[]
         ) => {
           const p = params[0];
-          return `${p.name}<br/>${t("ai.costTrendTooltip", { value: p.value.toFixed(3) })}`;
+          return `${escapeHtml(p.name)}<br/>${escapeHtml(
+            t("ai.costTrendTooltip", { value: p.value.toFixed(3) })
+          )}`;
         },
       },
       legend: {

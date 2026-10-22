@@ -22,6 +22,7 @@ import { useShallow } from "zustand/react/shallow";
 import { Badge, Card, Empty, StatCard, Table, Td, Tr } from "../../ui";
 import {
   dueLabel,
+  escapeHtml,
   formatBytes,
   formatCpu,
   formatUptime,
@@ -366,11 +367,14 @@ export function DiskWidget() {
           data: { name: string; total: number; used: number; mount: string };
         }) => {
           const d = p.data;
-          return `<b>${d.name}</b><br/>${t("overview.diskTooltip", {
-            used: formatBytes(d.used),
-            total: formatBytes(d.total),
-            mount: d.mount,
-          })}`;
+          // 名称/挂载点来自本机磁盘卷标（外部可控字符串），必须转义后再拼 HTML
+          return `<b>${escapeHtml(d.name)}</b><br/>${escapeHtml(
+            t("overview.diskTooltip", {
+              used: formatBytes(d.used),
+              total: formatBytes(d.total),
+              mount: d.mount,
+            })
+          )}`;
         },
       },
       series: series.length

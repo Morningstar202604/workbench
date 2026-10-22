@@ -92,7 +92,7 @@ export function Btn({
     "t-btn inline-flex items-center gap-1.5 px-3 py-[5px] text-[12.5px] font-medium transition-colors disabled:opacity-40";
   const styles: Record<string, string> = {
     primary:
-      "bg-accent text-[#04120f] hover:brightness-110 active:brightness-95 font-semibold",
+      "bg-accent text-[var(--color-on-accent)] hover:brightness-110 active:brightness-95 font-semibold",
     ghost:
       "border border-line bg-panel2/70 text-text hover:border-line hover:bg-panel2 hover:text-text",
     danger: "border border-danger/40 bg-danger/10 text-danger hover:bg-danger/18",

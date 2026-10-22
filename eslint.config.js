@@ -13,6 +13,12 @@ export default tseslint.config(
       "src-tauri/**",
       "src/generated/**",
       "docs/**",
+      // 覆盖率报告是测试产物（含 v8 生成的 js），不是源码
+      "coverage/**",
+      // 审计/截图临时目录
+      "audit-shots/**",
+      "test-results/**",
+      "playwright-report/**",
     ],
   },
   {

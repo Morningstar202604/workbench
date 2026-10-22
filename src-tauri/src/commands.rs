@@ -1,6 +1,6 @@
 //! IPC 命令层：前端 invoke 的唯一入口。阻塞工作全部丢进 spawn_blocking。
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::ai::{self, AiProcess, OpencodeSession, SessionDetail, SessionFilePreview};
 use crate::cost_store::{self, CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow};
@@ -588,6 +588,92 @@ pub struct ScanCostResult {
     pub overview: CostOverview,
     pub trend: Vec<CostTrendRow>,
     pub model_breakdown: Vec<ModelBreakdownRow>,
+}
+
+/// 一次完整备份：把三份数据文件复制到用户选的目录，带时间戳。
+///
+/// 为什么需要：`data.json` / `cost_data.json` 目前只有「损坏时保全」这一层保护，
+/// 没有任何用户可用的显式备份。删除成本记录、清空数据都是不可逆的，
+/// 而备份只需要三次复制。
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+pub struct BackupResult {
+    pub dir: String,
+    pub files: Vec<String>,
+    /// 被跳过（不存在）的文件名，不算错误
+    pub skipped: Vec<String>,
+}
+
+#[tauri::command(async)]
+pub async fn backup_data(app: AppHandle) -> Result<BackupResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        // 备份写到应用自己的数据目录下，而不是让用户选路径：
+        // 选目录需要额外的对话框插件（新依赖），而备份的价值在于「一键且不丢」。
+        // 目标目录固定 → 不需要权限对话框，也不会因为用户选到只读盘而失败。
+        let base = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("无法定位数据目录: {e}"))?;
+        let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+        let out_dir = base.join("backups").join(&stamp);
+        std::fs::create_dir_all(&out_dir).map_err(|e| format!("创建备份目录失败: {e}"))?;
+
+        let mut files = Vec::new();
+        let mut skipped = Vec::new();
+        let sources: Vec<(&str, Result<std::path::PathBuf, String>)> = vec![
+            ("data.json", data::data_file_path(&app)),
+            ("cost_data.json", cost_store::cost_data_path_public(&app)),
+            (
+                "pricing_overrides.json",
+                cost_store::cost_data_path_overrides(&app),
+            ),
+        ];
+        for (name, path) in sources {
+            match path {
+                Ok(src) if src.exists() => {
+                    // 先复制到临时名再改名：备份中途失败不会留下半个文件
+                    let dst = out_dir.join(name);
+                    let tmp = out_dir.join(format!("{name}.tmp"));
+                    std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
+                    std::fs::rename(&tmp, &dst).map_err(|e| format!("落盘 {name} 失败: {e}"))?;
+                    files.push(name.to_string());
+                }
+                Ok(_) => skipped.push(name.to_string()),
+                Err(e) => return Err(format!("定位 {name} 失败: {e}")),
+            }
+        }
+        log::info!(
+            "数据备份完成: {} 个文件 -> {}",
+            files.len(),
+            out_dir.display()
+        );
+        Ok(BackupResult {
+            dir: out_dir.to_string_lossy().to_string(),
+            files,
+            skipped,
+        })
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
+/// 打开备份目录（只允许应用数据目录下的 `backups`）。
+///
+/// 不接受任意路径：这个命令的唯一用途是「备份完成后带用户去看一眼」，
+/// 若允许任意路径就等于把 open_path 暴露给 WebView。
+#[tauri::command(async)]
+pub async fn open_backup_dir(app: AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("无法定位数据目录: {e}"))?;
+        let dir = base.join("backups");
+        std::fs::create_dir_all(&dir).map_err(|e| format!("创建备份目录失败: {e}"))?;
+        tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| format!("打开失败: {e}"))?;
+        Ok(dir.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
 /// 定价覆盖：读取（含每条的校验错误）

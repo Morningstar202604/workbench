@@ -75,20 +75,25 @@ releases where supported:
 | ![Overview](docs/screenshots/01-overview.png) | ![Processes](docs/screenshots/02-processes.png) |
 | CPU / memory trends, disks, process groups | Full snapshot, virtual scrolling, kill confirmation |
 
-| Servers & ports | AI sessions & cost |
-|-----------------|--------------------|
+| Servers & ports | AI sessions |
+|-----------------|--------------|
 | ![Servers](docs/screenshots/03-servers.png) | ![AI sessions](docs/screenshots/04-ai-sessions.png) |
-| netstat parsing, dev-framework tags | Session preview, token metering, budgets |
+| netstat parsing, dev-framework tags | Session files, live sessions, tool mix |
+
+| Cost ledger | AI assistant |
+|-------------|--------------|
+| ![Costs](docs/screenshots/05-costs.png) | ![Assistant](docs/screenshots/06-agent.png) |
+| Budget progress, trend, model split, price editor | Tool-call trace, per-call approval, example prompts |
 
 | Projects | Tasks |
 |----------|-------|
-| ![Projects](docs/screenshots/05-projects.png) | ![Tasks](docs/screenshots/06-tasks.png) |
+| ![Projects](docs/screenshots/07-projects.png) | ![Tasks](docs/screenshots/08-tasks.png) |
 | Local projects, Git branch detection | Drag-and-drop kanban |
 
 | Settings | Logs |
 |----------|------|
-| ![Settings](docs/screenshots/07-settings.png) | ![Logs](docs/screenshots/08-logs.png) |
-| Theme, refresh interval, budgets, import/export | Built-in log viewer, tail reading |
+| ![Settings](docs/screenshots/09-settings.png) | ![Logs](docs/screenshots/10-logs.png) |
+| Theme editor, shell/layout, widgets, backup | Built-in log viewer, tail reading |
 
 ### Visual system
 
@@ -99,18 +104,18 @@ differ in surface colour, radius, density and type family, not just hue.
 
 | Brand mark (sidebar) | Brand mark (masthead) |
 |----------------------|-----------------------|
-| ![Sidebar brand](docs/screenshots/09-brand-sidebar.png) | ![Masthead brand](docs/screenshots/10-brand-hero.png) |
+| ![Sidebar brand](docs/screenshots/11-brand-sidebar.png) | ![Masthead brand](docs/screenshots/12-brand-hero.png) |
 
 The mark is four vector strokes with `currentColor` and no plate — it sits
 directly on the panel, on any background.
 
 | Icon at every shipped size | Icon embedded in the exe |
 |----------------------------|--------------------------|
-| ![Icon sizes](docs/screenshots/11-icon-sizes.png) | ![Exe icon](docs/screenshots/14-exe-icon.png) |
+| ![Icon sizes](docs/screenshots/13-icon-sizes.png) | ![Exe icon](docs/screenshots/16-exe-icon.png) |
 
 | Collapsed sidebar | Narrow screen (drawer) |
 |-------------------|------------------------|
-| ![Collapsed](docs/screenshots/13-sidebar-collapsed.png) | ![Drawer](docs/screenshots/12-mobile-drawer.png) |
+| ![Collapsed](docs/screenshots/15-sidebar-collapsed.png) | ![Drawer](docs/screenshots/14-mobile-drawer.png) |
 
 ### Themes, shells and layouts
 
@@ -134,8 +139,11 @@ Settings → Appearance, and any built-in theme can be duplicated and edited.
 - **Layout** re-arranges the overview: bento, ledger, orbit, dense, zen.
 - **Widgets** can be dragged, reordered and hidden independently of both.
 
-See [docs/plan-audit.md](docs/plan-audit.md) for the full capability audit and
-the list of features that were declared but never actually wired up.
+See [docs/plan-audit.md](docs/plan-audit.md) for the capability audit and
+[docs/audit-2026-10-22.md](docs/audit-2026-10-22.md) for the full
+correctness / security / reliability / performance / test-quality review,
+including the competitor matrix (Raycast, Datadog, Warp, Linear, Zed) and the
+measured coverage / complexity numbers.
 
 Regenerate screenshots yourself: `npm run build`, then `npm run preview`,
 then run a headless Chrome with

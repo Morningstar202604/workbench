@@ -28,6 +28,7 @@ export type { DiskInfo } from "./generated/DiskInfo";
 export type { ScanCostResult } from "./generated/ScanCostResult";
 export type { PricingRow } from "./generated/PricingRow";
 export type { PricingView } from "./generated/PricingView";
+export type { BackupResult } from "./generated/BackupResult";
 
 // ── Agent（模型 + 工具调用）──
 export type { ChatMessage } from "./generated/ChatMessage";

@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { DollarSign, Download, Eraser, RefreshCw, Upload } from "lucide-react";
+import {
+  Archive,
+  DollarSign,
+  Download,
+  Eraser,
+  FolderOpen,
+  RefreshCw,
+  Upload,
+} from "lucide-react";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { isTauri } from "../lib/api";
+import { backupData, isTauri, openBackupDir } from "../lib/api";
 import { APP_VERSION, setLang, useLang, useT, type Lang } from "../lib/i18n";
 import { Badge, Btn, Card, Field, SectionTitle, inputCls } from "../ui";
 import { AppearancePanel } from "../components/AppearancePanel";
@@ -354,6 +362,38 @@ export default function Settings() {
           <div className="flex flex-wrap gap-2">
             <Btn onClick={exportJson}>
               <Download size={14} /> {t("settings.exportJson")}
+            </Btn>
+            <Btn
+              onClick={async () => {
+                try {
+                  const r = await backupData();
+                  setToast(
+                    t("settings.backupDone", {
+                      files: r.files.length,
+                      dir: r.dir,
+                    })
+                  );
+                } catch (e) {
+                  setToast(t("settings.backupFailed", { err: String(e) }));
+                }
+              }}
+              disabled={!isTauri()}
+              title={t("settings.backupHint")}
+            >
+              <Archive size={14} /> {t("settings.backup")}
+            </Btn>
+            <Btn
+              onClick={async () => {
+                try {
+                  await openBackupDir();
+                } catch (e) {
+                  setToast(t("settings.backupFailed", { err: String(e) }));
+                }
+              }}
+              disabled={!isTauri()}
+              title={t("settings.openBackupHint")}
+            >
+              <FolderOpen size={14} /> {t("settings.openBackup")}
             </Btn>
             <Btn onClick={() => fileRef.current?.click()}>
               <Upload size={14} /> {t("settings.importJson")}

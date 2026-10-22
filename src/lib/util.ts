@@ -112,3 +112,19 @@ export function formatTokens(n: number): string {
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
+
+/**
+ * HTML 转义：ECharts 的 tooltip 默认 renderMode 是 `html`
+ * （node_modules/echarts/lib/util/model.js:673 `return renderModeOption || 'html'`），
+ * 内容最终走 `el.innerHTML`（TooltipHTMLContent.js:316）。
+ * 而磁盘卷标、挂载点、进程名都来自本机外部数据 —— 卷标可以任意命名。
+ * 任何进入 tooltip 的字符串都必须先转义，否则本地可被写入的卷标就是一条 XSS。
+ */
+export function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}

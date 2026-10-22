@@ -10,6 +10,7 @@ import type {
   ModelBreakdownRow,
   OpencodeSessionsResult,
   PortEntry,
+  BackupResult,
   PricingView,
   ProcInfo,
   ScanCostResult,
@@ -192,6 +193,14 @@ export async function saveCostSettings(settings: CostSettings): Promise<void> {
 }
 
 /** 清空全部成本记录 */
+export async function backupData(): Promise<BackupResult> {
+  return invoke<BackupResult>("backup_data");
+}
+
+export async function openBackupDir(): Promise<string> {
+  return invoke<string>("open_backup_dir");
+}
+
 export async function getPricing(): Promise<PricingView> {
   return invoke<PricingView>("get_pricing");
 }

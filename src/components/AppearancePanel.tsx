@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
-import { useT } from "../lib/i18n";
+import { useLang, useT } from "../lib/i18n";
 import {
   allThemes,
   deriveTheme,
@@ -25,6 +25,7 @@ import {
 } from "../lib/theme/presets";
 import {
   buildTheme,
+  contrastRatio,
   mix,
   type Density,
   type FontChoice,
@@ -43,6 +44,7 @@ import { Badge, Btn, Card, Field, Modal, SectionTitle, inputCls } from "../ui";
  */
 export function AppearancePanel() {
   const t = useT();
+  const lang = useLang();
   const {
     theme,
     customThemes,
@@ -239,7 +241,7 @@ export function AppearancePanel() {
                       ) : (
                         <span
                           className="ml-auto text-[9px]"
-                          style={{ color: mix(text, panel, 0.5) }}
+                          style={{ color: readableOn(text, panel, 4.6) }}
                         >
                           {t("settings.themeCustom")}
                         </span>
@@ -247,7 +249,7 @@ export function AppearancePanel() {
                     </div>
                     <div
                       className="mt-0.5 truncate text-[9.5px]"
-                      style={{ color: mix(text, panel, 0.42) }}
+                      style={{ color: readableOn(text, panel, 4.6) }}
                     >
                       {describeTheme(th)}
                     </div>
@@ -333,9 +335,9 @@ export function AppearancePanel() {
                       : "border-line hover:border-accent/40"
                   }`}
                 >
-                  <div className="text-[12px] font-medium">{s.name.zh}</div>
+                  <div className="text-[12px] font-medium">{s.name[lang]}</div>
                   <div className="mt-0.5 text-[10px] leading-snug text-faint">
-                    {s.hint.zh}
+                    {s.hint[lang]}
                   </div>
                 </button>
               ))}
@@ -350,7 +352,7 @@ export function AppearancePanel() {
                   type="button"
                   data-layout={l.id}
                   aria-pressed={layout === l.id}
-                  title={l.hint.zh}
+                  title={l.hint[lang]}
                   onClick={() => setLayout(l.id)}
                   className={`t-btn border px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
                     layout === l.id
@@ -358,7 +360,7 @@ export function AppearancePanel() {
                       : "border-line bg-panel2/70 text-dim hover:text-text"
                   }`}
                 >
-                  {l.name.zh}
+                  {l.name[lang]}
                 </button>
               ))}
             </div>
@@ -398,7 +400,9 @@ export function AppearancePanel() {
                   } ${hidden ? "opacity-45" : ""}`}
                 >
                   <GripVertical size={12} className="shrink-0 cursor-grab text-faint" />
-                  <span className="min-w-0 flex-1 truncate text-[12px]">{w.name.zh}</span>
+                  <span className="min-w-0 flex-1 truncate text-[12px]">
+                    {w.name[lang]}
+                  </span>
                   <Badge tone="dim">{w.span}/12</Badge>
                   <button
                     type="button"
@@ -455,6 +459,19 @@ export function AppearancePanel() {
 }
 
 // ── 主题编辑器 ─────────────────────────────────────────────
+
+/**
+ * 在给定底色上取一个「尽量接近 text 但至少满足 minRatio」的颜色。
+ * 主题卡片的副标题用的是每套主题自己的底色，写死混合比例必然有主题不达标。
+ */
+function readableOn(text: string, bg: string, minRatio: number): string {
+  if (contrastRatio(text, bg) >= minRatio) return text;
+  for (let i = 70; i >= 0; i--) {
+    const c = mix(text, bg, i / 100);
+    if (contrastRatio(c, bg) >= minRatio) return c;
+  }
+  return text;
+}
 
 const DENSITIES: { id: Density; key: string }[] = [
   { id: "compact", key: "settings.densityCompact" },
