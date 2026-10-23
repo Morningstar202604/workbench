@@ -50,8 +50,8 @@ process as administrator) when you need them. Data stays on your device.
 
 | Platform | File |
 |----------|------|
-| Windows 10/11 x64 | `Workbench_0.2.0_x64-setup.exe` (NSIS, ~4 MB) or portable `workbench.exe` |
-| Linux | `workbench_0.2.0_amd64.deb` |
+| Windows 10/11 x64 | `Workbench_0.2.0_x64-setup.exe` (NSIS, ~4 MB) |
+| Linux | not packaged for v0.2.0 — build from source, or keep using the `0.1.1` deb |
 
 > Not code-signed, so Windows SmartScreen may show an "Unknown publisher"
 > warning — choose **More info → Run anyway** (certificates cost money, the
@@ -61,9 +61,9 @@ Pick any mirror — identical code, each publishes its own releases:
 
 | Mirror | Releases |
 |--------|----------|
-| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) |
-| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) |
-| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) |
+| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) — still on **v0.1.1** (push credentials pending) |
+| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) — v0.2.0 released; installer asset pending upload from the release page |
+| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) — v0.2.0 released; installer asset pending upload from the release page |
 
 ## Build
 

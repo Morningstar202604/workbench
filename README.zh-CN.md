@@ -49,8 +49,8 @@
 
 | 平台 | 文件 |
 |------|------|
-| Windows 10/11 x64 | `Workbench_0.2.0_x64-setup.exe`（NSIS，约 4 MB）或免安装 `workbench.exe` |
-| Linux | `workbench_0.2.0_amd64.deb` |
+| Windows 10/11 x64 | `Workbench_0.2.0_x64-setup.exe`（NSIS，约 4 MB） |
+| Linux | v0.2.0 暂无安装包 —— 可源码构建，或沿用 0.1.1 的 deb |
 
 > 安装包未做代码签名，Windows SmartScreen 可能提示「未知发布者」——
 > 点「更多信息 → 仍要运行」即可（证书需付费，文件没有风险）。
@@ -59,9 +59,9 @@
 
 | 镜像 | Release 页 |
 |------|------------|
-| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) |
-| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) |
-| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) |
+| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) —— 停留在 **v0.1.1**（推送凭据待解决） |
+| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) —— 已发 v0.2.0，安装包附件待从 Release 页上传 |
+| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) —— 已发 v0.2.0，安装包附件待从 Release 页上传 |
 
 ## 构建
 

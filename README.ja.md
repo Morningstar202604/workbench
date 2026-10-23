@@ -49,8 +49,8 @@
 
 | プラットフォーム | ファイル |
 |------------------|----------|
-| Windows 10/11 x64 | `Workbench_0.2.0_x64-setup.exe`（NSIS、約 4 MB）またはポータブル `workbench.exe` |
-| Linux | `workbench_0.2.0_amd64.deb` |
+| Windows 10/11 x64 | `Workbench_0.2.0_x64-setup.exe`（NSIS、約 4 MB） |
+| Linux | v0.2.0 は未提供 —— ソースからビルド、または 0.1.1 の deb を利用 |
 
 > コード署名されていないため、Windows SmartScreen が「不明な発行元」を表示する
 > ことがあります。**詳細情報 → 実行** で問題ありません（証明書に費用がかかるためで、
@@ -60,9 +60,9 @@
 
 | ミラー | Release ページ |
 |--------|----------------|
-| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) |
-| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) |
-| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) |
+| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) —— **v0.1.1** のまま（push 認証は未解決） |
+| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) —— v0.2.0 公開済み、インストーラー添付は Release ページから対応予定 |
+| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) —— v0.2.0 公開済み、インストーラー添付は Release ページから対応予定 |
 
 ## ビルド
 
