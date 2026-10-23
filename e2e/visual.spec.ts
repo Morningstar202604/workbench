@@ -23,7 +23,15 @@ const THEMES = [
   "jade",
 ] as const;
 
-const LAYOUTS = ["bento", "ledger", "orbit", "dense", "zen"] as const;
+const LAYOUTS = [
+  "bento",
+  "ledger",
+  "orbit",
+  "dense",
+  "zen",
+  "timeline",
+  "board",
+] as const;
 const SHELLS = ["rail", "dock", "zen"] as const;
 
 /** 通过侧栏/顶部坞的导航按钮打开页面（title 在折叠态也有，比文字稳）。 */
@@ -111,8 +119,8 @@ test.describe("布局稳定性", () => {
     }
   });
 
-  test("五种概览布局都渲染出同一批组件", async ({ page }) => {
-    test.setTimeout(90_000);
+  test("七种概览布局都渲染出同一批组件", async ({ page }) => {
+    test.setTimeout(120_000);
     for (const layout of LAYOUTS) {
       await pickLayout(page, layout);
       // 每种布局都必须至少渲染「关键指标」，否则就是整页塌了
@@ -159,7 +167,7 @@ test.describe("布局稳定性", () => {
     await expect(
       page.locator("main button[aria-label]").filter({ hasText: "" })
     ).not.toHaveCount(0);
-    await expect(page.locator("button[data-layout]")).toHaveCount(5);
+    await expect(page.locator("button[data-layout]")).toHaveCount(7);
     await expect(page.locator("button[data-shell]")).toHaveCount(3);
     await expect(page).toHaveScreenshot("settings.png", { maxDiffPixelRatio: 0.005 });
   });

@@ -4,19 +4,27 @@ import { useShallow } from "zustand/react/shallow";
 import { useT, useLang, localeFor, type Lang } from "../../lib/i18n";
 import { useBreakpoint } from "../../lib/useBreakpoint";
 import { BrandMark } from "../../components/BrandMark";
-import { orbitSlots, spanOf, widgetsForLayout, type WidgetId } from "../../lib/layout";
+import {
+  orbitSlots,
+  boardLanes,
+  spanOf,
+  widgetsForLayout,
+  type WidgetId,
+} from "../../lib/layout";
 import { Nameplate, OrbitTile } from "./widgets";
 import { WIDGET_COMPONENTS } from "./registry";
 
 /**
  * 概览页：只负责「按布局摆放组件」。
  *
- * 五种布局共享同一批组件，差异只在容器与流式规则：
+ * 七种布局共享同一批组件，差异只在容器与流式规则：
  * - bento：12 栅格，组件按自身 span 占位；
  * - ledger：单列通栏，逐行扫读；
  * - orbit：以圆心仪表为轴，模块绕环分布（窄屏自动退化成列表）；
  * - dense：两列紧排，去掉装饰间距；
- * - zen：只留指标与主图。
+ * - zen：只留指标与主图；
+ * - timeline：竖向轨道，组件按用户排序各占一站；
+ * - board：固定三列（信号 / 资源 / 工作），按用途分组。
  *
  * 为什么用 CSS grid + 少量内联定位而不是把布局也做成数据驱动引擎：
  * 组件宽度只有「占几列」这一维，栅格已经能表达；做一套通用布局 DSL
@@ -99,6 +107,8 @@ export default function Overview() {
       {layout === "bento" && <Bento ids={ids} render={render} spans={widgetSpans} />}
       {layout === "dense" && <Dense ids={ids} render={render} />}
       {layout === "ledger" && <Ledger ids={ids} render={render} spans={widgetSpans} />}
+      {layout === "timeline" && <Timeline ids={ids} render={render} />}
+      {layout === "board" && <Board ids={ids} render={render} />}
       {layout === "orbit" && (
         <Orbit
           ids={ids}
@@ -265,6 +275,58 @@ function Zen({ ids, render }: { ids: WidgetId[]; render: Renderer }) {
       {ids.map((id) => (
         <div key={id} className={id === "resources" ? "min-h-[320px]" : ""}>
           {render(id)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * 时间轴：一条竖向轨道，组件按用户排序自上而下各占一站。
+ *
+ * 和 ledger（通栏扫读）的区别在「站」的隐喻：每个组件带序号标记，
+ * 一眼能数出「这一页有几块东西、现在读到第几块」。序号是唯一的装饰，
+ * 不加动画、不加渐变——工具页要的是可数，不是好看。
+ */
+function Timeline({ ids, render }: { ids: WidgetId[]; render: Renderer }) {
+  return (
+    <div className="ml-1 flex flex-col gap-4 border-l border-line pl-5">
+      {ids.map((id, i) => (
+        <div key={id} className="relative">
+          <span
+            className="num absolute -left-[28px] top-3.5 flex h-4 w-4 items-center justify-center rounded-full border border-accent/70 bg-panel text-[9px] font-medium leading-none text-dim"
+            aria-hidden="true"
+          >
+            {i + 1}
+          </span>
+          {render(id)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * 看板：固定三列（信号 / 资源 / 工作），按组件用途分组。
+ *
+ * 列是固定的而顺序是用户的：跨列重排会破坏「同类相邻」这个看板的核心
+ * 价值，所以跨列顺序不遵守全局排序（提示文案里写明）；列内仍按用户的
+ * 顺序渲染。空列直接不渲染，避免一条孤零零的列头。
+ */
+function Board({ ids, render }: { ids: WidgetId[]; render: Renderer }) {
+  const t = useT();
+  const lanes = boardLanes(ids);
+  return (
+    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+      {lanes.map((lane) => (
+        <div key={lane.id} data-lane={lane.id} className="flex min-w-0 flex-col gap-2.5">
+          <div className="flex items-center gap-1.5 border-b border-line/70 pb-1.5 text-[11px] font-medium tracking-[0.06em] text-faint">
+            <span>{t(`overview.lane.${lane.id}`)}</span>
+            <span className="num ml-auto text-[10px]">{lane.widgets.length}</span>
+          </div>
+          {lane.widgets.map((id) => (
+            <div key={id}>{render(id)}</div>
+          ))}
         </div>
       ))}
     </div>

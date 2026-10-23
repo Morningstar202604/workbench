@@ -7,6 +7,9 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Theme share links.** The appearance panel gained a "Share link" button next to export: it packs the current theme into the URL fragment (`#theme=…`, base64url of the same JSON the export button writes). Opening such a link imports the theme once at boot through the same fail-closed validator as the JSON import (id collisions are renamed, never overwritten) and strips the fragment from the address bar, so reloading cannot import twice. A payload that fails to decode or validate is dropped and the fragment is still cleared.
+- **Two more overview layouts.** "Timeline" hangs every visible widget off one vertical rail as numbered stops, in the user's order. "Board" groups widgets into three fixed lanes (signals / resources / work) by purpose, keeps the user's order within each lane and drops empty lanes. Both ship with wireframe previews in Settings; the visual suite now covers seven layouts.
+
 - **The cost ledger is now SQLite** (`cost.db`, `rusqlite` with the bundled
   amalgamation). Records are indexed by day / model / file, aggregation runs in
   SQL, and the scan writes incrementally inside one transaction. The old
@@ -52,8 +55,8 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   full-width canvas) or zen (icon strip + centred column). Previously
   `StyleDef.shell` only rounded the preview swatch in Settings and never
   affected the app.
-- **Overview has five layouts** over the same nine widget components: bento,
-  ledger, orbit, dense, zen. The orbit layout keeps the yin-yang *structure*
+- **Overview has seven layouts** over the same nine widget components: bento,
+  ledger, orbit, dense, zen, timeline, board. The orbit layout keeps the yin-yang *structure*
   (one hub + a ring of satellites) without rotating cards or text — the hub
   carries the headline gauge.
 - **Widgets can be reordered and hidden** from Settings or dragged directly on

@@ -5,6 +5,7 @@ import {
   SHELLS,
   WIDGETS,
   ZEN_WIDGETS,
+  boardLanes,
   normalizeHidden,
   normalizeLayout,
   normalizeOrder,
@@ -72,6 +73,63 @@ describe("normalizeShell / normalizeLayout", () => {
     expect(normalizeLayout("orbit")).toBe("orbit");
     expect(normalizeLayout("ledger")).toBe("ledger");
     expect(normalizeLayout("circle")).toBe("bento");
+  });
+
+  it("新增版面 timeline / board 可被接受，旧值不受影响", () => {
+    expect(normalizeLayout("timeline")).toBe("timeline");
+    expect(normalizeLayout("board")).toBe("board");
+    expect(LAYOUTS.map((l) => l.id)).toContain("timeline");
+    expect(LAYOUTS.map((l) => l.id)).toContain("board");
+  });
+});
+
+describe("widgetsForLayout（timeline）", () => {
+  it("时间轴返回全部可见组件且保持用户顺序", () => {
+    const order = ["kpis", "tasks", "disks", "ports"] as const;
+    expect(widgetsForLayout("timeline", [...order], [])).toEqual([...order]);
+  });
+
+  it("隐藏的组件被过滤", () => {
+    const out = widgetsForLayout("timeline", DEFAULT_ORDER, ["disks", "ports"]);
+    expect(out).not.toContain("disks");
+    expect(out).not.toContain("ports");
+    expect(out.length).toBe(DEFAULT_ORDER.length - 2);
+  });
+});
+
+describe("boardLanes", () => {
+  it("按固定三列分组：信号 / 资源 / 工作", () => {
+    const lanes = boardLanes(DEFAULT_ORDER);
+    expect(lanes.map((l) => l.id)).toEqual(["signals", "resources", "work"]);
+    expect(lanes[0].widgets).toEqual(["kpis", "resources", "categories"]);
+    expect(lanes[1].widgets).toEqual(["disks", "ports", "processes"]);
+    expect(lanes[2].widgets).toEqual(["services", "tasks", "sessions"]);
+  });
+
+  it("只包含可见组件，列内保持用户顺序，空列被丢弃", () => {
+    const lanes = boardLanes(["tasks", "ports", "kpis"]);
+    expect(lanes).toEqual([
+      { id: "signals", widgets: ["kpis"] },
+      { id: "resources", widgets: ["ports"] },
+      { id: "work", widgets: ["tasks"] },
+    ]);
+  });
+
+  it("同一列内的多个组件遵守用户排序（不是注册表顺序）", () => {
+    const lanes = boardLanes(["sessions", "services", "kpis", "categories"]);
+    expect(lanes).toEqual([
+      { id: "signals", widgets: ["kpis", "categories"] },
+      { id: "work", widgets: ["sessions", "services"] },
+    ]);
+  });
+
+  it("全部隐藏时返回空数组，不抛异常", () => {
+    expect(boardLanes([])).toEqual([]);
+  });
+
+  it("未知 id 不会出现在任何一列", () => {
+    const lanes = boardLanes(["bogus" as never]);
+    expect(lanes).toEqual([]);
   });
 });
 

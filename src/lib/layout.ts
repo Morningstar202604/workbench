@@ -13,7 +13,8 @@
 
 export type ShellId = "rail" | "dock" | "zen";
 
-export type OverviewLayoutId = "bento" | "ledger" | "orbit" | "zen" | "dense";
+export type OverviewLayoutId =
+  "bento" | "ledger" | "orbit" | "zen" | "dense" | "timeline" | "board";
 
 export interface ShellDef {
   id: ShellId;
@@ -101,6 +102,24 @@ export const LAYOUTS: LayoutDef[] = [
       en: "Four numbers and one chart; everything else rests until asked for",
       zh: "四个数字 + 一张图；其余内容不打扰",
       ja: "数字 4 つとグラフ 1 枚だけ",
+    },
+  },
+  {
+    id: "timeline",
+    name: { en: "Timeline", zh: "时间轴", ja: "タイムライン" },
+    hint: {
+      en: "Each widget is a numbered stop on one vertical rail, top to bottom in your order",
+      zh: "每个组件是竖向轨道上的一站，带序号，按你的排序自上而下",
+      ja: "各ウィジェットを番号付きの縦レールに順に配置",
+    },
+  },
+  {
+    id: "board",
+    name: { en: "Board", zh: "看板", ja: "ボード" },
+    hint: {
+      en: "Three fixed lanes — signals, resources, work — grouped by purpose; your order kept within each lane",
+      zh: "固定三列：信号、资源、工作，按用途分组（列内仍按你的排序）",
+      ja: "3 つの固定レーン（状態 / リソース / 作業）に目的別に配置。列内はあなたの順序",
     },
   },
 ];
@@ -269,11 +288,48 @@ export function normalizeLayout(raw: unknown): OverviewLayoutId {
     raw === "orbit" ||
     raw === "zen" ||
     raw === "dense" ||
+    raw === "timeline" ||
+    raw === "board" ||
     raw === "bento"
   ) {
     return raw;
   }
   return "bento";
+}
+
+/**
+ * 看板布局的固定三列：按组件「是干什么的」分组，而不是按用户全局排序
+ * 硬拆——看板的价值就在于同类的站在一起。列内仍然遵守用户排序，
+ * 隐藏的组件照常不出现，空列在渲染层被丢弃。
+ */
+export type BoardLaneId = "signals" | "resources" | "work";
+
+export const BOARD_LANES: { id: BoardLaneId; widgets: WidgetId[] }[] = [
+  { id: "signals", widgets: ["kpis", "resources", "categories"] },
+  { id: "resources", widgets: ["disks", "ports", "processes"] },
+  { id: "work", widgets: ["services", "tasks", "sessions"] },
+];
+
+/** 把（已过滤可见性的）组件列表分进三列；空列不返回。 */
+export function boardLanes(ids: WidgetId[]): { id: BoardLaneId; widgets: WidgetId[] }[] {
+  // 按 ids（用户顺序）分桶，而不是按 BOARD_LANES 过滤——否则列内顺序
+  // 变成注册表顺序，「列内仍按你的排序」就是一句假话。
+  const laneOf = new Map<WidgetId, BoardLaneId>();
+  for (const lane of BOARD_LANES) {
+    for (const w of lane.widgets) laneOf.set(w, lane.id);
+  }
+  const buckets = new Map<BoardLaneId, WidgetId[]>();
+  for (const id of ids) {
+    const lane = laneOf.get(id);
+    if (!lane) continue;
+    const bucket = buckets.get(lane);
+    if (bucket) bucket.push(id);
+    else buckets.set(lane, [id]);
+  }
+  return BOARD_LANES.filter((lane) => buckets.has(lane.id)).map((lane) => ({
+    id: lane.id,
+    widgets: buckets.get(lane.id)!,
+  }));
 }
 
 /**

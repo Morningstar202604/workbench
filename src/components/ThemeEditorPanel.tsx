@@ -15,9 +15,9 @@ import { Btn, Field, Modal, inputCls } from "../ui";
 /**
  * 版面线框图：用几块灰阶矩形表达「组件怎么摆」。
  *
- * 为什么值得画：五种版面在文字描述上都是「重排概览」，用户点之前
+ * 为什么值得画：各版面在文字描述上都是「重排概览」，用户点之前
  * 分不出差别；而线框能在一眼之内说明 bento 是大小格、ledger 是通栏、
- * orbit 是绕环、dense 是两列、zen 是一条主图。
+ * orbit 是绕环、dense 是两列、zen 是一条主图、timeline 是竖轨、board 是三列。
  */
 export function LayoutWireframe({ id }: { id: string }) {
   const rows: Record<string, React.ReactNode> = {
@@ -76,6 +76,31 @@ export function LayoutWireframe({ id }: { id: string }) {
       <div className="flex h-full flex-col gap-1 items-center justify-center">
         <div className="h-3 w-2/3 rounded-[2px] bg-current opacity-70" />
         <div className="h-8 w-full rounded-[2px] bg-current opacity-40" />
+      </div>
+    ),
+    timeline: (
+      <div className="relative h-full pl-3">
+        <div className="absolute bottom-0.5 left-[2px] top-0.5 w-px bg-current opacity-30" />
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="relative mb-1 flex items-center">
+            <span className="absolute -left-[6.5px] h-[9px] w-[9px] rounded-full bg-current opacity-70" />
+            <div
+              className="h-3 rounded-[2px] bg-current opacity-45"
+              style={{ width: ["100%", "82%", "64%"][i] }}
+            />
+          </div>
+        ))}
+      </div>
+    ),
+    board: (
+      <div className="grid h-full grid-cols-3 gap-1.5">
+        {[3, 2, 2].map((n, c) => (
+          <div key={c} className="flex flex-col gap-1 border-t border-current/50 pt-1">
+            {Array.from({ length: n }).map((_, i) => (
+              <div key={i} className="h-2.5 rounded-[2px] bg-current opacity-45" />
+            ))}
+          </div>
+        ))}
       </div>
     ),
   };

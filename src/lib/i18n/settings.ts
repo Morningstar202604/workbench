@@ -32,7 +32,7 @@ export const dict = {
     "pricing.path": "File: {path}",
     "settings.themeSection": "Theme",
     "settings.themeHint":
-      "Pick a theme, or duplicate one and change its palette, radius, type, density and material. Themes are data — export one to share it.",
+      "Pick a theme, or duplicate one and change its palette, radius, type, density and material. Themes are data — export a file or copy a share link.",
     "settings.themeCustom": "Custom",
     "settings.themeNew": "Duplicate as custom",
     "settings.themeEdit": "Edit",
@@ -44,6 +44,10 @@ export const dict = {
     "settings.themeCopied": "Copied as a new custom theme",
     "settings.themeExported": "Theme JSON exported",
     "settings.themeImported": "Theme imported",
+    "settings.themeShare": "Share link",
+    "settings.themeShareCopied":
+      "Share link copied — opening it in Workbench imports this theme",
+    "settings.themeShareFailed": "Could not copy the link",
     "settings.editorTitle": "Edit theme",
     "settings.editorName": "Name",
     "settings.editorColors": "Colors",
@@ -212,7 +216,7 @@ export const dict = {
     "pricing.path": "文件：{path}",
     "settings.themeSection": "主题",
     "settings.themeHint":
-      "选一套主题，或复制一套后改配色、圆角、字体、密度与材质。主题是数据——可以导出分享给别人。",
+      "选一套主题，或复制一套后改配色、圆角、字体、密度与材质。主题是数据——导出文件或复制分享链接都行。",
     "settings.themeCustom": "自定义",
     "settings.themeNew": "复制为新主题",
     "settings.themeEdit": "编辑",
@@ -224,6 +228,9 @@ export const dict = {
     "settings.themeCopied": "已复制为新主题",
     "settings.themeExported": "主题 JSON 已导出",
     "settings.themeImported": "主题已导入",
+    "settings.themeShare": "分享链接",
+    "settings.themeShareCopied": "分享链接已复制——在 Workbench 打开即可一键导入该主题",
+    "settings.themeShareFailed": "复制链接失败",
     "settings.editorTitle": "编辑主题",
     "settings.editorName": "名称",
     "settings.editorColors": "配色",
@@ -384,7 +391,7 @@ export const dict = {
     "pricing.path": "ファイル: {path}",
     "settings.themeSection": "テーマ",
     "settings.themeHint":
-      "テーマを選ぶか、複製して配色・角丸・書体・密度・質感を変更できます。テーマはデータなので書き出して共有できます。",
+      "テーマを選ぶか、複製して配色・角丸・書体・密度・質感を変更できます。テーマはデータです。書き出しでも共有リンクでも渡せます。",
     "settings.themeCustom": "カスタム",
     "settings.themeNew": "複製してカスタム化",
     "settings.themeEdit": "編集",
@@ -396,6 +403,10 @@ export const dict = {
     "settings.themeCopied": "カスタムテーマとして複製しました",
     "settings.themeExported": "テーマ JSON を書き出しました",
     "settings.themeImported": "テーマを読み込みました",
+    "settings.themeShare": "共有リンク",
+    "settings.themeShareCopied":
+      "共有リンクをコピーしました——Workbench で開くとこのテーマを読み込みます",
+    "settings.themeShareFailed": "リンクをコピーできませんでした",
     "settings.editorTitle": "テーマを編集",
     "settings.editorName": "名前",
     "settings.editorColors": "配色",

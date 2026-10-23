@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   GripVertical,
+  Link2,
   Pencil,
   Plus,
   RotateCcw,
@@ -36,6 +37,7 @@ import {
 } from "../lib/layout";
 import { LayoutWireframe, ThemeEditor } from "./ThemeEditorPanel";
 import { readableOn } from "../lib/theme/readable";
+import { buildShareUrl } from "../lib/theme/share";
 import { Btn, Card, Field, SectionTitle } from "../ui";
 
 /**
@@ -131,6 +133,14 @@ export function AppearancePanel() {
     setToast(res.ok ? t("settings.themeImported") : res.error || "");
   };
 
+  /** 分享链接：主题压进 URL hash，对方打开即导入（与 JSON 导入同一套校验）。 */
+  const shareTheme = () => {
+    navigator.clipboard
+      .writeText(buildShareUrl(current))
+      .then(() => setToast(t("settings.themeShareCopied")))
+      .catch(() => setToast(t("settings.themeShareFailed")));
+  };
+
   const move = (id: WidgetId, dir: -1 | 1) => {
     const order = normalizeOrder(widgetOrder);
     const idx = order.indexOf(id);
@@ -174,6 +184,13 @@ export function AppearancePanel() {
               </Btn>
               <Btn className="!px-2 !py-1 !text-[11px]" onClick={exportTheme}>
                 <Download size={12} /> {t("settings.themeExport")}
+              </Btn>
+              <Btn
+                className="!px-2 !py-1 !text-[11px]"
+                onClick={shareTheme}
+                title={t("settings.themeShareCopied")}
+              >
+                <Link2 size={12} /> {t("settings.themeShare")}
               </Btn>
               <Btn
                 variant="primary"

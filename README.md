@@ -403,7 +403,7 @@ Done and planned. Vote or propose new ideas in the Issues.
 - [x] AI session cost metering with budget alerts
 - [x] Projects & task kanban
 - [x] Data-driven themes (8 built-ins + custom editor + import/export), log viewer
-- [x] Three shells (rail / top dock / zen) and five overview layouts
+- [x] Three shells (rail / top dock / zen) and seven overview layouts
 - [x] Draggable, hideable overview widgets
 - [x] Multilingual UI (English / 简体中文 / 日本語)
 - [x] Cross-platform (Windows and Linux built and verified; macOS built by the
@@ -416,6 +416,8 @@ Done and planned. Vote or propose new ideas in the Issues.
       suites: data/backup, agent approval, import/export)
 - [x] Editable widget widths (4/6/8/12 columns)
 - [x] Theme editor: status colours, live contrast readout, UI scale
+- [x] Theme share links (theme packed into a URL fragment — opens straight into
+      the importer, no backend needed)
 - [ ] Auto-update (needs a signed release channel)
 
 ## Known limitations
