@@ -225,6 +225,39 @@ export function normalizeHidden(raw: unknown): WidgetId[] {
   return out;
 }
 
+/** 用户可选的组件宽度档位（12 栅格制）。 */
+export const SPAN_OPTIONS = [4, 6, 8, 12] as const;
+export type WidgetSpan = (typeof SPAN_OPTIONS)[number];
+
+/**
+ * 组件宽度覆盖表。缺省（没有这个 id）= 用组件自带的 span。
+ *
+ * 为什么是覆盖而不是完整表：组件增删时（版本升级加了新组件），
+ * 完整表会缺键，界面就只剩默认值；覆盖表天然向后兼容。
+ */
+export function normalizeSpans(raw: unknown): Partial<Record<WidgetId, number>> {
+  const known = new Set<string>(WIDGETS.map((w) => w.id));
+  const out: Partial<Record<WidgetId, number>> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!known.has(k)) continue;
+    if (typeof v !== "number" || !Number.isFinite(v)) continue;
+    const snapped = SPAN_OPTIONS.reduce((best, opt) =>
+      Math.abs(opt - v) < Math.abs(best - v) ? opt : best
+    );
+    out[k as WidgetId] = snapped;
+  }
+  return out;
+}
+
+/** 某个组件在给定覆盖表下的实际栅格宽度。 */
+export function spanOf(
+  id: WidgetId,
+  overrides: Partial<Record<WidgetId, number>>
+): number {
+  return overrides[id] ?? widgetOf(id).span;
+}
+
 export function normalizeShell(raw: unknown): ShellId {
   if (raw === "dock" || raw === "zen" || raw === "rail") return raw;
   return "rail";

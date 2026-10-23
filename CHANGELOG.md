@@ -7,6 +7,16 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **The cost ledger is now SQLite** (`cost.db`, `rusqlite` with the bundled
+  amalgamation). Records are indexed by day / model / file, aggregation runs in
+  SQL, and the scan writes incrementally inside one transaction. The old
+  `cost_data.json` is imported once on first launch and renamed
+  `cost_data.json.migrated` (never deleted) — a failed import leaves the file in
+  place and retries next launch. Backups snapshot the database with
+  `VACUUM INTO` (a plain file copy can catch a half-merged journal) and
+  restoring validates `PRAGMA integrity_check` before touching live data and
+  clears stale `-wal`/`-shm`/`-journal` sidecars. Measured: 100k records →
+  overview + trend + breakdown in 246 ms.
 - **Start at login**, backed by the real OS registration (`tauri-plugin-autostart`):
   HKCU\…\Run on Windows, a `.desktop` file under `~/.config/autostart` on
   Linux, a LaunchAgent on macOS. The toggle reads `is_enabled` from the OS on
@@ -54,6 +64,21 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   wrapper, so Settings / Logs / Projects never download it. Measured on the
   production build: first-contentful-paint 292 ms, chart chunk requested only
   after the overview paints.
+- **The theme now drives more than colour.** The chart series palette is derived
+  from the accent hue instead of a fixed purple/blue/pink list, so a paper or
+  ink theme no longer grows purple charts. The editor exposes the three status
+  colours (`ok` / `warn` / `danger`) that `parseTheme` always accepted but the UI
+  never showed, prints a live WCAG contrast ratio next to every colour, and has
+  an **UI scale** slider (85–120%) that scales the whole WebView, not just the
+  handful of rem-based sizes.
+- **Widget widths are editable.** `widgetSpans` stores per-widget overrides
+  (4/6/8/12 columns) with a picker in Settings; bento and ledger honour them.
+  Previously "custom layout" only meant order and visibility.
+- **`node scripts/ci-local.mjs`** runs the same steps as `ci.yml` on this
+  machine (icon contract, typecheck, lint, format, unit, build, Playwright,
+  cargo fmt/test/clippy, IPC drift), so the remote run is a confirmation rather
+  than a discovery. `--linux` tries the Linux job in Docker and says plainly
+  when it cannot.
 - **Complexity pass**: every function in `src/` is now at or below cyclomatic
   complexity 10 (was: `App` 43, `CostDashboard` 32, `parseTheme` 22,
   `buildTheme` 19, `Processes` 14, `Agent` 17). Extracted modules:

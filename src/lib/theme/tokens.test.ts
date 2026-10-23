@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTheme,
+  chartSeries,
+  clampTextScale,
   luminance,
   mix,
   parseHex,
@@ -139,5 +141,58 @@ describe("buildTheme", () => {
     // dim/faint 是 text 与 bg 之间，必然比 text 浅、比 bg 深
     expect(luminance(light.vars["--color-dim"])).toBeGreaterThan(luminance("#111111"));
     expect(luminance(light.vars["--color-dim"])).toBeLessThan(luminance("#ffffff"));
+  });
+});
+
+/**
+ * 图表系列色与缩放。
+ *
+ * 这两个都是「写死值读起来没问题、换主题就露馅」的地方：
+ * 固定调色板在米色/黑白主题上会突然出现紫色；缩放写死 100% 时
+ * 4K 屏用户只能靠系统放大镜。
+ */
+describe("chartSeries", () => {
+  const hsl = (hex: string) => {
+    const n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+
+  it("首色永远是主题强调色", () => {
+    for (const accent of ["#22d3ee", "#8a5a2b", "#d92b2b", "#1f7a5a"]) {
+      expect(chartSeries(accent, true)[0]).toBe(accent);
+    }
+  });
+
+  it("返回 8 个互不相同的颜色", () => {
+    const series = chartSeries("#22d3ee", true);
+    expect(series).toHaveLength(8);
+    expect(new Set(series.map((c) => c.toLowerCase())).size).toBeGreaterThanOrEqual(7);
+  });
+
+  it("深色主题的系列色比浅色主题更亮", () => {
+    const lum = (hex: string) => {
+      const [r, g, b] = hsl(hex).map((v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const dark = chartSeries("#22d3ee", true).slice(1);
+    const light = chartSeries("#22d3ee", false).slice(1);
+    const avg = (xs: string[]) => xs.reduce((a, c) => a + lum(c), 0) / xs.length;
+    expect(avg(dark)).toBeGreaterThan(avg(light));
+  });
+});
+
+describe("clampTextScale", () => {
+  it("缺省与非法值都是 1", () => {
+    expect(clampTextScale(undefined)).toBe(1);
+    expect(clampTextScale(Number.NaN)).toBe(1);
+  });
+
+  it("夹在 0.85–1.2", () => {
+    expect(clampTextScale(0.5)).toBe(0.85);
+    expect(clampTextScale(2)).toBe(1.2);
+    expect(clampTextScale(1.1)).toBeCloseTo(1.1, 5);
   });
 });

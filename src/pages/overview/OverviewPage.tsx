@@ -4,7 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useT, useLang, localeFor, type Lang } from "../../lib/i18n";
 import { useBreakpoint } from "../../lib/useBreakpoint";
 import { BrandMark } from "../../components/BrandMark";
-import { orbitSlots, widgetOf, widgetsForLayout, type WidgetId } from "../../lib/layout";
+import { orbitSlots, spanOf, widgetsForLayout, type WidgetId } from "../../lib/layout";
 import { Nameplate, OrbitTile } from "./widgets";
 import { WIDGET_COMPONENTS } from "./registry";
 
@@ -28,11 +28,12 @@ export default function Overview() {
   const lang = useLang();
   const bp = useBreakpoint();
   const [dragging, setDragging] = useState<WidgetId | null>(null);
-  const { layout, widgetOrder, widgetHidden, setWidgetOrder } = useStore(
+  const { layout, widgetOrder, widgetHidden, widgetSpans, setWidgetOrder } = useStore(
     useShallow((s) => ({
       layout: s.layout,
       widgetOrder: s.widgetOrder,
       widgetHidden: s.widgetHidden,
+      widgetSpans: s.widgetSpans,
       setWidgetOrder: s.setWidgetOrder,
     }))
   );
@@ -95,9 +96,9 @@ export default function Overview() {
 
       <Nameplate />
 
-      {layout === "bento" && <Bento ids={ids} render={render} />}
+      {layout === "bento" && <Bento ids={ids} render={render} spans={widgetSpans} />}
       {layout === "dense" && <Dense ids={ids} render={render} />}
-      {layout === "ledger" && <Ledger ids={ids} render={render} />}
+      {layout === "ledger" && <Ledger ids={ids} render={render} spans={widgetSpans} />}
       {layout === "orbit" && (
         <Orbit
           ids={ids}
@@ -159,32 +160,33 @@ function Masthead({ date, lang }: { date: Date; lang: Lang }) {
 
 type Renderer = (id: WidgetId) => ReactNode;
 
-function Bento({ ids, render }: { ids: WidgetId[]; render: Renderer }) {
+function Bento({
+  ids,
+  render,
+  spans,
+}: {
+  ids: WidgetId[];
+  render: Renderer;
+  spans: Partial<Record<WidgetId, number>>;
+}) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-      {ids.map((id) => {
-        const w = widgetOf(id);
-        return (
-          <div
-            key={id}
-            className={
-              w.span >= 12
-                ? "lg:col-span-12"
-                : w.span >= 8
-                  ? "lg:col-span-8"
-                  : w.span >= 6
-                    ? "lg:col-span-6"
-                    : w.span >= 4
-                      ? "lg:col-span-4"
-                      : "lg:col-span-3"
-            }
-          >
-            {render(id)}
-          </div>
-        );
-      })}
+      {ids.map((id) => (
+        <div key={id} className={colClass(spanOf(id, spans))}>
+          {render(id)}
+        </div>
+      ))}
     </div>
   );
+}
+
+/** 12 栅格宽度 → Tailwind 列类。用户覆盖的 4/6/8/12 都落在这几档里。 */
+function colClass(span: number): string {
+  if (span >= 12) return "lg:col-span-12";
+  if (span >= 8) return "lg:col-span-8";
+  if (span >= 6) return "lg:col-span-6";
+  if (span >= 4) return "lg:col-span-4";
+  return "lg:col-span-3";
 }
 
 function Dense({ ids, render }: { ids: WidgetId[]; render: Renderer }) {
@@ -206,10 +208,18 @@ function Dense({ ids, render }: { ids: WidgetId[]; render: Renderer }) {
  * 否则一个 1146px 宽的行里放一个 168px 的环图，四周全是空白，
  * 扫读节奏也被打散。配对不改变阅读顺序（仍是自上而下、自左而右）。
  */
-function Ledger({ ids, render }: { ids: WidgetId[]; render: Renderer }) {
+function Ledger({
+  ids,
+  render,
+  spans,
+}: {
+  ids: WidgetId[];
+  render: Renderer;
+  spans: Partial<Record<WidgetId, number>>;
+}) {
   return (
     <div className="flex flex-col gap-2.5">
-      {ledgerRows(ids).map((row, i) => (
+      {ledgerRows(ids, spans).map((row, i) => (
         <div
           key={i}
           className={row.length === 2 ? "grid grid-cols-1 gap-2.5 lg:grid-cols-2" : ""}
@@ -226,11 +236,14 @@ function Ledger({ ids, render }: { ids: WidgetId[]; render: Renderer }) {
 }
 
 /** 把通栏与小面板分组：span ≥ 8 独占一行，其余两个一行。 */
-function ledgerRows(ids: WidgetId[]): WidgetId[][] {
+function ledgerRows(
+  ids: WidgetId[],
+  spans: Partial<Record<WidgetId, number>>
+): WidgetId[][] {
   const rows: WidgetId[][] = [];
   let pair: WidgetId[] = [];
   for (const id of ids) {
-    if (widgetOf(id).span >= 8) {
+    if (spanOf(id, spans) >= 8) {
       if (pair.length) rows.push(pair);
       pair = [];
       rows.push([id]);

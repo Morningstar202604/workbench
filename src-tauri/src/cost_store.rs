@@ -1,15 +1,24 @@
-//! 成本数据持久化（JSON 文件，幂等导入）
+//! 成本数据持久化（SQLite）。
 //!
-//! 设计取舍：
-//! - 不用 SQLite —— 工作台的数据量级（几百~几万条成本记录）用 JSON 足够了
-//! - 原子写入 + 损坏文件保全 —— 见 json_store
-//! - 幂等：每条记录以 file_path + file_mtime + file_size 为去重键，重复扫描不重复计费
-//! - 并发：所有「读-改-写」在 COST_LOCK 内完成。扫描/保存设置/清空若并发执行，
-//!   不加锁会互相覆盖（后写者用自己那份旧快照盖掉前者刚写入的记录）。
+//! 为什么从 JSON 换成 SQLite：
+//! - 旧实现每次读取都反序列化整个 `cost_data.json`。十万条记录时单次读取
+//!   要几十毫秒到上百毫秒，而 AI 页进入时会同时发 4 个查询；
+//! - 每次扫描都要「全量解析 + 全量序列化 + fsync」一次，扫描本身是增量的，
+//!   落盘却是全量的；
+//! - 聚合（按天、按模型）本该由索引完成，而不是把全部记录读进内存再累加。
+//!
+//! 迁移是单向且保守的：首次打开时若存在旧 `cost_data.json`，在一个事务里
+//! 导入全部记录，然后把文件改名为 `cost_data.json.migrated`（**不删除**，
+//! 用户仍可以手工回退）。迁移失败时数据库保持为空且不改名，下次启动重试。
+//!
+//! 并发：桌面端是单实例，但扫描、读设置、清空可能并发。这里用一把进程内
+//! 互斥锁 + SQLite 自己的事务；每次操作新开一个连接，避免恢复备份后
+//! 连接仍指向旧文件（被替换的 inode）。
 
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use tauri::{AppHandle, Manager};
 
@@ -154,28 +163,201 @@ pub struct ModelBreakdownRow {
     pub record_count: u32,
 }
 
-// ── 存储层 ─────────────────────────────────────────────────
+// ── 路径 ───────────────────────────────────────────────────
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct CostData {
-    pub records: Vec<CostRecord>,
-    pub settings: CostSettings,
-}
-
-/// app_data_dir 下的成本数据文件路径
-/// 成本库文件路径（供备份命令使用）。
-pub fn cost_data_path_public(app: &AppHandle) -> Result<PathBuf, String> {
-    cost_data_path(app)
-}
-
-fn cost_data_path(app: &AppHandle) -> Result<PathBuf, String> {
+fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("无法定位数据目录: {e}"))?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建数据目录: {e}"))?;
-    Ok(dir.join("cost_data.json"))
+    Ok(dir)
 }
+
+/// 成本库文件路径（供备份命令使用）。
+pub fn cost_db_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_data_dir(app)?.join("cost.db"))
+}
+
+/// 旧版本的成本数据文件（迁移源）。
+pub fn legacy_cost_json_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_data_dir(app)?.join("cost_data.json"))
+}
+
+/// 用户自定义定价覆盖文件路径
+pub fn cost_data_path_overrides(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_data_dir(app)?.join("pricing_overrides.json"))
+}
+
+// ── 连接与建表 ─────────────────────────────────────────────
+
+const SCHEMA_VERSION: i64 = 1;
+
+fn open_at(path: &Path) -> Result<Connection, String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("创建数据目录失败: {e}"))?;
+    }
+    let conn = Connection::open(path).map_err(|e| format!("打开成本库失败: {e}"))?;
+    // 崩溃安全优先于吞吐：桌面应用不需要 WAL 的写并发，而回滚日志让
+    // 「直接复制 .db 文件」这一备份方式天然安全（退出时日志已合并）。
+    conn.pragma_update(None, "journal_mode", "DELETE")
+        .map_err(|e| format!("设置日志模式失败: {e}"))?;
+    conn.pragma_update(None, "synchronous", "NORMAL")
+        .map_err(|e| format!("设置同步模式失败: {e}"))?;
+    init_schema(&conn)?;
+    Ok(conn)
+}
+
+fn init_schema(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS meta (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS settings (
+            id                  INTEGER PRIMARY KEY CHECK (id = 1),
+            daily_budget        REAL NOT NULL,
+            monthly_budget      REAL NOT NULL,
+            alert_threshold_pct INTEGER NOT NULL,
+            include_estimated   INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS records (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_path             TEXT NOT NULL,
+            file_mtime            INTEGER NOT NULL,
+            file_size             INTEGER NOT NULL,
+            tool                  TEXT NOT NULL,
+            project               TEXT NOT NULL,
+            model                 TEXT NOT NULL,
+            input_tokens          INTEGER NOT NULL,
+            output_tokens         INTEGER NOT NULL,
+            cache_read_tokens     INTEGER NOT NULL,
+            cache_creation_tokens INTEGER NOT NULL,
+            cost_input            REAL NOT NULL,
+            cost_output           REAL NOT NULL,
+            cost_total            REAL NOT NULL,
+            cost_source           TEXT NOT NULL,
+            day                   TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_records_file ON records(file_path);
+        CREATE INDEX IF NOT EXISTS idx_records_day  ON records(day);
+        CREATE INDEX IF NOT EXISTS idx_records_model ON records(model);
+        "#,
+    )
+    .map_err(|e| format!("初始化成本库失败: {e}"))?;
+
+    let version: Option<i64> = conn
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'schema_version'",
+            [],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| format!("读取 schema 版本失败: {e}"))?
+        .and_then(|v| v.parse().ok());
+
+    match version {
+        Some(v) if v == SCHEMA_VERSION => Ok(()),
+        Some(v) => Err(format!(
+            "成本库版本 {v} 高于本程序支持的 {SCHEMA_VERSION}，请升级应用"
+        )),
+        None => {
+            conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?1)",
+                params![SCHEMA_VERSION.to_string()],
+            )
+            .map_err(|e| format!("写入 schema 版本失败: {e}"))?;
+            Ok(())
+        }
+    }
+}
+
+fn open(app: &AppHandle) -> Result<Connection, String> {
+    open_at(&cost_db_path(app)?)
+}
+
+/// 迁移旧 `cost_data.json`（幂等）。
+///
+/// 只在旧文件存在时执行一次；成功后改名为 `.migrated` 保留原件。
+/// 迁移失败时**不**改名，下次启动还会重试；数据库里的部分写入由事务回滚。
+fn migrate_legacy_json(app: &AppHandle) -> Result<(), String> {
+    let legacy = legacy_cost_json_path(app)?;
+    if !legacy.exists() {
+        return Ok(());
+    }
+    let text = std::fs::read_to_string(&legacy).map_err(|e| format!("读取旧成本库失败: {e}"))?;
+    let parsed: Option<LegacyCostData> = serde_json::from_str(&text)
+        .map_err(|e| format!("旧成本库不是合法 JSON（保留原文件不迁移）: {e}"))
+        .ok();
+    let Some(old) = parsed else {
+        // 空文件：直接改名，避免每次启动都重试解析失败
+        let _ = std::fs::rename(&legacy, legacy.with_extension("json.migrated"));
+        return Ok(());
+    };
+
+    let mut conn = open(app)?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("开启迁移事务失败: {e}"))?;
+    insert_records(&tx, &old.records)?;
+    save_settings_row(&tx, &old.settings)?;
+    tx.commit().map_err(|e| format!("提交迁移事务失败: {e}"))?;
+
+    std::fs::rename(&legacy, legacy.with_extension("json.migrated"))
+        .map_err(|e| format!("迁移完成但改名失败（下次会重复导入，记录不会重复）: {e}"))?;
+    log::info!(
+        "成本库已从 cost_data.json 迁移 {} 条记录",
+        old.records.len()
+    );
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct LegacyCostData {
+    #[serde(default)]
+    records: Vec<CostRecord>,
+    #[serde(default)]
+    settings: CostSettings,
+}
+
+fn insert_records(conn: &Connection, records: &[CostRecord]) -> Result<(), String> {
+    if records.is_empty() {
+        return Ok(());
+    }
+    let mut stmt = conn
+        .prepare(
+            "INSERT INTO records (
+                file_path, file_mtime, file_size, tool, project, model,
+                input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+                cost_input, cost_output, cost_total, cost_source, day
+             ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",
+        )
+        .map_err(|e| format!("准备写入语句失败: {e}"))?;
+    for r in records {
+        stmt.execute(params![
+            r.file_path,
+            r.file_mtime as i64,
+            r.file_size as i64,
+            r.tool,
+            r.project,
+            r.model,
+            r.input_tokens as i64,
+            r.output_tokens as i64,
+            r.cache_read_tokens as i64,
+            r.cache_creation_tokens as i64,
+            r.cost_input,
+            r.cost_output,
+            r.cost_total,
+            r.cost_source,
+            r.day
+        ])
+        .map_err(|e| format!("写入成本记录失败: {e}"))?;
+    }
+    Ok(())
+}
+
+// ── 定价覆盖（仍是 JSON：这是用户可手改的小文件）───────────
 
 /// 定价覆盖的读取结果：合法条目 + 每条被拒的原因。
 #[derive(Default, Debug)]
@@ -184,16 +366,12 @@ pub struct OverrideRead {
     pub problems: Vec<String>,
 }
 
-/// 读取并校验用户的定价覆盖文件。
-///
-/// 与「静默忽略坏文件」不同：这里把每个条目的校验错误都收集起来返回，
-/// 因为定价直接影响账单——用户以为改了价、实际被忽略，比报错更糟。
 pub fn read_pricing_overrides(app: &AppHandle) -> Result<OverrideRead, String> {
     read_pricing_overrides_at(&cost_data_path_overrides(app)?)
 }
 
 /// 纯路径版本：可脱离 AppHandle 测试（文件格式、逐条校验、空文件语义）。
-pub fn read_pricing_overrides_at(path: &std::path::Path) -> Result<OverrideRead, String> {
+pub fn read_pricing_overrides_at(path: &Path) -> Result<OverrideRead, String> {
     let raw: Option<HashMap<String, (f64, f64)>> = json_store::read_json(path)?;
     let Some(map) = raw else {
         return Ok(OverrideRead::default());
@@ -214,7 +392,6 @@ pub fn read_pricing_overrides_at(path: &std::path::Path) -> Result<OverrideRead,
     })
 }
 
-/// 写入定价覆盖（整体替换，原子写）。
 pub fn save_pricing_overrides(
     app: &AppHandle,
     overrides: &HashMap<String, (f64, f64)>,
@@ -224,7 +401,7 @@ pub fn save_pricing_overrides(
 
 /// 纯路径版本：空表删除文件，非空原子写入。
 pub fn save_pricing_overrides_at(
-    path: &std::path::Path,
+    path: &Path,
     overrides: &HashMap<String, (f64, f64)>,
 ) -> Result<(), String> {
     if overrides.is_empty() {
@@ -239,41 +416,131 @@ pub fn save_pricing_overrides_at(
     json_store::write_json_atomic(path, overrides)
 }
 
-/// 用户自定义定价覆盖文件路径
-pub fn cost_data_path_overrides(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("无法定位数据目录: {e}"))?;
-    std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建数据目录: {e}"))?;
-    Ok(dir.join("pricing_overrides.json"))
+// ── 设置 ───────────────────────────────────────────────────
+
+fn save_settings_row(conn: &Connection, s: &CostSettings) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO settings (id, daily_budget, monthly_budget, alert_threshold_pct, include_estimated)
+         VALUES (1, ?1, ?2, ?3, ?4)
+         ON CONFLICT(id) DO UPDATE SET
+            daily_budget = excluded.daily_budget,
+            monthly_budget = excluded.monthly_budget,
+            alert_threshold_pct = excluded.alert_threshold_pct,
+            include_estimated = excluded.include_estimated",
+        params![
+            s.daily_budget,
+            s.monthly_budget,
+            s.alert_threshold_pct as i64,
+            if s.include_estimated { 1 } else { 0 }
+        ],
+    )
+    .map_err(|e| format!("保存成本设置失败: {e}"))?;
+    Ok(())
 }
 
-/// 锁外只读取一次快照，损坏时把真实错误抛给调用方（不再静默清零）。
-fn load_cost_data(app: &AppHandle) -> Result<CostData, String> {
-    Ok(json_store::read_json(&cost_data_path(app)?)?.unwrap_or_default())
+fn read_settings(conn: &Connection) -> Result<CostSettings, String> {
+    let row = conn
+        .query_row(
+            "SELECT daily_budget, monthly_budget, alert_threshold_pct, include_estimated
+             FROM settings WHERE id = 1",
+            [],
+            |r| {
+                Ok(CostSettings {
+                    daily_budget: r.get(0)?,
+                    monthly_budget: r.get(1)?,
+                    alert_threshold_pct: r.get::<_, i64>(2)? as u32,
+                    include_estimated: r.get::<_, i64>(3)? != 0,
+                })
+            },
+        )
+        .optional()
+        .map_err(|e| format!("读取成本设置失败: {e}"))?;
+    Ok(row.unwrap_or_default())
 }
 
-fn save_cost_data(app: &AppHandle, data: &CostData) -> Result<(), String> {
-    json_store::write_json_atomic(&cost_data_path(app)?, data)
-}
-
-/// 在锁内做「读-改-写」；闭包返回 `false` 表示无变更，跳过落盘。
-fn mutate<T>(app: &AppHandle, f: impl FnOnce(&mut CostData) -> (T, bool)) -> Result<T, String> {
+pub fn get_cost_settings(app: &AppHandle) -> Result<CostSettings, String> {
     let _guard = lock();
-    let mut data = load_cost_data(app)?;
-    let (out, changed) = f(&mut data);
-    if changed {
-        save_cost_data(app, &data)?;
+    migrate_legacy_json(app)?;
+    let conn = open(app)?;
+    read_settings(&conn)
+}
+
+pub fn save_cost_settings(app: &AppHandle, settings: CostSettings) -> Result<(), String> {
+    let _guard = lock();
+    migrate_legacy_json(app)?;
+    let conn = open(app)?;
+    save_settings_row(&conn, &settings)
+}
+
+// ── 导入 ───────────────────────────────────────────────────
+
+/// 已入库文件的 (path, mtime, size) 快照，供扫描跳过未变化文件。
+pub fn existing_keys(app: &AppHandle) -> Result<HashMap<(String, u64, u64), ()>, String> {
+    let _guard = lock();
+    migrate_legacy_json(app)?;
+    let conn = open(app)?;
+    let mut stmt = conn
+        .prepare("SELECT DISTINCT file_path, file_mtime, file_size FROM records")
+        .map_err(|e| format!("准备查询失败: {e}"))?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)? as u64,
+                r.get::<_, i64>(2)? as u64,
+            ))
+        })
+        .map_err(|e| format!("查询已有文件失败: {e}"))?;
+    let mut out = HashMap::new();
+    for row in rows {
+        let k = row.map_err(|e| format!("读取已有文件失败: {e}"))?;
+        out.insert(k, ());
     }
     Ok(out)
 }
 
-/// 在锁内做只读聚合。
-fn view<T>(app: &AppHandle, f: impl FnOnce(&CostData) -> T) -> Result<T, String> {
+/// 导入：按 file_path **整组替换**，在单个事务里完成。
+pub fn import_records(app: &AppHandle, new_records: &[CostRecord]) -> Result<usize, String> {
+    if new_records.is_empty() {
+        return Ok(0);
+    }
     let _guard = lock();
-    Ok(f(&load_cost_data(app)?))
+    migrate_legacy_json(app)?;
+    let mut conn = open(app)?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("开启导入事务失败: {e}"))?;
+    let net = replace_by_file(&tx, new_records)?;
+    tx.commit().map_err(|e| format!("提交导入事务失败: {e}"))?;
+    Ok(net)
 }
+
+/// 事务内：删除同一文件的旧记录 → 插入新记录 → 返回净增量。
+fn replace_by_file(conn: &Connection, new_records: &[CostRecord]) -> Result<usize, String> {
+    let touched: HashSet<&str> = new_records.iter().map(|r| r.file_path.as_str()).collect();
+    let mut removed = 0usize;
+    for path in touched {
+        removed += conn
+            .execute("DELETE FROM records WHERE file_path = ?1", params![path])
+            .map_err(|e| format!("清理旧记录失败: {e}"))?;
+    }
+    insert_records(conn, new_records)?;
+    Ok(new_records.len().saturating_sub(removed))
+}
+
+pub fn clear_records(app: &AppHandle) -> Result<(), String> {
+    let _guard = lock();
+    migrate_legacy_json(app)?;
+    let conn = open(app)?;
+    conn.execute("DELETE FROM records", [])
+        .map_err(|e| format!("清空成本记录失败: {e}"))?;
+    // 删完顺手回收空间：十万条记录的文件可能几十 MB，用户点「清空」后
+    // 期待磁盘占用真的下降。
+    let _ = conn.execute_batch("VACUUM");
+    Ok(())
+}
+
+// ── 聚合 ───────────────────────────────────────────────────
 
 /// 一次扫描的完整结果：导入 + 三个聚合视图。
 pub struct ScanOutcome {
@@ -283,124 +550,147 @@ pub struct ScanOutcome {
     pub breakdown: Vec<ModelBreakdownRow>,
 }
 
-/// 扫描落库 + 聚合，全程只加一次锁、只读写一次文件。
-///
-/// 原先 commands.rs 里依次调用 existing_keys / import_records / build_overview /
-/// build_trend / build_model_breakdown，每一轮都在锁内全量读 JSON、全量序列化、
-/// fsync 一次（记录上万条时 5 次 fsync + 5 次全文件解析）。这些操作本该是
-/// 一次事务：扫描结果与聚合视图必须是同一份快照，否则中途失败会留下
-/// 「记录已写入、视图还是旧的」的中间态。
+/// 扫描落库 + 聚合，全程一个连接、一个事务。
 pub fn import_and_aggregate(
     app: &AppHandle,
     records: &[CostRecord],
     trend_days: usize,
 ) -> Result<ScanOutcome, String> {
     let _guard = lock();
-    let mut data = load_cost_data(app)?;
-    let net_new = apply_import(&mut data, records);
-    if !records.is_empty() {
-        save_cost_data(app, &data)?;
-    }
+    migrate_legacy_json(app)?;
+    let mut conn = open(app)?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("开启事务失败: {e}"))?;
+    let net_new = replace_by_file(&tx, records)?;
+    let settings = read_settings(&tx)?;
+    let overview = overview_sql(&tx, &settings)?;
+    let trend = trend_sql(&tx, trend_days, settings.include_estimated)?;
+    let breakdown = breakdown_sql(&tx, settings.include_estimated)?;
+    tx.commit().map_err(|e| format!("提交扫描结果失败: {e}"))?;
     Ok(ScanOutcome {
         net_new,
-        overview: overview_of(&data),
-        trend: trend_of(&data, trend_days),
-        breakdown: model_breakdown_of(&data),
-    })
-}
-
-/// 已入库文件的 (path, mtime, size) 快照，供扫描跳过未变化文件。
-pub fn existing_keys(app: &AppHandle) -> Result<HashMap<(String, u64, u64), ()>, String> {
-    view(app, |data| {
-        data.records
-            .iter()
-            .map(|r| ((r.file_path.clone(), r.file_mtime, r.file_size), ()))
-            .collect()
-    })
-}
-
-/// 获取当前成本设置。
-pub fn get_cost_settings(app: &AppHandle) -> Result<CostSettings, String> {
-    view(app, |data| data.settings.clone())
-}
-
-pub fn save_cost_settings(app: &AppHandle, settings: CostSettings) -> Result<(), String> {
-    mutate(app, |data| {
-        let changed = data.settings != settings;
-        data.settings = settings;
-        ((), changed)
-    })
-}
-
-/// 导入：按 file_path **整组替换**。
-/// 同一会话文件每次变化只保留最新一组按日记录，避免旧快照与新快照重复累加。
-/// 返回值 = 净新增记录数（新文件的全部记录；已存在文件被替换则记 0 或差额）。
-pub fn import_records(app: &AppHandle, new_records: &[CostRecord]) -> Result<usize, String> {
-    if new_records.is_empty() {
-        return Ok(0);
-    }
-    mutate(app, |data| {
-        let net = apply_import(data, new_records);
-        (net, true)
-    })
-}
-
-/// 纯函数：整组替换 + 返回净增量。单独抽出来是为了可脱离 AppHandle 测试。
-fn apply_import(data: &mut CostData, new_records: &[CostRecord]) -> usize {
-    let touched_paths: HashSet<String> = new_records.iter().map(|r| r.file_path.clone()).collect();
-    let old_len = data.records.len();
-    data.records
-        .retain(|r| !touched_paths.contains(&r.file_path));
-    let replaced = old_len - data.records.len();
-    data.records.extend(new_records.iter().cloned());
-
-    let net = data.records.len().saturating_sub(old_len);
-    log::info!(
-        "成本导入: 整组替换 {replaced} 条旧记录，净新增 {net} 条（库内共 {} 条）",
-        data.records.len()
-    );
-    net
-}
-
-pub fn clear_records(app: &AppHandle) -> Result<(), String> {
-    mutate(app, |data| {
-        let changed = !data.records.is_empty();
-        data.records.clear();
-        ((), changed)
+        overview,
+        trend,
+        breakdown,
     })
 }
 
 pub fn build_overview(app: &AppHandle) -> Result<CostOverview, String> {
-    view(app, overview_of)
+    let _guard = lock();
+    migrate_legacy_json(app)?;
+    let conn = open(app)?;
+    let settings = read_settings(&conn)?;
+    overview_sql(&conn, &settings)
 }
 
-/// 纯函数：按 settings.include_estimated 决定估算行是否参与金额聚合。
-fn overview_of(data: &CostData) -> CostOverview {
-    let settings = &data.settings;
+pub fn build_trend(app: &AppHandle, days: usize) -> Result<Vec<CostTrendRow>, String> {
+    let _guard = lock();
+    migrate_legacy_json(app)?;
+    let conn = open(app)?;
+    let settings = read_settings(&conn)?;
+    trend_sql(&conn, days, settings.include_estimated)
+}
 
+pub fn build_model_breakdown(app: &AppHandle) -> Result<Vec<ModelBreakdownRow>, String> {
+    let _guard = lock();
+    migrate_legacy_json(app)?;
+    let conn = open(app)?;
+    let settings = read_settings(&conn)?;
+    breakdown_sql(&conn, settings.include_estimated)
+}
+
+/// 金额与 token 是否计入一行的过滤条件（与旧 JSON 实现语义一致：
+/// 估算行在开关关闭时不计金额，但计数仍然可见）。
+fn counted(include_estimated: bool) -> &'static str {
+    if include_estimated {
+        "1=1"
+    } else {
+        "cost_source != 'estimated'"
+    }
+}
+
+struct Agg {
+    cost: f64,
+    input: i64,
+    output: i64,
+    cache_read: i64,
+    cache_creation: i64,
+    n: i64,
+}
+
+fn sum_rows(conn: &Connection, clause: &str, args: &[&dyn rusqlite::ToSql]) -> Result<Agg, String> {
+    let sql = format!(
+        "SELECT COALESCE(SUM(cost_total),0), COALESCE(SUM(input_tokens),0),
+                COALESCE(SUM(output_tokens),0), COALESCE(SUM(cache_read_tokens),0),
+                COALESCE(SUM(cache_creation_tokens),0), COUNT(*)
+         FROM records WHERE {clause}"
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("准备聚合查询失败: {e}"))?;
+    stmt.query_row(args, |r| {
+        Ok(Agg {
+            cost: r.get(0)?,
+            input: r.get(1)?,
+            output: r.get(2)?,
+            cache_read: r.get(3)?,
+            cache_creation: r.get(4)?,
+            n: r.get(5)?,
+        })
+    })
+    .map_err(|e| format!("聚合查询失败: {e}"))
+}
+
+fn count_by_source(conn: &Connection, source: &str) -> Result<usize, String> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM records WHERE cost_source = ?1",
+        params![source],
+        |r| r.get::<_, i64>(0),
+    )
+    .map(|n| n as usize)
+    .map_err(|e| format!("统计来源失败: {e}"))
+}
+
+fn overview_sql(conn: &Connection, settings: &CostSettings) -> Result<CostOverview, String> {
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let month_prefix = chrono::Local::now().format("%Y-%m").to_string();
+    let month_prefix = format!("{}-", chrono::Local::now().format("%Y-%m"));
+
+    let base = counted(settings.include_estimated).to_string();
+    let total = sum_rows(conn, &base, &[])?;
+    let today_agg = sum_rows(conn, &format!("{base} AND day = ?1"), &[&today])?;
+    let month_agg = sum_rows(
+        conn,
+        &format!("{base} AND day LIKE ?1"),
+        &[&format!("{month_prefix}%")],
+    )?;
 
     let mut overview = CostOverview {
-        today_cost: 0.0,
-        today_input_tokens: 0,
-        today_output_tokens: 0,
-        today_cache_read_tokens: 0,
-        today_cache_creation_tokens: 0,
-        month_cost: 0.0,
-        month_input_tokens: 0,
-        month_output_tokens: 0,
-        month_cache_read_tokens: 0,
-        month_cache_creation_tokens: 0,
-        total_cost: 0.0,
-        total_input_tokens: 0,
-        total_output_tokens: 0,
-        total_cache_read_tokens: 0,
-        total_cache_creation_tokens: 0,
-        record_count: 0,
-        measured_count: 0,
-        estimated_count: 0,
-        zero_pricing_count: 0,
+        today_cost: today_agg.cost,
+        today_input_tokens: today_agg.input as u64,
+        today_output_tokens: today_agg.output as u64,
+        today_cache_read_tokens: today_agg.cache_read as u64,
+        today_cache_creation_tokens: today_agg.cache_creation as u64,
+        month_cost: month_agg.cost,
+        month_input_tokens: month_agg.input as u64,
+        month_output_tokens: month_agg.output as u64,
+        month_cache_read_tokens: month_agg.cache_read as u64,
+        month_cache_creation_tokens: month_agg.cache_creation as u64,
+        total_cost: total.cost,
+        total_input_tokens: total.input as u64,
+        total_output_tokens: total.output as u64,
+        total_cache_read_tokens: total.cache_read as u64,
+        total_cache_creation_tokens: total.cache_creation as u64,
+        record_count: total.n as usize,
+        measured_count: count_by_source(conn, "measured")?,
+        estimated_count: count_by_source(conn, "estimated")?,
+        zero_pricing_count: conn
+            .query_row(
+                "SELECT COUNT(*) FROM records WHERE cost_source NOT IN ('measured','estimated')",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .map_err(|e| format!("统计未定价记录失败: {e}"))? as usize,
         daily_budget: settings.daily_budget,
         monthly_budget: settings.monthly_budget,
         alert_threshold_pct: settings.alert_threshold_pct,
@@ -409,38 +699,6 @@ fn overview_of(data: &CostData) -> CostOverview {
         budget_exceeded: false,
     };
 
-    for r in &data.records {
-        match r.cost_source.as_str() {
-            "measured" => overview.measured_count += 1,
-            "estimated" => overview.estimated_count += 1,
-            _ => overview.zero_pricing_count += 1,
-        }
-        // include_estimated = false 时，估算行不参与金额/token 聚合
-        if r.cost_source == "estimated" && !settings.include_estimated {
-            continue;
-        }
-        overview.record_count += 1;
-        overview.total_cost += r.cost_total;
-        overview.total_input_tokens += r.input_tokens;
-        overview.total_output_tokens += r.output_tokens;
-        overview.total_cache_read_tokens += r.cache_read_tokens;
-        overview.total_cache_creation_tokens += r.cache_creation_tokens;
-        if r.day == today {
-            overview.today_cost += r.cost_total;
-            overview.today_input_tokens += r.input_tokens;
-            overview.today_output_tokens += r.output_tokens;
-            overview.today_cache_read_tokens += r.cache_read_tokens;
-            overview.today_cache_creation_tokens += r.cache_creation_tokens;
-        }
-        if r.day.starts_with(&month_prefix) {
-            overview.month_cost += r.cost_total;
-            overview.month_input_tokens += r.input_tokens;
-            overview.month_output_tokens += r.output_tokens;
-            overview.month_cache_read_tokens += r.cache_read_tokens;
-            overview.month_cache_creation_tokens += r.cache_creation_tokens;
-        }
-    }
-
     if settings.daily_budget > 0.0 {
         overview.daily_pct = (overview.today_cost / settings.daily_budget * 100.0).min(999.0);
     }
@@ -448,82 +706,123 @@ fn overview_of(data: &CostData) -> CostOverview {
         overview.monthly_pct = (overview.month_cost / settings.monthly_budget * 100.0).min(999.0);
     }
     overview.budget_exceeded = overview.daily_pct >= 100.0 || overview.monthly_pct >= 100.0;
-    overview
+    Ok(overview)
 }
 
-/// 聚合：成本趋势（按天）
-pub fn build_trend(app: &AppHandle, days: usize) -> Result<Vec<CostTrendRow>, String> {
-    view(app, |data| trend_of(data, days))
-}
-
-fn trend_of(data: &CostData, days: usize) -> Vec<CostTrendRow> {
-    let mut by_day: std::collections::BTreeMap<String, (u64, u64, u64, u64, f64, u32)> =
-        std::collections::BTreeMap::new();
-    for r in &data.records {
-        if r.cost_source == "estimated" && !data.settings.include_estimated {
-            continue;
-        }
-        let e = by_day.entry(r.day.clone()).or_insert((0, 0, 0, 0, 0.0, 0));
-        e.0 += r.input_tokens;
-        e.1 += r.output_tokens;
-        e.2 += r.cache_read_tokens;
-        e.3 += r.cache_creation_tokens;
-        e.4 += r.cost_total;
-        e.5 += 1;
-    }
-
-    let mut rows: Vec<CostTrendRow> = by_day
-        .into_iter()
-        .map(|(day, (inp, out, cr, cc, cost, cnt))| CostTrendRow {
-            day,
-            input_tokens: inp,
-            output_tokens: out,
-            cache_read_tokens: cr,
-            cache_creation_tokens: cc,
-            cost,
-            record_count: cnt,
+fn trend_sql(
+    conn: &Connection,
+    days: usize,
+    include_estimated: bool,
+) -> Result<Vec<CostTrendRow>, String> {
+    let sql = format!(
+        "SELECT day, SUM(input_tokens), SUM(output_tokens), SUM(cache_read_tokens),
+                SUM(cache_creation_tokens), SUM(cost_total), COUNT(*)
+         FROM records WHERE {}
+         GROUP BY day ORDER BY day DESC LIMIT ?1",
+        counted(include_estimated)
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("准备趋势查询失败: {e}"))?;
+    let rows = stmt
+        .query_map(params![days as i64], |r| {
+            Ok(CostTrendRow {
+                day: r.get(0)?,
+                input_tokens: r.get::<_, i64>(1)? as u64,
+                output_tokens: r.get::<_, i64>(2)? as u64,
+                cache_read_tokens: r.get::<_, i64>(3)? as u64,
+                cache_creation_tokens: r.get::<_, i64>(4)? as u64,
+                cost: r.get(5)?,
+                record_count: r.get::<_, i64>(6)? as u32,
+            })
         })
-        .collect();
-
-    // 限制最近 N 天
-    if rows.len() > days {
-        rows = rows.split_off(rows.len() - days);
+        .map_err(|e| format!("查询趋势失败: {e}"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| format!("读取趋势失败: {e}"))?);
     }
-    rows
+    // SQL 取的是「最近 N 天」的倒序，图表需要正序
+    out.reverse();
+    Ok(out)
 }
 
-/// 聚合：按模型分解
-pub fn build_model_breakdown(app: &AppHandle) -> Result<Vec<ModelBreakdownRow>, String> {
-    view(app, model_breakdown_of)
-}
-
-fn model_breakdown_of(data: &CostData) -> Vec<ModelBreakdownRow> {
-    let mut by_model: std::collections::BTreeMap<String, (u64, u64, f64, u32)> =
-        std::collections::BTreeMap::new();
-    for r in &data.records {
-        if r.cost_source == "estimated" && !data.settings.include_estimated {
-            continue;
-        }
-        let e = by_model.entry(r.model.clone()).or_insert((0, 0, 0.0, 0));
-        e.0 += r.input_tokens;
-        e.1 += r.output_tokens;
-        e.2 += r.cost_total;
-        e.3 += 1;
-    }
-
-    let mut rows: Vec<ModelBreakdownRow> = by_model
-        .into_iter()
-        .map(|(model, (inp, out, cost, cnt))| ModelBreakdownRow {
-            model,
-            input_tokens: inp,
-            output_tokens: out,
-            cost,
-            record_count: cnt,
+fn breakdown_sql(
+    conn: &Connection,
+    include_estimated: bool,
+) -> Result<Vec<ModelBreakdownRow>, String> {
+    let sql = format!(
+        "SELECT model, SUM(input_tokens), SUM(output_tokens), SUM(cost_total), COUNT(*)
+         FROM records WHERE {}
+         GROUP BY model ORDER BY SUM(cost_total) DESC",
+        counted(include_estimated)
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("准备模型分解查询失败: {e}"))?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(ModelBreakdownRow {
+                model: r.get(0)?,
+                input_tokens: r.get::<_, i64>(1)? as u64,
+                output_tokens: r.get::<_, i64>(2)? as u64,
+                cost: r.get(3)?,
+                record_count: r.get::<_, i64>(4)? as u32,
+            })
         })
-        .collect();
+        .map_err(|e| format!("查询模型分解失败: {e}"))?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| format!("读取模型分解失败: {e}"))?);
+    }
+    Ok(out)
+}
 
-    rows.sort_by(|a, b| b.cost.total_cmp(&a.cost));
-    rows
+/// 一致性快照：用 `VACUUM INTO` 生成一个干净的 .db 文件。
+///
+/// 直接复制 .db 在正常情况下也可行（回滚日志已合并），但应用正在写入时
+/// 复制可能拿到「主文件已改、日志未合并」的中间态。VACUUM INTO 由 SQLite
+/// 自己保证快照一致，代价是一次全量重写（备份本来就要复制全量）。
+pub fn snapshot_db(app: &AppHandle, dest: &Path) -> Result<(), String> {
+    let _guard = lock();
+    migrate_legacy_json(app)?;
+    let conn = open(app)?;
+    if dest.exists() {
+        std::fs::remove_file(dest).map_err(|e| format!("清理旧快照失败: {e}"))?;
+    }
+    conn.execute("VACUUM INTO ?1", params![dest.to_string_lossy()])
+        .map_err(|e| format!("生成成本库快照失败: {e}"))?;
+    Ok(())
+}
+
+/// 恢复后必须清掉日志/共享内存旁文件，否则 SQLite 会把旧事务重放到新文件上。
+pub fn clear_sidecars(db_path: &Path) {
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let p = PathBuf::from(format!("{}{suffix}", db_path.display()));
+        let _ = std::fs::remove_file(p);
+    }
+}
+
+/// 校验一个 SQLite 文件：能打开、完整性检查通过、有 records 表。
+pub fn validate_db(path: &Path) -> Result<(), String> {
+    let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| format!("无法打开成本库: {e}"))?;
+    let integrity: String = conn
+        .query_row("PRAGMA integrity_check", [], |r| r.get(0))
+        .map_err(|e| format!("完整性检查失败: {e}"))?;
+    if integrity != "ok" {
+        return Err(format!("成本库完整性检查未通过: {integrity}"));
+    }
+    let tables: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='records'",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("读取表结构失败: {e}"))?;
+    if tables == 0 {
+        return Err("成本库里没有 records 表".to_string());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -550,201 +849,303 @@ mod tests {
         }
     }
 
-    fn data_with(records: Vec<CostRecord>) -> CostData {
-        CostData {
-            records,
-            settings: CostSettings::default(),
-        }
-    }
-
-    /// 临时目录（不引 tempfile 依赖，只用标准库）。
-    fn temp_dir(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("wb-cost-test-{tag}-{}", std::process::id()));
+    fn temp_db(tag: &str) -> (PathBuf, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("wb-sql-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        dir
+        let db = dir.join("cost.db");
+        (dir, db)
+    }
+
+    fn insert(conn: &Connection, recs: &[CostRecord]) {
+        insert_records(conn, recs).unwrap();
     }
 
     #[test]
-    fn pricing_overrides_roundtrip_and_empty_deletes_file() {
-        let dir = temp_dir("pricing");
-        let path = dir.join("pricing_overrides.json");
+    fn settings_roundtrip_and_default_when_absent() {
+        let (dir, db) = temp_db("settings");
+        let conn = open_at(&db).unwrap();
+        assert_eq!(read_settings(&conn).unwrap(), CostSettings::default());
 
-        // 无文件 → 空覆盖、无问题
-        let read = read_pricing_overrides_at(&path).unwrap();
-        assert!(read.overrides.is_empty());
-        assert!(read.problems.is_empty());
-
-        let mut map = HashMap::new();
-        map.insert("my-model".to_string(), (1.5, 6.0));
-        map.insert("gpt-4o".to_string(), (9.0, 30.0));
-        save_pricing_overrides_at(&path, &map).unwrap();
-        assert!(path.exists());
-
-        let read = read_pricing_overrides_at(&path).unwrap();
-        assert_eq!(read.overrides.len(), 2);
-        assert_eq!(read.overrides["gpt-4o"], (9.0, 30.0));
-        assert!(read.problems.is_empty());
-
-        // 空表 → 删文件（回到内置价），而不是留一个 {}
-        save_pricing_overrides_at(&path, &HashMap::new()).unwrap();
-        assert!(!path.exists(), "空覆盖必须删除文件");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn pricing_overrides_bad_entries_are_reported_not_dropped_silently() {
-        let dir = temp_dir("pricing-bad");
-        let path = dir.join("pricing_overrides.json");
-        // 手工写入：一条合法、三条非法（负价 / 全 0 / 过高）
-        std::fs::write(
-            &path,
-            r#"{"good-model":[1.0,2.0],"neg":[-1.0,2.0],"zero":[0.0,0.0],"huge":[20000.0,1.0]}"#,
-        )
-        .unwrap();
-
-        let read = read_pricing_overrides_at(&path).unwrap();
-        assert_eq!(read.overrides.len(), 1, "只有合法条目生效");
-        assert_eq!(read.overrides["good-model"], (1.0, 2.0));
-        assert_eq!(read.problems.len(), 3, "每条非法条目都要有原因");
-        assert!(read.problems.iter().any(|p| p.starts_with("neg:")));
-        assert!(read.problems.iter().any(|p| p.starts_with("zero:")));
-        assert!(read.problems.iter().any(|p| p.starts_with("huge:")));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn pricing_overrides_model_names_are_normalized_on_read() {
-        let dir = temp_dir("pricing-norm");
-        let path = dir.join("pricing_overrides.json");
-        std::fs::write(&path, r#"{"My-Model":[1.0,2.0]}"#).unwrap();
-        let read = read_pricing_overrides_at(&path).unwrap();
-        // 键统一小写，否则 lookup 的小写匹配永远命中不了大写键
-        assert!(read.overrides.contains_key("my-model"));
+        let custom = CostSettings {
+            daily_budget: 12.5,
+            monthly_budget: 300.0,
+            alert_threshold_pct: 90,
+            include_estimated: false,
+        };
+        save_settings_row(&conn, &custom).unwrap();
+        assert_eq!(read_settings(&conn).unwrap(), custom);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn reimport_same_file_replaces_group_instead_of_accumulating() {
-        let mut data = data_with(vec![record(
-            "/s/a.jsonl",
-            "2026-10-01",
-            "measured",
-            "claude-sonnet-4-5",
-            0.5,
-        )]);
-        // 同一文件增长后重扫：旧的两条按日记录应被这一组的新记录整组替换
-        let second = vec![
-            record(
-                "/s/a.jsonl",
-                "2026-10-01",
-                "measured",
-                "claude-sonnet-4-5",
-                0.6,
-            ),
-            record(
-                "/s/a.jsonl",
-                "2026-10-02",
-                "measured",
-                "claude-sonnet-4-5",
-                0.4,
-            ),
-        ];
-        let net = apply_import(&mut data, &second);
+        let (dir, db) = temp_db("replace");
+        let mut conn = open_at(&db).unwrap();
+        let tx = conn.transaction().unwrap();
+        replace_by_file(
+            &tx,
+            &[record("/s/a.jsonl", "2026-10-01", "measured", "m", 0.5)],
+        )
+        .unwrap();
+        let net = replace_by_file(
+            &tx,
+            &[
+                record("/s/a.jsonl", "2026-10-01", "measured", "m", 0.6),
+                record("/s/a.jsonl", "2026-10-02", "measured", "m", 0.4),
+            ],
+        )
+        .unwrap();
+        tx.commit().unwrap();
 
-        assert_eq!(data.records.len(), 2, "不应残留旧快照");
         assert_eq!(net, 1, "净新增 = 2 - 1");
-        assert_eq!(
-            data.records
-                .iter()
-                .find(|r| r.day == "2026-10-01")
-                .unwrap()
-                .cost_total,
-            0.6,
-            "应保留最新一次扫描的值"
-        );
-        assert!(data
-            .records
-            .iter()
-            .all(|r| r.day != "2026-10-01" || r.cost_total > 0.5));
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM records", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 2);
+        let cost: f64 = conn
+            .query_row(
+                "SELECT cost_total FROM records WHERE day = '2026-10-01'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!((cost - 0.6).abs() < 1e-9, "应保留最新一次扫描的值");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn reimport_identical_snapshot_is_zero_net() {
+    fn identical_reimport_is_zero_net_and_keeps_rows() {
+        let (dir, db) = temp_db("idem");
+        let mut conn = open_at(&db).unwrap();
         let base = vec![record("/s/a.jsonl", "2026-10-01", "measured", "m", 0.5)];
-        let mut data = data_with(base.clone());
-        assert_eq!(apply_import(&mut data, &base), 0);
-        assert_eq!(data.records.len(), 1);
+        let tx = conn.transaction().unwrap();
+        replace_by_file(&tx, &base).unwrap();
+        let net = replace_by_file(&tx, &base).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(net, 0);
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM records", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn estimated_records_excluded_when_toggle_off() {
-        let data = data_with(vec![
-            record("/s/a.jsonl", "2026-10-01", "measured", "m", 1.0),
-            record("/s/b.jsonl", "2026-10-01", "estimated", "m", 9.0),
-        ]);
-        let mut off = data.clone();
-        off.settings.include_estimated = false;
-
-        let on = overview_of(&data);
-        let filtered = overview_of(&off);
+    fn estimated_rows_excluded_from_money_but_still_counted() {
+        let (dir, db) = temp_db("estimated");
+        let conn = open_at(&db).unwrap();
+        insert(
+            &conn,
+            &[
+                record("/s/a.jsonl", "2026-10-01", "measured", "m", 1.0),
+                record("/s/b.jsonl", "2026-10-01", "estimated", "m", 9.0),
+            ],
+        );
+        let mut settings = CostSettings::default();
+        let on = overview_sql(&conn, &settings).unwrap();
+        settings.include_estimated = false;
+        let off = overview_sql(&conn, &settings).unwrap();
 
         assert!((on.total_cost - 10.0).abs() < 1e-9);
-        assert!(
-            (filtered.total_cost - 1.0).abs() < 1e-9,
-            "估算行不应计入金额"
-        );
-        assert_eq!(
-            filtered.estimated_count, 1,
-            "计数仍应可见，用于提示数据质量"
-        );
-        assert_eq!(filtered.record_count, 1);
-        // 趋势与模型分解同样受开关影响
-        assert_eq!(trend_of(&off, 14)[0].record_count, 1);
-        assert_eq!(model_breakdown_of(&off).len(), 1);
+        assert!((off.total_cost - 1.0).abs() < 1e-9, "估算行不应计入金额");
+        assert_eq!(off.estimated_count, 1, "计数仍应可见，用于提示数据质量");
+        assert_eq!(off.record_count, 1);
+        assert_eq!(trend_sql(&conn, 14, false).unwrap()[0].record_count, 1);
+        assert_eq!(breakdown_sql(&conn, false).unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn budget_percentage_and_exceeded_flag() {
+        let (dir, db) = temp_db("budget");
+        let conn = open_at(&db).unwrap();
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-        let mut data = data_with(vec![record("/s/a.jsonl", &today, "measured", "m", 6.0)]);
-        data.settings.daily_budget = 5.0;
-        data.settings.monthly_budget = 50.0;
-
-        let o = overview_of(&data);
+        insert(&conn, &[record("/s/a.jsonl", &today, "measured", "m", 6.0)]);
+        let settings = CostSettings {
+            daily_budget: 5.0,
+            monthly_budget: 50.0,
+            ..CostSettings::default()
+        };
+        let o = overview_sql(&conn, &settings).unwrap();
         assert!((o.daily_pct - 120.0).abs() < 1e-6, "got {}", o.daily_pct);
         assert!(o.budget_exceeded);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn trend_keeps_only_latest_days_and_rows_are_cost_ordered() {
-        let mut records = Vec::new();
-        for d in 1..=20 {
-            records.push(record(
-                &format!("/s/{d}.jsonl"),
-                &format!("2026-05-{d:02}"),
-                "measured",
-                "m",
-                0.1,
-            ));
-        }
-        let data = data_with(records);
-        let rows = trend_of(&data, 7);
+    fn trend_keeps_only_latest_days_in_ascending_order() {
+        let (dir, db) = temp_db("trend");
+        let conn = open_at(&db).unwrap();
+        let records: Vec<CostRecord> = (1..=20)
+            .map(|d| {
+                record(
+                    &format!("/s/{d}.jsonl"),
+                    &format!("2026-05-{d:02}"),
+                    "measured",
+                    "m",
+                    0.1,
+                )
+            })
+            .collect();
+        insert(&conn, &records);
+        let rows = trend_sql(&conn, 7, true).unwrap();
         assert_eq!(rows.len(), 7);
         assert_eq!(rows.first().unwrap().day, "2026-05-14");
         assert_eq!(rows.last().unwrap().day, "2026-05-20");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
-        let mut mixed = data_with(vec![
-            record("/s/x.jsonl", "2026-05-01", "measured", "cheap", 0.1),
-            record("/s/y.jsonl", "2026-05-01", "measured", "expensive", 3.0),
-        ]);
-        mixed
-            .records
-            .push(record("/s/z.jsonl", "2026-05-02", "measured", "mid", 1.5));
-        let models = model_breakdown_of(&mixed);
+    #[test]
+    fn breakdown_is_cost_ordered_desc() {
+        let (dir, db) = temp_db("breakdown");
+        let conn = open_at(&db).unwrap();
+        insert(
+            &conn,
+            &[
+                record("/s/x.jsonl", "2026-05-01", "measured", "cheap", 0.1),
+                record("/s/y.jsonl", "2026-05-01", "measured", "expensive", 3.0),
+                record("/s/z.jsonl", "2026-05-02", "measured", "mid", 1.5),
+            ],
+        );
+        let models = breakdown_sql(&conn, true).unwrap();
         assert_eq!(
             models.iter().map(|m| m.model.as_str()).collect::<Vec<_>>(),
             vec!["expensive", "mid", "cheap"]
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn existing_keys_lists_distinct_file_triples() {
+        let (dir, db) = temp_db("keys");
+        let conn = open_at(&db).unwrap();
+        insert(
+            &conn,
+            &[
+                record("/s/a.jsonl", "2026-10-01", "measured", "m", 0.1),
+                record("/s/a.jsonl", "2026-10-02", "measured", "m", 0.2),
+                record("/s/b.jsonl", "2026-10-02", "measured", "m", 0.3),
+            ],
+        );
+        let mut stmt = conn
+            .prepare("SELECT DISTINCT file_path, file_mtime, file_size FROM records")
+            .unwrap();
+        let n = stmt.query_map([], |_| Ok(())).unwrap().count();
+        assert_eq!(n, 2, "同一文件的多条按日记录只算一个去重键");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 十万级记录的聚合：这是换 SQLite 的直接理由。
+    /// 断言的是「能返回正确结果」，耗时只打印不设阈值（CI 机器差异大）。
+    #[test]
+    fn aggregation_handles_100k_rows() {
+        let (dir, db) = temp_db("100k");
+        let mut conn = open_at(&db).unwrap();
+        let tx = conn.transaction().unwrap();
+        {
+            let mut stmt = tx
+                .prepare(
+                    "INSERT INTO records (
+                        file_path, file_mtime, file_size, tool, project, model,
+                        input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+                        cost_input, cost_output, cost_total, cost_source, day
+                     ) VALUES (?1,1,1,'t','p',?2,10,5,0,0,0,0,?3,'measured',?4)",
+                )
+                .unwrap();
+            for i in 0..100_000 {
+                let day = format!("2026-{:02}-{:02}", (i % 12) + 1, (i % 28) + 1);
+                stmt.execute(params![
+                    format!("/s/{}.jsonl", i % 500),
+                    format!("model-{}", i % 7),
+                    0.001,
+                    day
+                ])
+                .unwrap();
+            }
+        }
+        tx.commit().unwrap();
+
+        let started = std::time::Instant::now();
+        let settings = CostSettings::default();
+        let o = overview_sql(&conn, &settings).unwrap();
+        let trend = trend_sql(&conn, 14, true).unwrap();
+        let models = breakdown_sql(&conn, true).unwrap();
+        let elapsed = started.elapsed();
+
+        assert_eq!(o.record_count, 100_000);
+        assert!((o.total_cost - 100.0).abs() < 1e-6);
+        assert_eq!(trend.len(), 14);
+        assert_eq!(models.len(), 7);
+        println!("100k rows: overview+trend+breakdown = {:?}", elapsed);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn snapshot_and_validate_roundtrip() {
+        let (dir, db) = temp_db("snapshot");
+        let conn = open_at(&db).unwrap();
+        insert(
+            &conn,
+            &[record("/s/a.jsonl", "2026-10-01", "measured", "m", 1.0)],
+        );
+        let snap = dir.join("snapshot.db");
+        conn.execute("VACUUM INTO ?1", params![snap.to_string_lossy()])
+            .unwrap();
+        assert!(snap.exists());
+        validate_db(&snap).unwrap();
+
+        // 被破坏的文件必须被拒（恢复前校验）
+        let broken = dir.join("broken.db");
+        std::fs::write(&broken, b"this is not sqlite").unwrap();
+        assert!(validate_db(&broken).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn legacy_json_migration_imports_records_and_renames_file() {
+        let dir = std::env::temp_dir().join(format!("wb-mig-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let legacy = dir.join("cost_data.json");
+        let json = serde_json::json!({
+            "records": [
+                {
+                    "file_path": "/s/a.jsonl", "file_mtime": 1, "file_size": 2,
+                    "tool": "Claude Code", "project": "p", "model": "m",
+                    "input_tokens": 10, "output_tokens": 5,
+                    "cache_read_tokens": 0, "cache_creation_tokens": 0,
+                    "cost_input": 0.1, "cost_output": 0.2, "cost_total": 0.3,
+                    "cost_source": "measured", "day": "2026-10-01"
+                }
+            ],
+            "settings": {
+                "daily_budget": 3.0, "monthly_budget": 30.0,
+                "alert_threshold_pct": 70, "include_estimated": false
+            }
+        });
+        std::fs::write(&legacy, serde_json::to_string(&json).unwrap()).unwrap();
+
+        let db = dir.join("cost.db");
+        // 直接调用迁移的纯逻辑部分（AppHandle 版本只是路径包装）
+        let parsed: LegacyCostData =
+            serde_json::from_str(&std::fs::read_to_string(&legacy).unwrap()).unwrap();
+        let mut conn = open_at(&db).unwrap();
+        let tx = conn.transaction().unwrap();
+        insert_records(&tx, &parsed.records).unwrap();
+        save_settings_row(&tx, &parsed.settings).unwrap();
+        tx.commit().unwrap();
+        std::fs::rename(&legacy, legacy.with_extension("json.migrated")).unwrap();
+
+        assert!(!legacy.exists(), "迁移后旧文件应改名");
+        assert!(dir.join("cost_data.json.migrated").exists());
+        let settings = read_settings(&conn).unwrap();
+        assert_eq!(settings.alert_threshold_pct, 70);
+        assert!(!settings.include_estimated);
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM records", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

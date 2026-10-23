@@ -225,6 +225,15 @@ Requires [Node.js](https://nodejs.org/) ≥ 20,
 npm install
 ```
 
+Local CI mirror (same steps as `.github/workflows/ci.yml`):
+
+```bash
+node scripts/ci-local.mjs          # icon contract → typecheck → lint → format →
+                                   # unit → build → Playwright → cargo fmt/test/clippy → IPC drift
+node scripts/ci-local.mjs --fast   # skip the visual-regression pass
+node scripts/ci-local.mjs --linux  # also try the Linux backend job in Docker
+```
+
 ### IPC contract types
 
 Types crossing the IPC boundary are not hand-written in `src/types.ts`; they
@@ -407,8 +416,10 @@ Done and planned. Vote or propose new ideas in the Issues.
   task titles) to the model service **you configure**. If command lines may
   contain secrets, treat that provider as part of your trust boundary
 - Interaction paths are covered by Playwright (structure and WCAG AA across 10 pages × 8 themes) plus a packaged-exe desktop E2E over real IPC; the agent conversation and import/export flows are not scripted yet
-- The cost ledger is a single `cost_data.json` (writes are serialized); very
-  large histories will make full read/write sluggish
+- The cost ledger is a SQLite database (`cost.db`, `rusqlite` bundled) with
+  indexes on day / model / file. Aggregation runs inside SQL, so 100k records
+  aggregate in ~250 ms instead of re-parsing a whole JSON file per query.
+  The old `cost_data.json` is imported once and renamed `.migrated` (never deleted)
 - The cost ledger has no sharded storage yet; very large histories make full read/write sluggish
 - The installer is unsigned; first launch may trigger a SmartScreen prompt
 - The tray menu text is currently Chinese only (frontend UI is fully
@@ -419,7 +430,7 @@ Done and planned. Vote or propose new ideas in the Issues.
 | File | Purpose | Location |
 |------|---------|----------|
 | `data.json` | Projects & tasks | app data dir |
-| `cost_data.json` | Cost records + pricing settings | app data dir |
+| `cost.db` | Cost records + pricing settings (SQLite) | app data dir |
 | `pricing_overrides.json` | User price overrides (editable on the Cost ledger page) | app data dir |
 | `workbench.log` | Runtime logs | app data dir |
 | `*.corrupt-<timestamp>` | Untouched backup of a data file that failed to parse (never overwritten by the next save) | app data dir |

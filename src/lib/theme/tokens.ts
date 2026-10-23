@@ -38,6 +38,11 @@ export interface ThemeInput {
   grid: number;
   /** 面板不透明度（glass 材质下生效） */
   panelOpacity: number;
+  /**
+   * 字号缩放（0.85–1.2）。
+   * 密度只改间距，不改字号；4K 屏与 1080p 笔记本需要的是后者。
+   */
+  textScale?: number;
   /** 是否内置（内置不可删除） */
   builtin?: boolean;
 }
@@ -327,7 +332,9 @@ export function buildTheme(input: ThemeInput): ThemeTokens {
       ok: okSafe,
       warn: warnSafe,
       danger: dangerSafe,
-      series: [accent, "#a78bfa", okSafe, warnSafe, dangerSafe, "#60a5fa", "#e879f9"],
+      // 系列色由主题派生，而不是写死三个固定色：写死时 Paper（米色）与
+      // Ink（黑白红）上会突然冒出紫色和粉色，与整页气质冲突。
+      series: chartSeries(accent, input.dark),
     },
   };
 }
@@ -411,7 +418,77 @@ function themeVars(input: ThemeInput, c: DerivedColors): Record<string, string> 
     "--glow": input.material === "glass" ? "1" : "0",
     // 浅色底上给卡片加白色高光只会把它洗灰，所以浅色主题一律关掉
     "--card-sheen": input.dark ? "3.5" : "0",
+    "--text-scale": String(clampTextScale(input.textScale)),
   };
+}
+
+/** 字号缩放限制在 0.85–1.2：再小读不清，再大右侧栏会挤爆。 */
+export function clampTextScale(v: number | undefined): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) return 1;
+  return Math.max(0.85, Math.min(1.2, v));
+}
+
+/**
+ * 图表系列色：以强调色为起点，按色相旋转生成 8 色。
+ *
+ * 为什么按色相旋转而不是固定调色板：主题是用户数据，固定调色板必然有
+ * 主题与它冲突（米色纸感主题配紫色系列）。旋转保持「同族颜色」，
+ * 每套主题的图表都像是这套主题自己长出来的。
+ *
+ * 饱和度和明度按深浅模式微调：深色底上需要更亮、略降饱和，否则刺眼；
+ * 浅色底上需要更深，否则在白卡片上发灰。
+ */
+export function chartSeries(accent: string, dark: boolean): string[] {
+  const [h, sat] = rgbToHsl(parseHex(accent));
+  const s = Math.max(0.35, Math.min(0.9, sat * (dark ? 0.95 : 1.05)));
+  const l = dark ? 0.62 : 0.42;
+  // 首色固定是强调色本身：主系列必须与品牌色一致，否则图表和按钮
+  // 看起来像两个产品。其余 7 色按色相旋转派生。
+  const offsets = [38, 76, 152, 196, 228, 280, 320];
+  return [accent, ...offsets.map((d) => hslToHex((h + d) % 360, s, l))];
+}
+
+function rgbToHsl([r, g, b]: [number, number, number]): [number, number] {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h =
+    max === rn
+      ? ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6
+      : max === gn
+        ? ((bn - rn) / d + 2) / 6
+        : ((rn - gn) / d + 4) / 6;
+  return [h * 360, s];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const hp = (h % 360) / 60;
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  const [r1, g1, b1] =
+    hp < 1
+      ? [c, x, 0]
+      : hp < 2
+        ? [x, c, 0]
+        : hp < 3
+          ? [0, c, x]
+          : hp < 4
+            ? [0, x, c]
+            : hp < 5
+              ? [x, 0, c]
+              : [c, 0, x];
+  const m = l - c / 2;
+  return toHex([
+    Math.round((r1 + m) * 255),
+    Math.round((g1 + m) * 255),
+    Math.round((b1 + m) * 255),
+  ]);
 }
 
 function cardShadow(input: ThemeInput): string {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useT } from "../lib/i18n";
 import {
   buildTheme,
+  contrastRatio,
   type Density,
   type FontChoice,
   type Material,
@@ -160,33 +161,65 @@ function ColorFields({
   patch: (p: Partial<ThemeInput>) => void;
 }) {
   const t = useT();
-  const row = (key: keyof ThemeInput, label: string) => (
-    <label className="flex items-center gap-2">
-      <input
-        type="color"
-        aria-label={label}
-        value={String(local[key] ?? "#000000")}
-        onChange={(e) => patch({ [key]: e.target.value } as Partial<ThemeInput>)}
-        className="h-7 w-9 shrink-0 cursor-pointer rounded border border-line bg-transparent"
-      />
-      <span className="min-w-0 flex-1 truncate text-[11.5px] text-dim">{label}</span>
-      <span className="num shrink-0 text-[10.5px] text-faint">
-        {String(local[key] ?? "")}
-      </span>
-    </label>
-  );
-
   return (
     <div>
       <div className="mb-1.5 text-[11px] font-medium text-dim">
         {t("settings.editorColors")}
       </div>
       <div className="flex flex-col gap-1.5">
-        {row("bg", t("settings.editorBg"))}
-        {row("panel", t("settings.editorPanel"))}
-        {row("text", t("settings.editorText"))}
-        {row("accent", t("settings.editorAccent"))}
+        <ColorRow local={local} patch={patch} field="bg" label={t("settings.editorBg")} />
+        <ColorRow
+          local={local}
+          patch={patch}
+          field="panel"
+          label={t("settings.editorPanel")}
+        />
+        <ColorRow
+          local={local}
+          patch={patch}
+          field="text"
+          label={t("settings.editorText")}
+          against={local.bg}
+        />
+        <ColorRow
+          local={local}
+          patch={patch}
+          field="accent"
+          label={t("settings.editorAccent")}
+          against={local.bg}
+        />
       </div>
+
+      <div className="mb-1.5 mt-3 text-[11px] font-medium text-dim">
+        {t("settings.editorSemantic")}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <ColorRow
+          local={local}
+          patch={patch}
+          field="ok"
+          label={t("settings.editorOk")}
+          against={local.bg}
+          fallback={local.dark ? "#3ecf8e" : "#0b7a54"}
+        />
+        <ColorRow
+          local={local}
+          patch={patch}
+          field="warn"
+          label={t("settings.editorWarn")}
+          against={local.bg}
+          fallback={local.dark ? "#f5b544" : "#a86400"}
+        />
+        <ColorRow
+          local={local}
+          patch={patch}
+          field="danger"
+          label={t("settings.editorDanger")}
+          against={local.bg}
+          fallback={local.dark ? "#ff6b6b" : "#c02b2b"}
+        />
+      </div>
+
       <label className="mt-2 flex items-center gap-2 text-[11.5px] text-dim">
         <input
           type="checkbox"
@@ -196,6 +229,56 @@ function ColorFields({
         {t("settings.editorDark")}
       </label>
     </div>
+  );
+}
+
+/**
+ * 一行颜色：色块 + 名称 + 十六进制 + 对比度读数。
+ *
+ * 对比度是**用户可见的**产品能力，而不是只存在于测试里的内部约束：
+ * 用户把文字色调到 3.2:1 时，界面上立刻出现红色读数，比事后看到
+ * 「某处文字看不清」再去猜原因有用得多。
+ */
+function ColorRow({
+  local,
+  patch,
+  field,
+  label,
+  against,
+  fallback,
+}: {
+  local: ThemeInput;
+  patch: (p: Partial<ThemeInput>) => void;
+  field: "bg" | "panel" | "text" | "accent" | "ok" | "warn" | "danger";
+  label: string;
+  against?: string;
+  fallback?: string;
+}) {
+  const value = String(local[field] ?? fallback ?? "#000000");
+  const ratio = against ? contrastRatio(value, against) : null;
+  const ok = ratio === null || ratio >= 4.5;
+  return (
+    <label className="flex items-center gap-2">
+      <input
+        type="color"
+        aria-label={label}
+        value={value}
+        onChange={(e) => patch({ [field]: e.target.value })}
+        className="h-7 w-9 shrink-0 cursor-pointer rounded border border-line bg-transparent"
+      />
+      <span className="min-w-0 flex-1 truncate text-[11.5px] text-dim">{label}</span>
+      <span className="num shrink-0 text-[10.5px] text-faint">{value}</span>
+      {ratio !== null && (
+        <span
+          className={`num w-11 shrink-0 text-right text-[10.5px] ${
+            ok ? "text-ok" : "text-danger"
+          }`}
+          title={ok ? "WCAG AA ✓" : "低于 AA 4.5:1"}
+        >
+          {ratio.toFixed(1)}:1
+        </span>
+      )}
+    </label>
   );
 }
 
@@ -254,6 +337,17 @@ function ShapeFields({
           max={100}
           value={Math.round(local.panelOpacity * 100)}
           onChange={(e) => patch({ panelOpacity: Number(e.target.value) / 100 })}
+          className="mt-1 w-full"
+        />
+      </label>
+      <label className="mb-2 block text-[11px] text-dim">
+        {t("settings.editorTextScale")} — {Math.round((local.textScale ?? 1) * 100)}%
+        <input
+          type="range"
+          min={85}
+          max={120}
+          value={Math.round((local.textScale ?? 1) * 100)}
+          onChange={(e) => patch({ textScale: Number(e.target.value) / 100 })}
           className="mt-1 w-full"
         />
       </label>

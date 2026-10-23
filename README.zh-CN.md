@@ -276,9 +276,11 @@ workbench/
 ```bash
 npm run format:check       # Prettier 格式检查
 npm run lint               # ESLint（零警告）
-npm run test               # 前端单测（vitest，48 个用例）
-npm run coverage           # 覆盖率
+npm run test               # 前端单测（vitest）
+npm run coverage           # 覆盖率（v8）
 npm run build              # tsc + vite build
+node scripts/ci-local.mjs  # 本地复跑 CI 的全部步骤（--fast 跳过视觉回归）
+node scripts/ci-local.mjs --linux   # 额外尝试在 Docker 里跑 Linux 后端 job
 
 cd src-tauri
 cargo test                 # 后端单测 + IPC 契约导出
@@ -356,7 +358,7 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 
 - Windows 与 Linux 均已构建并启动验证；端口采集 Windows 走 `netstat -ano`、Linux 走 `ss -tulpn`（缺 iproute2 时回退 `netstat`）
 - 交互路径由 Playwright（10 页面 × 8 主题的结构/对比度回归）与打包版桌面 E2E（真实 IPC）覆盖；Agent 对话与导入导出尚未脚本化
-- 成本账本落在单个 `cost_data.json`（写操作已串行化），记录数很大时全量读写会开始吃力
+- 成本账本使用 SQLite（`cost.db`，rusqlite bundled），按日 / 模型 / 文件建索引；聚合在 SQL 内完成，十万条记录约 250ms，而不是每次查询都重新解析整个 JSON。旧 `cost_data.json` 首次启动自动导入并改名为 `.migrated`（不删除）
 - 成本账本尚无分片存储；记录量到十万级时全量读写会明显变慢
 - 安装包未做代码签名，首次运行可能触发 SmartScreen 提示
 - 托盘菜单文案当前仅中文（前端界面已完整三语）
@@ -366,7 +368,7 @@ Anthropic 的缓存 token 按官方语义单独计价（读 0.1×、写 1.25×�
 | 文件 | 用途 | 位置 |
 |------|------|------|
 | `data.json` | 项目与任务 | `app data dir` |
-| `cost_data.json` | 成本记录 + 定价设置 | `app data dir` |
+| `cost.db` | 成本记录 + 定价设置（SQLite） | `app data dir` |
 | `pricing_overrides.json` | 用户自定义模型价格覆盖（成本页可编辑） | `app data dir` |
 | `workbench.log` | 运行日志 | `app data dir` |
 | `*.corrupt-<时间戳>` | 数据文件解析失败时的原样备份（不会被下次保存覆盖） | `app data dir` |

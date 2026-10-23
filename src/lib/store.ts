@@ -15,6 +15,7 @@ import {
   normalizeLayout,
   normalizeOrder,
   normalizeShell,
+  normalizeSpans,
   type OverviewLayoutId,
   type ShellId,
   type WidgetId,
@@ -98,6 +99,8 @@ interface UiState {
   widgetOrder: WidgetId[];
   /** 概览页隐藏的组件 */
   widgetHidden: WidgetId[];
+  /** 用户覆盖的组件宽度（缺省 = 组件自带 span） */
+  widgetSpans: Partial<Record<WidgetId, number>>;
   refreshMs: number;
   view: ViewKey;
   alwaysOnTop: boolean;
@@ -167,6 +170,7 @@ interface Store extends UiState, RuntimeState {
   setLayout: (l: OverviewLayoutId) => void;
   setWidgetOrder: (o: WidgetId[]) => void;
   setWidgetHidden: (h: WidgetId[]) => void;
+  setWidgetSpan: (id: WidgetId, span: number) => void;
   resetWidgets: () => void;
   setRefreshMs: (ms: number) => void;
   setToast: (t: string) => void;
@@ -227,6 +231,7 @@ export const useStore = create<Store>()(
       layout: "bento",
       widgetOrder: DEFAULT_ORDER,
       widgetHidden: [],
+      widgetSpans: {},
       refreshMs: 3000,
       view: "overview",
       alwaysOnTop: false,
@@ -330,7 +335,10 @@ export const useStore = create<Store>()(
       setWidgetOrder: (widgetOrder) => set({ widgetOrder: normalizeOrder(widgetOrder) }),
       setWidgetHidden: (widgetHidden) =>
         set({ widgetHidden: normalizeHidden(widgetHidden) }),
-      resetWidgets: () => set({ widgetOrder: DEFAULT_ORDER, widgetHidden: [] }),
+      setWidgetSpan: (id, span) =>
+        set((s) => ({ widgetSpans: normalizeSpans({ ...s.widgetSpans, [id]: span }) })),
+      resetWidgets: () =>
+        set({ widgetOrder: DEFAULT_ORDER, widgetHidden: [], widgetSpans: {} }),
       setRefreshMs: (ms) => set({ refreshMs: ms }),
       setToast: (t) => {
         set({ toast: t });
@@ -786,6 +794,7 @@ export const useStore = create<Store>()(
           layout: normalizeLayout(state.layout),
           widgetOrder: normalizeOrder(state.widgetOrder),
           widgetHidden: normalizeHidden(state.widgetHidden),
+          widgetSpans: normalizeSpans(state.widgetSpans),
         } as never;
       },
       partialize: (s) => ({
@@ -795,6 +804,7 @@ export const useStore = create<Store>()(
         layout: s.layout,
         widgetOrder: s.widgetOrder,
         widgetHidden: s.widgetHidden,
+        widgetSpans: s.widgetSpans,
         refreshMs: s.refreshMs,
         alwaysOnTop: s.alwaysOnTop,
       }),

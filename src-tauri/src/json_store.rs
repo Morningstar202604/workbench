@@ -3,7 +3,7 @@
 //! 两条硬性规则：
 //! 1. 解析失败绝不静默返回默认值 —— 调用方一旦带着默认值再保存，就会把可恢复的
 //!    损坏文件覆盖成空集。这里先把原文件改名保全，再把错误上抛。
-//! 2. 临时文件必须唯一 —— data.json 与 cost_data.json 都存在并发保存，
+//! 2. 临时文件必须唯一 —— data.json 与 pricing_overrides.json 都存在并发保存，
 //!    共用 `xxx.json.tmp` 会让两个写入互相截断后 rename 出半截文件。
 
 use serde::{de::DeserializeOwned, Serialize};

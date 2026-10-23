@@ -487,7 +487,7 @@ pub fn clear_logs(app: AppHandle) -> Result<(), String> {
 // 成本计量相关 IPC 命令
 // ════════════════════════════════════════════════════════════
 
-/// 扫描 session JSONL 文件 → 提取 usage → 计算成本 → 持久化到 cost_data.json
+/// 扫描 session JSONL 文件 → 提取 usage → 计算成本 → 写入 SQLite 成本库
 /// 注意：成本计量必须全量扫描（不受 UI 预览的 10 条上限影响）。
 #[tauri::command(async)]
 pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String> {
@@ -529,9 +529,9 @@ pub async fn scan_session_costs(app: AppHandle) -> Result<ScanCostResult, String
     .map_err(|e| format!("任务执行失败: {e}"))?
 }
 
-// 成本读取全部走 spawn_blocking：这几个命令一次要读并解析整个 cost_data.json
-// （上万条记录时单次数十毫秒），而 Tauri 的非 async 命令在主线程执行 ——
-// 前端进入 AI 页时用 Promise.all 同时发 4 个，等于把主线程冻结数百毫秒。
+// 成本读取全部走 spawn_blocking：SQLite 查询是同步阻塞调用，
+// 而 Tauri 的非 async 命令在主线程执行 —— 前端进入 AI 页时用 Promise.all
+// 同时发 4 个查询，在主线程上就是数百毫秒的冻结。
 
 /// 获取成本总览（不重新扫描）
 #[tauri::command(async)]
@@ -626,7 +626,7 @@ fn backups_root(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 fn data_files(app: &AppHandle) -> Vec<(&'static str, Result<std::path::PathBuf, String>)> {
     vec![
         ("data.json", data::data_file_path(app)),
-        ("cost_data.json", cost_store::cost_data_path_public(app)),
+        ("cost.db", cost_store::cost_db_path(app)),
         (
             "pricing_overrides.json",
             cost_store::cost_data_path_overrides(app),
@@ -694,10 +694,16 @@ fn backup_now(app: &AppHandle) -> Result<BackupResult, String> {
     for (name, path) in data_files(app) {
         match path {
             Ok(src) if src.exists() => {
-                // 先复制到临时名再改名：备份中途失败不会留下半个文件
+                // 先写临时名再改名：备份中途失败不会留下半个文件。
+                // SQLite 必须用 VACUUM INTO 而不是直接复制：应用可能正在写入，
+                // 复制会拿到「主文件已改、日志未合并」的中间态。
                 let dst = out_dir.join(name);
                 let tmp = out_dir.join(format!("{name}.tmp"));
-                std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
+                if name.ends_with(".db") {
+                    cost_store::snapshot_db(app, &tmp)?;
+                } else {
+                    std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
+                }
                 std::fs::rename(&tmp, &dst).map_err(|e| format!("落盘 {name} 失败: {e}"))?;
                 files.push(name.to_string());
             }
@@ -746,7 +752,7 @@ pub async fn list_backups(app: AppHandle) -> Result<Vec<BackupPoint>, String> {
             if let Ok(inner) = std::fs::read_dir(entry.path()) {
                 for f in inner.flatten() {
                     let n = f.file_name().to_string_lossy().to_string();
-                    if n.ends_with(".json") {
+                    if n.ends_with(".json") || n.ends_with(".db") {
                         files.push(n);
                     }
                 }
@@ -823,12 +829,18 @@ fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
             untouched.push(name.to_string());
             continue;
         }
-        let text =
-            std::fs::read_to_string(&src).map_err(|e| format!("读取备份 {name} 失败: {e}"))?;
-        let value: serde_json::Value =
-            serde_json::from_str(&text).map_err(|e| format!("备份 {name} 不是合法 JSON: {e}"))?;
-        if !value.is_object() {
-            return Err(format!("备份 {name} 顶层不是对象，拒绝恢复"));
+        if name.ends_with(".db") {
+            // SQLite 备份：完整性检查 + 必须有 records 表。用只读连接校验，
+            // 坏文件在这里就被拦住，不会覆盖掉能用的库。
+            cost_store::validate_db(&src).map_err(|e| format!("备份 {name} 不可用: {e}"))?;
+        } else {
+            let text =
+                std::fs::read_to_string(&src).map_err(|e| format!("读取备份 {name} 失败: {e}"))?;
+            let value: serde_json::Value = serde_json::from_str(&text)
+                .map_err(|e| format!("备份 {name} 不是合法 JSON: {e}"))?;
+            if !value.is_object() {
+                return Err(format!("备份 {name} 顶层不是对象，拒绝恢复"));
+            }
         }
         plan.push((name, src, dest));
     }
@@ -848,6 +860,11 @@ fn restore_now(app: &AppHandle, id: &str) -> Result<RestoreResult, String> {
         let tmp = dest.with_extension("restore-tmp");
         std::fs::copy(&src, &tmp).map_err(|e| format!("复制 {name} 失败: {e}"))?;
         std::fs::rename(&tmp, &dest).map_err(|e| format!("替换 {name} 失败: {e}"))?;
+        if name.ends_with(".db") {
+            // 旧库的 -wal / -shm / -journal 若残留，SQLite 会把旧事务重放到
+            // 新文件上，恢复出来的数据等于错的。
+            cost_store::clear_sidecars(&dest);
+        }
         restored.push(name.to_string());
     }
     log::info!(

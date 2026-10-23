@@ -25,10 +25,18 @@ import {
   swatchOf,
 } from "../lib/theme/presets";
 import { mix, type ThemeInput } from "../lib/theme/tokens";
-import { LAYOUTS, SHELLS, normalizeOrder, widgetOf, type WidgetId } from "../lib/layout";
+import {
+  LAYOUTS,
+  SHELLS,
+  SPAN_OPTIONS,
+  normalizeOrder,
+  spanOf,
+  widgetOf,
+  type WidgetId,
+} from "../lib/layout";
 import { LayoutWireframe, ThemeEditor } from "./ThemeEditorPanel";
 import { readableOn } from "../lib/theme/readable";
-import { Badge, Btn, Card, Field, SectionTitle } from "../ui";
+import { Btn, Card, Field, SectionTitle } from "../ui";
 
 /**
  * 外观面板：主题（含自定义与导入导出）、外壳、概览版面、组件摆放。
@@ -55,6 +63,8 @@ export function AppearancePanel() {
     widgetHidden,
     setWidgetOrder,
     setWidgetHidden,
+    widgetSpans,
+    setWidgetSpan,
     resetWidgets,
     setToast,
   } = useStore(
@@ -73,6 +83,8 @@ export function AppearancePanel() {
       widgetHidden: s.widgetHidden,
       setWidgetOrder: s.setWidgetOrder,
       setWidgetHidden: s.setWidgetHidden,
+      widgetSpans: s.widgetSpans,
+      setWidgetSpan: s.setWidgetSpan,
       resetWidgets: s.resetWidgets,
       setToast: s.setToast,
     }))
@@ -310,7 +322,11 @@ export function AppearancePanel() {
                   <span className="min-w-0 flex-1 truncate text-[12px]">
                     {w.name[lang]}
                   </span>
-                  <Badge tone="dim">{w.span}/12</Badge>
+                  <WidgetSpanSelect
+                    id={id}
+                    value={spanOf(id, widgetSpans)}
+                    onPick={(span) => setWidgetSpan(id, span)}
+                  />
                   <button
                     type="button"
                     className="rounded p-0.5 text-faint hover:text-text disabled:opacity-30"
@@ -499,5 +515,40 @@ function ThemeCard({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * 组件宽度选择器。
+ *
+ * 用下拉而不是拖拽调整：宽度是离散的（4/6/8/12），拖拽会给用户
+ * 「能拖到任意宽度」的错觉，而且拖动时没有吸附反馈。四档下拉
+ * 一眼能看出「这个组件现在占多宽」。
+ */
+function WidgetSpanSelect({
+  id,
+  value,
+  onPick,
+}: {
+  id: WidgetId;
+  value: number;
+  onPick: (span: number) => void;
+}) {
+  const t = useT();
+  return (
+    <select
+      aria-label={t("settings.widgetsSpan")}
+      title={t("settings.widgetsSpan")}
+      data-widget-span={id}
+      value={String(value)}
+      onChange={(e) => onPick(Number(e.target.value))}
+      className="shrink-0 rounded-[3px] border border-line bg-panel2 px-1 py-0.5 text-[10px] text-dim outline-none hover:text-text"
+    >
+      {SPAN_OPTIONS.map((s) => (
+        <option key={s} value={s}>
+          {s}/12
+        </option>
+      ))}
+    </select>
   );
 }

@@ -228,6 +228,7 @@ export function parseTheme(raw: unknown): ThemeInput | null {
     material,
     grid: clamp(o.grid, 0, 1, 0),
     panelOpacity: clamp(o.panelOpacity, 0.2, 1, 1),
+    textScale: clamp(o.textScale, 0.85, 1.2, 1),
     builtin: false,
   };
 }

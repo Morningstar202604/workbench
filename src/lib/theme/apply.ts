@@ -1,4 +1,5 @@
 import type { ThemeTokens } from "./tokens";
+import { applyUiScale } from "../uiScale";
 import { registerChartTheme } from "../chartTheme";
 import type { ShellId, OverviewLayoutId } from "../layout";
 
@@ -34,4 +35,6 @@ export function applyTheme(
     parseFloat(tokens.vars["--radius-card"]) === 0 ? "sharp" : "round";
   root.style.colorScheme = tokens.dark ? "dark" : "light";
   registerChartTheme(tokens.id, tokens.chart);
+  // 缩放属于主题的一部分（同色不同屏需要不同字号），在应用主题时一起生效。
+  applyUiScale(Number(tokens.vars["--text-scale"] ?? "1"));
 }

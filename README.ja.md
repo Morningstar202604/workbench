@@ -349,13 +349,14 @@ PID 再利用による誤爆を防ぎます。
 
 ## 既知の制限
 
-- Windows でのみ検証: ポート取得は `cmd /c netstat -ano` 固定で、`ports.rs` の
-  POSIX 分岐は現在実行されません
-- フロントエンドの操作パスは手動検証が中心: vitest は util / store / 共有
-  コンポーネント / エラー境界をカバーしますが、8 ページの E2E テストはありません
-- コスト台帳は単一の `cost_data.json`（書き込みは直列化）。記録が非常に多い場合は
-  全読み書きが重くなります
-- コスト台帳はシャード保存ではなく単一ファイルです。記録が十万件規模になると全量読み書きが遅くなります
+- Windows と Linux の両方でビルド・起動を検証済み。ポート取得は Windows が
+  `netstat -ano`、Linux が `ss -tulpn`（iproute2 が無い場合は `netstat`）
+- 操作パスは Playwright（10 ページ × 8 テーマの構造 / コントラスト回帰）と
+  パッケージ版のデスクトップ E2E（実 IPC）でカバー。エージェント対話と
+  インポート / エクスポートはまだスクリプト化していません
+- コスト台帳は SQLite（`cost.db`、rusqlite bundled）で、日付 / モデル / ファイルに
+  索引を持ちます。集計は SQL 内で完了するため、10 万件でも約 250ms。
+  旧 `cost_data.json` は初回起動時に取り込み、`.migrated` に改名します（削除しません）
 - インストーラーは未署名のため、初回起動時に SmartScreen が出ることがあります
 - トレイメニューの文言は現在中国語のみ（フロントエンド UI は完全に三言語対応）
 
@@ -364,7 +365,7 @@ PID 再利用による誤爆を防ぎます。
 | ファイル | 用途 | 場所 |
 |----------|------|------|
 | `data.json` | プロジェクトとタスク | app data dir |
-| `cost_data.json` | コスト記録 + 価格設定 | app data dir |
+| `cost.db` | コスト記録 + 価格設定（SQLite） | app data dir |
 | `pricing_overrides.json` | ユーザー定義のモデル価格（コスト台帳で編集可能） | app data dir |
 | `workbench.log` | 実行ログ | app data dir |
 | `*.corrupt-<timestamp>` | 解析失敗時の元データバックアップ（次回保存で上書きされない） | app data dir |
