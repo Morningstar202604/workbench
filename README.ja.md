@@ -270,13 +270,24 @@ workbench/
 ```bash
 npm run format:check       # Prettier
 npm run lint               # ESLint（警告ゼロ）
-npm run test               # フロントエンド単体テスト（vitest、48 ケース）
-npm run coverage           # カバレッジ
+npm run test               # フロントエンド単体テスト（vitest）
+npm run coverage           # カバレッジ（v8）
+npm run dup                # 重複コード（jscpd、しきい値 3%）
 npm run build              # tsc + vite build
+node scripts/ci-local.mjs  # CI と同じ全ステップをローカルで実行
 
 cd src-tauri
 cargo test                 # バックエンドテスト + IPC 契約エクスポート
 cargo clippy --all-targets -- -D warnings   # 警告ゼロゲート
+```
+
+パッケージ版の E2E（実際の Tauri ウィンドウ + 実 IPC）。exe を
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=22300` で起動してから:
+
+```bash
+node scripts/e2e-desktop.mjs 22300   # データ / バックアップ復元 / 価格 / ログイン時起動
+node scripts/e2e-agent.mjs 22300     # エージェント承認フロー（ローカル mock モデル）
+node scripts/e2e-io.mjs 22300        # インポート / エクスポート
 ```
 
 純粋な Rust ロジック（netstat 解析、フレームワーク判定、価格マッチング、トークン

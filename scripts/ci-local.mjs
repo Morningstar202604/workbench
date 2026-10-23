@@ -26,6 +26,7 @@ const steps = [
   { name: "Typecheck", cmd: "npx", args: ["tsc", "--noEmit"] },
   { name: "Lint", cmd: "npm", args: ["run", "lint"] },
   { name: "Format check", cmd: "npx", args: ["prettier", "--check", "."] },
+  { name: "Duplication < 3%", cmd: "npm", args: ["run", "dup"] },
   { name: "Unit tests", cmd: "npm", args: ["test"] },
   { name: "Build", cmd: "npm", args: ["run", "build"] },
   {

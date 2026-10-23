@@ -234,6 +234,15 @@ node scripts/ci-local.mjs --fast   # skip the visual-regression pass
 node scripts/ci-local.mjs --linux  # also try the Linux backend job in Docker
 ```
 
+Packaged-app E2E (real Tauri window, real IPC). Start the exe with
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=22300`, then:
+
+```bash
+node scripts/e2e-desktop.mjs 22300   # data, backup/restore, pricing, start-at-login
+node scripts/e2e-agent.mjs 22300     # agent approval flow against a local mock model
+node scripts/e2e-io.mjs 22300        # import / export
+```
+
 ### IPC contract types
 
 Types crossing the IPC boundary are not hand-written in `src/types.ts`; they
@@ -320,6 +329,7 @@ npm run format:check       # Prettier
 npm run lint               # ESLint (zero warnings)
 npm run test               # frontend unit tests (vitest, 48 cases)
 npm run coverage           # coverage
+npm run dup                # duplication (jscpd, 3% threshold)
 npm run build              # tsc + vite build
 
 cd src-tauri

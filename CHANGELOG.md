@@ -74,6 +74,19 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Widget widths are editable.** `widgetSpans` stores per-widget overrides
   (4/6/8/12 columns) with a picker in Settings; bento and ledger honour them.
   Previously "custom layout" only meant order and visibility.
+- **Three gaps that only a real desktop could test are now scripted.**
+  `scripts/e2e-agent.mjs` starts a local OpenAI-compatible mock (no real key, no
+  cost) and drives the whole path: provider config → model asks for a mutating
+  tool → step enters approval → approve → the tool really writes to `data.json`
+  → the same approval token is rejected on replay → tool result goes back to
+  the model. `scripts/e2e-io.mjs` feeds the hidden file input directly and
+  checks that malformed JSON is rejected whole, a valid import lands, and the
+  exported file can be imported again. `.github/workflows/ci.yml` gained a
+  `Backend (macOS)` job that runs fmt / test / clippy and builds the `.app`.
+- **Two more quality gates, both measured rather than asserted**: `npm run dup`
+  runs jscpd at a 3% threshold (measured: **0.26%**, 5 clones / 49 lines), and
+  `sonarjs/cognitive-complexity` is now an ESLint error at 15 (measured: **0
+  functions over the limit**). Both run in `ci.yml` and in `ci-local.mjs`.
 - **`node scripts/ci-local.mjs`** runs the same steps as `ci.yml` on this
   machine (icon contract, typecheck, lint, format, unit, build, Playwright,
   cargo fmt/test/clippy, IPC drift), so the remote run is a confirmation rather

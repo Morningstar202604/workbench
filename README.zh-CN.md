@@ -282,6 +282,12 @@ npm run build              # tsc + vite build
 node scripts/ci-local.mjs  # 本地复跑 CI 的全部步骤（--fast 跳过视觉回归）
 node scripts/ci-local.mjs --linux   # 额外尝试在 Docker 里跑 Linux 后端 job
 
+# 打包版的端到端（真实 Tauri 窗口 + 真实 IPC），先启动 exe 并带 CDP 端口：
+#   WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=22300 workbench.exe
+node scripts/e2e-desktop.mjs 22300  # 数据/备份恢复/定价/开机自启
+node scripts/e2e-agent.mjs 22300    # Agent 审批全链路（本地 mock 模型，无需密钥）
+node scripts/e2e-io.mjs 22300       # 导入 / 导出
+
 cd src-tauri
 cargo test                 # 后端单测 + IPC 契约导出
 cargo clippy --all-targets -- -D warnings   # 零警告门禁
@@ -289,8 +295,10 @@ cargo clippy --all-targets -- -D warnings   # 零警告门禁
 
 Rust 侧纯逻辑（netstat 解析、框架识别、价格匹配、token 提取、JSON 存储、IPC 守卫）
 都有 `#[cfg(test)]` 单测；前端有 vitest 单测覆盖 util / store / 共享组件 / 错误边界。
-CI 跑格式、静态检查、类型检查、构建、两侧单测、clippy 零警告，
-并校验 `src/generated/` 与 Rust 结构体一致。
+CI 跑格式、静态检查（含圈复杂度 ≤10、认知复杂度 ≤15）、重复行（jscpd <3%）、
+类型检查、构建、两侧单测、Playwright 视觉与对比度回归、clippy 零警告，
+并校验 `src/generated/` 与 Rust 结构体一致。同一套步骤在本地用
+`node scripts/ci-local.mjs` 一次跑完。
 
 ## 常见问题
 

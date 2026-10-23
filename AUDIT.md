@@ -53,7 +53,7 @@
 │   ├── ErrorBoundary.test.tsx 🆕 错误边界单测（3）
 │   ├── lib/util.test.ts      🆕 纯函数单测（17）
 │   ├── lib/store.test.ts     🆕 状态层单测（12）
-│   └── vitest.config.ts      🆕 jsdom 环境 + 覆盖率配置
+│   └── vitest.config.mts     jsdom 环境 + 覆盖率配置
 │   └── pages/
 │       ├── Overview.tsx      🔧 新增大标题 Hero 横幅（问候语+实时脉冲+Logo）；改用共享 StatCard
 │       ├── Processes.tsx     🔧 删除本地 StatPill，改用共享 StatCard

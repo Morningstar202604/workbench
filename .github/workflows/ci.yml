@@ -34,6 +34,9 @@ jobs:
         run: npm run lint
       - name: Format check
         run: npm run format:check
+      # 重复代码：阈值 3%（与审查红线一致）。jscpd 退出码非 0 即超阈值。
+      - name: Duplication
+        run: npm run dup
       - name: Unit tests
         run: npm test
       - name: Build
@@ -111,6 +114,52 @@ jobs:
           echo "built: $deb"
           dpkg-deb -c "$deb" | grep -q "usr/bin/workbench" || { echo "binary missing"; exit 1; }
           dpkg-deb -f "$deb" Package | grep -Eq '^[a-z0-9][a-z0-9.+-]*$' || { echo "invalid package name"; exit 1; }
+
+  # macOS：代码里所有平台差异都走 `cfg`，但从未真正编译过。
+  # 公开仓库的 macOS runner 免费；跑一次就能把「未验证」变成「每 commit 验证」。
+  # 产物不签名（需要付费证书），所以只验证能编译、能跑测试、能打出 .app。
+  backend-macos:
+    name: Backend (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Format check
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+
+      - name: Tests
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build app bundle
+        run: npx tauri build --bundles app
+
+      - name: Verify bundle structure
+        run: |
+          app=$(ls -d src-tauri/target/release/bundle/macos/*.app | head -1)
+          echo "built: $app"
+          test -x "$app/Contents/MacOS/workbench" || { echo "binary missing"; exit 1; }
+          test -f "$app/Contents/Info.plist" || { echo "Info.plist missing"; exit 1; }
 
   backend:
     name: Backend (Windows)
