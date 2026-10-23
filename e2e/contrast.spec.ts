@@ -26,7 +26,6 @@ const PAGES = [
   ["进程", "processes"],
   ["服务与端口", "servers"],
   ["AI 会话", "ai"],
-  ["智能助手", "agent"],
   ["成本账本", "costs"],
   ["项目", "projects"],
   ["任务", "tasks"],
@@ -110,7 +109,7 @@ test.describe("可读性（WCAG AA）", () => {
     await page.waitForTimeout(1500);
   });
 
-  test("十个页面在默认主题下零失败", async ({ page }) => {
+  test("九个页面在默认主题下零失败", async ({ page }) => {
     for (const [label] of PAGES) {
       await page
         .locator(`aside button[title="${label}"], header nav button[title="${label}"]`)

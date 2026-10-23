@@ -76,6 +76,100 @@ pub async fn terminate_process(pid: u32) -> Result<(), String> {
     result
 }
 
+// ── 以管理员结束进程（Windows UAC）──────────────────────────
+
+/// 构造提权 taskkill 的命令行参数（纯函数，单测不碰 UAC）。
+/// `/T` 连同子进程树一起结束，`/F` 强制终止。
+/// 参数只准放 u32 派生值：pid 经 to_string 进入本函数，不存在注入面；
+/// 未来若加字符串参数，必须改参数化传递（args 数组），严禁拼进单一命令串。
+#[cfg(windows)]
+fn elevated_taskkill_args(pid: u32) -> Vec<String> {
+    vec![
+        "/PID".to_string(),
+        pid.to_string(),
+        "/T".to_string(),
+        "/F".to_string(),
+    ]
+}
+
+/// 以 runas verb 启动 taskkill（经 PowerShell `Start-Process -Verb RunAs`，
+/// 底层即 ShellExecute runas），触发 UAC 提权弹窗并等待其退出。
+/// 用户在 UAC 点「否」或 taskkill 失败都会以非零码退出，映射为 Err。
+#[cfg(windows)]
+fn run_elevated_taskkill(pid: u32) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    // PassThru + exit <code>：把提权 taskkill 的退出码透传回来，
+    // 否则 Start-Process 失败也返回 0，调用方无法区分「拒绝 UAC」和「成功」。
+    let arglist = elevated_taskkill_args(pid)
+        .iter()
+        .map(|a| format!("'{a}'"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let script = format!(
+        "$p = Start-Process -FilePath taskkill -ArgumentList {arglist} \
+         -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode"
+    );
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("启动提权命令失败: {e}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "提权结束失败（UAC 被拒绝或 taskkill 出错）: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
+/// 非 Windows 平台没有 UAC 概念，直接拒绝（调用方应走普通 terminate_process）。
+#[cfg(not(windows))]
+fn run_elevated_taskkill(_pid: u32) -> Result<(), String> {
+    Err("仅 Windows 支持提权结束".to_string())
+}
+
+/// 二次身份比对（纯函数，单测不碰 UAC）：首次校验通过后到实际 spawn 之间
+/// 存在等待窗口（前端延迟 + UAC 弹窗停留时间，可达数十秒），目标退出后
+/// PID 会被系统复用给无关进程，直接 taskkill 等于误杀。因此 spawn 前按
+/// 「PID + 进程名」再比对一次：目标已退出（None）或名字与首次校验不一致
+/// 都必须拒绝，宁可少杀不可错杀。
+fn verify_elevated_target_unchanged(
+    fresh_name: Option<String>,
+    expected_name: &str,
+) -> Result<(), String> {
+    match fresh_name {
+        Some(name) if name == expected_name => Ok(()),
+        Some(name) => Err(format!(
+            "目标进程已退出或 PID 已被复用（首次校验「{expected_name}」，现名「{name}」）"
+        )),
+        None => Err("目标进程已退出或 PID 已被复用".to_string()),
+    }
+}
+
+/// 以管理员权限结束进程：`taskkill /PID <pid> /T /F` 经 UAC runas 启动。
+/// 与普通 terminate_process 共用 procs.rs 的同一份保护名单：受保护进程
+/// （System/lsass 等）在提权路径下同样直接拒绝，UAC 通过也不例外。
+/// 安全注记：校验通过后仍存在 UAC 等待窗口（用户停留在弹窗的时间不定，
+/// 目标可能退出、PID 可能被复用），故在 spawn 前按「PID + 进程名」做
+/// 第二次比对（verify_elevated_target_unchanged），不一致直接拒绝、不弹 UAC。
+#[tauri::command(async)]
+pub async fn terminate_process_elevated(pid: u32) -> Result<(), String> {
+    log::info!("请求提权终止进程 PID={pid}");
+    tauri::async_runtime::spawn_blocking(move || {
+        let name = procs::validate_termination_target(pid)?;
+        // 二次校验：实时取当前进程名，与首次校验比对，防窗口期 PID 复用误杀
+        let fresh = procs::process_name_by_pid(pid);
+        verify_elevated_target_unchanged(fresh, &name)?;
+        run_elevated_taskkill(pid)
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {e}"))?
+}
+
 #[tauri::command(async)]
 pub async fn list_ports() -> Result<Vec<PortEntry>, String> {
     tauri::async_runtime::spawn_blocking(cached_port_entries)
@@ -463,8 +557,6 @@ pub async fn save_data(
     let paths: Vec<String> = data.projects.iter().map(|p| p.path.clone()).collect();
     let accepted = dirs.record_validated_blocking(paths).await?;
     log::debug!("save_data 登记 {accepted} 个项目目录");
-    // 与 Agent 的 create_task 共用一把锁：前端防抖保存是整文件替换，
-    // 不加锁会盖掉另一个线程刚做的读-改-写。
     let app2 = app.clone();
     tauri::async_runtime::spawn_blocking(move || data::save_to_disk(&app2, &data))
         .await
@@ -1003,5 +1095,57 @@ mod tests {
         assert!(!is_backup_id("20261022-11420a"), "必须全数字");
         assert!(!is_backup_id(r"C:\Windows"), "盘符路径必须拒绝");
         assert!(!is_backup_id(""));
+    }
+
+    // ── 提权结束进程 ──
+
+    /// 受保护 PID（Windows 的 System / POSIX 的 init）在提权路径同样必须拒绝。
+    #[test]
+    fn elevated_target_rejects_protected_pids() {
+        #[cfg(windows)]
+        let protected = 4u32;
+        #[cfg(not(windows))]
+        let protected = 1u32;
+        let err = procs::validate_termination_target(protected).unwrap_err();
+        assert!(err.contains("拒绝"), "实际错误: {err}");
+    }
+
+    /// 本应用自身绝不允许被提权结束（提权成功等于自杀且 WebView 成孤儿）。
+    #[test]
+    fn elevated_target_rejects_self() {
+        assert!(procs::validate_termination_target(std::process::id()).is_err());
+    }
+
+    /// taskkill 参数顺序与开关固定：/PID <pid> /T /F。
+    #[cfg(windows)]
+    #[test]
+    fn elevated_taskkill_args_match_contract() {
+        assert_eq!(
+            elevated_taskkill_args(1234),
+            vec![
+                "/PID".to_string(),
+                "1234".to_string(),
+                "/T".to_string(),
+                "/F".to_string()
+            ]
+        );
+    }
+
+    /// 二次比对：名字不一致（PID 复用）或目标已退出都必须拒绝，一致才放行。
+    #[test]
+    fn elevated_second_check_rejects_reused_or_dead_pid() {
+        assert!(verify_elevated_target_unchanged(None, "notepad.exe").is_err());
+        assert!(
+            verify_elevated_target_unchanged(Some("explorer.exe".into()), "notepad.exe").is_err()
+        );
+        assert!(verify_elevated_target_unchanged(Some("notepad.exe".into()), "notepad.exe").is_ok());
+    }
+
+    /// 非 Windows 平台没有 UAC，必须显式报错而不是静默降级。
+    #[cfg(not(windows))]
+    #[test]
+    fn elevated_run_errs_off_windows() {
+        let err = run_elevated_taskkill(1).unwrap_err();
+        assert!(err.contains("仅 Windows"), "实际错误: {err}");
     }
 }

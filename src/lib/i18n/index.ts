@@ -15,12 +15,11 @@ import { dict as projects } from "./projects";
 import { dict as tasks } from "./tasks";
 import { dict as settings } from "./settings";
 import { dict as logs } from "./logs";
-import { dict as agent } from "./agent";
 
 export type Lang = "en" | "zh" | "ja";
 
-/** 应用版本号：改动时同步 package.json / tauri.conf.json / release.yml */
-export const APP_VERSION = "0.1.1";
+/** 应用版本号：版本发布时手动同步 package.json / tauri.conf.json 与发布产物命名 */
+export const APP_VERSION = "0.2.0";
 
 type Dict = Record<string, string>;
 
@@ -35,7 +34,6 @@ const DICTS: Record<Lang, Dict> = {
     ...tasks.en,
     ...settings.en,
     ...logs.en,
-    ...agent.en,
   },
   zh: {
     ...core.zh,
@@ -47,7 +45,6 @@ const DICTS: Record<Lang, Dict> = {
     ...tasks.zh,
     ...settings.zh,
     ...logs.zh,
-    ...agent.zh,
   },
   ja: {
     ...core.ja,
@@ -59,7 +56,6 @@ const DICTS: Record<Lang, Dict> = {
     ...tasks.ja,
     ...settings.ja,
     ...logs.ja,
-    ...agent.ja,
   },
 };
 

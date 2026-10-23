@@ -1,4 +1,3 @@
-pub mod agent;
 pub mod ai;
 pub mod commands;
 pub mod cost_store;
@@ -75,8 +74,6 @@ pub fn run() {
             // IPC 反向入参守卫：目录与端口白名单，随扫描/加载动态登记
             app.manage(ipc_guard::KnownDirs::default());
             app.manage(ipc_guard::AllowedPorts::default());
-            // Agent 运行时状态：provider 配置（密钥仅内存）+ 工具审批登记
-            app.manage(agent::AgentState::default());
 
             // ── 全局快捷键 Ctrl+Shift+W 切换窗口可见性（被占用时降级为警告，不阻断启动）──
             if let Err(e) = app.handle().global_shortcut().on_shortcut(
@@ -196,6 +193,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_processes,
             commands::terminate_process,
+            commands::terminate_process_elevated,
             commands::list_ports,
             commands::list_dev_servers,
             commands::list_ai_processes,
@@ -225,15 +223,6 @@ pub fn run() {
             commands::restore_backup,
             commands::get_pricing,
             commands::save_pricing,
-            // ── Agent（模型 + 工具调用）──
-            agent::agent_set_provider,
-            agent::agent_get_provider,
-            agent::agent_list_tools,
-            agent::agent_approve_tool,
-            agent::agent_reject_tool,
-            agent::agent_cancel,
-            agent::agent_clear_chat,
-            agent::agent_run,
         ])
         .run(tauri::generate_context!())
         .expect("运行工作台应用失败");

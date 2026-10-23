@@ -28,7 +28,7 @@ function rustCommands(): Set<string> {
   const end = libSource.indexOf("])", start);
   const block = libSource.slice(start, end);
   const out = new Set<string>();
-  for (const m of block.matchAll(/(?:commands|agent|crate::[\w:]+)::([a-z0-9_]+)/g)) {
+  for (const m of block.matchAll(/(?:commands|crate::[\w:]+)::([a-z0-9_]+)/g)) {
     out.add(m[1]);
   }
   return out;
@@ -71,10 +71,10 @@ describe("IPC 命令名", () => {
   it("扫描出足够多的前端调用点（防止 glob 匹配失效导致空跑通过）", () => {
     // 这条是「测试自身有效性」的守卫：如果 glob 没匹配到文件，
     // 上面的断言会因为空数组而永远通过 —— 那才是真的假绿灯。
-    // 实际调用点是三个文件（App / api / agentApi）共 35 处；
-    // 阈值定在 25 处、3 个文件，既能挡住 glob 失效，也不会因为
+    // 实际调用点是两个文件（api.ts 32 处 / AppHeader.tsx 1 处）共 33 处；
+    // 阈值定在 25 处、2 个文件，既能挡住 glob 失效，也不会因为
     // 有人把某个 invoke 挪进新的 API 模块就误报。
     expect(calls.length).toBeGreaterThan(25);
-    expect(new Set(calls.map((c) => c.file)).size).toBeGreaterThanOrEqual(3);
+    expect(new Set(calls.map((c) => c.file)).size).toBeGreaterThanOrEqual(2);
   });
 });

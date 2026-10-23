@@ -32,19 +32,6 @@ export type { BackupResult } from "./generated/BackupResult";
 export type { BackupPoint } from "./generated/BackupPoint";
 export type { RestoreResult } from "./generated/RestoreResult";
 
-// ── Agent（模型 + 工具调用）──
-export type { ChatMessage } from "./generated/ChatMessage";
-export type { ChatReply } from "./generated/ChatReply";
-export type { ToolCallWire } from "./generated/ToolCallWire";
-export type { FunctionCall } from "./generated/FunctionCall";
-export type { ProviderConfig } from "./generated/ProviderConfig";
-export type { ProviderView } from "./generated/ProviderView";
-export type { ToolSpec } from "./generated/ToolSpec";
-export type { ToolRisk } from "./generated/ToolRisk";
-export type { ToolResult } from "./generated/ToolResult";
-export type { AgentStep } from "./generated/AgentStep";
-export type { AgentRunResult } from "./generated/AgentRunResult";
-
 export type { CostSettings } from "./generated/CostSettings";
 export type { CostOverview } from "./generated/CostOverview";
 export type { CostTrendRow } from "./generated/CostTrendRow";

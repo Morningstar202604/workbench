@@ -35,7 +35,6 @@ const PAGES = [
   { key: "servers", file: "03-servers.png" },
   { key: "ai", file: "04-ai-sessions.png" },
   { key: "costs", file: "05-costs.png" },
-  { key: "agent", file: "06-agent.png" },
   { key: "projects", file: "07-projects.png" },
   { key: "tasks", file: "08-tasks.png" },
   { key: "settings", file: "09-settings.png" },

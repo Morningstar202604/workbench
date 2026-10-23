@@ -74,10 +74,11 @@ fn save_to_disk_unlocked(app: &AppHandle, data: &WorkbenchData) -> Result<(), St
 
 /// 数据文件锁。
 ///
-/// 为什么必须加：前端用 300ms 防抖整文件保存（`saveData`），而 Agent 工具
-/// （`create_task`）会在另一个线程做「读-改-写」。没有锁时后写者会用自己的
-/// 旧快照盖掉前者刚写入的内容 —— json_store 的原子写只保证"不会写出半截
-/// 文件"，不保证读-改-写是原子的。
+/// 为什么必须加：前端用 300ms 防抖整文件保存（`saveData`），是「读出全量
+/// 快照 → 改 → 整文件替换」的模式；项目/任务数据与其他写方（如成本账本
+/// 归档引用的元数据）共用同一份数据文件，任何一方在另一线程做「读-改-写」
+/// 时，没有锁的话后写者会用自己的旧快照盖掉前者刚写入的内容 ——
+/// json_store 的原子写只保证"不会写出半截文件"，不保证读-改-写是原子的。
 static DATA_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn lock() -> std::sync::MutexGuard<'static, ()> {

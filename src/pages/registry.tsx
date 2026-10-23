@@ -1,5 +1,4 @@
 import {
-  Bot,
   Coins,
   Cpu,
   FileText,
@@ -46,7 +45,6 @@ export const PAGES = [
   { key: "processes", icon: Cpu, group: "monitor", load: () => import("./Processes") },
   { key: "servers", icon: Server, group: "monitor", load: () => import("./Servers") },
   { key: "ai", icon: Sparkles, group: "ai", load: () => import("./AiSessions") },
-  { key: "agent", icon: Bot, group: "ai", load: () => import("./Agent") },
   { key: "costs", icon: Coins, group: "ai", load: () => import("./Costs") },
   {
     key: "projects",

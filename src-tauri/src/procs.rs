@@ -183,12 +183,17 @@ const PROTECTED_PIDS: &[u32] = &[0, 4];
 #[cfg(not(windows))]
 const PROTECTED_PIDS: &[u32] = &[0, 1];
 
-/// 结束指定进程（不可逆，前端必须二次确认后才调用）。
+/// 终止前的身份校验（保护名单 + 存活 + 防自杀），普通结束与提权结束共用。
 /// 目标身份先刷新再校验：拿到的是旧快照时，PID 可能已被系统复用给别的进程，
-/// 直接 kill 等于误杀。刷新后重新确认名字不是关键进程才动手。
-pub fn terminate_process(pid: u32) -> Result<(), String> {
+/// 直接 kill 等于误杀。刷新后重新确认名字不是关键进程才放行。
+/// 校验通过返回刷新后的进程名（小写），供调用方记录日志。
+pub fn validate_termination_target(pid: u32) -> Result<String, String> {
     if PROTECTED_PIDS.contains(&pid) {
         return Err(format!("拒绝终止系统关键进程 PID={pid}"));
+    }
+    // 不允许杀掉本应用自身：would orphan the WebView and look like a crash
+    if pid == std::process::id() {
+        return Err("拒绝终止当前应用自身".to_string());
     }
     let mut sys = System::new_all();
     sys.refresh_processes(ProcessesToUpdate::All, true);
@@ -199,10 +204,33 @@ pub fn terminate_process(pid: u32) -> Result<(), String> {
             if PROTECTED_PROCESSES.contains(&name.as_str()) {
                 return Err(format!("拒绝终止系统关键进程「{name}」"));
             }
-            // 不允许杀掉本应用自身：would orphan the WebView and look like a crash
-            if pid == std::process::id() {
-                return Err("拒绝终止当前应用自身".to_string());
-            }
+            Ok(name)
+        }
+        None => Err(format!("找不到进程 {pid}")),
+    }
+}
+
+/// 按 PID 取当前进程名（小写）。每次实时刷新，不读快照缓存——
+/// 提权路径的二次身份比对必须看「此刻」的名字，旧快照会掩盖 PID 复用。
+/// 进程不存在（已退出）返回 None。
+pub fn process_name_by_pid(pid: u32) -> Option<String> {
+    let mut sys = System::new_all();
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+    sys.process(Pid::from_u32(pid))
+        .map(|p| p.name().to_string_lossy().to_ascii_lowercase())
+}
+
+/// 结束指定进程（不可逆，前端必须二次确认后才调用）。
+pub fn terminate_process(pid: u32) -> Result<(), String> {
+    validate_termination_target(pid)?;
+    // 有意为之的双刷新：validate 与 kill 句柄各需一份目标数据
+    // （校验通过后不能拿着校验时的旧 System 直接取句柄，进程可能刚好变化）；
+    // 单次人工操作性能不敏感，不为此合并重构。
+    let mut sys = System::new_all();
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+    let target = Pid::from_u32(pid);
+    match sys.process(target) {
+        Some(p) => {
             if p.kill() {
                 Ok(())
             } else {

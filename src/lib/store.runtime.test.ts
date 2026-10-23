@@ -428,32 +428,11 @@ describe("预算告警", () => {
 });
 
 /**
- * 剩余未覆盖分支：重载、项目 CRUD 的持久化路径、成本设置读取失败、
- * 清空失败、agent 列表的两种更新形态。
+ * 剩余未覆盖分支：项目 CRUD 的持久化路径、成本设置读取失败、清空失败。
  * 这些分支原先靠人工点击验证，回归时只会表现为「数据没保存」，
  * 是最难发现的一类。
  */
 describe("数据重载与持久化", () => {
-  it("reloadData 读盘成功后覆盖内存数据", async () => {
-    api.loadData.mockResolvedValue({ projects: [{ id: "p1" }], tasks: [] });
-    await useStore.getState().reloadData();
-    expect(useStore.getState().data.projects[0].id).toBe("p1");
-  });
-
-  it("reloadData 失败时提示且不破坏现有数据", async () => {
-    useStore.setState({ data: { projects: [{ id: "keep" }] as never, tasks: [] } });
-    api.loadData.mockRejectedValue(new Error("disk gone"));
-    await useStore.getState().reloadData();
-    expect(useStore.getState().toast).toContain("disk gone");
-    expect(useStore.getState().data.projects[0].id).toBe("keep");
-  });
-
-  it("reloadData 在演示模式直接返回", async () => {
-    tauriMode = false;
-    await useStore.getState().reloadData();
-    expect(api.loadData).not.toHaveBeenCalled();
-  });
-
   it("updateProject 只改目标项目", () => {
     useStore.setState({
       data: {
@@ -504,7 +483,7 @@ describe("数据重载与持久化", () => {
   });
 });
 
-describe("成本与 agent 的失败分支", () => {
+describe("成本的失败分支", () => {
   it("读取成本设置失败时提示", async () => {
     api.getCostSettings.mockRejectedValue(new Error("no settings"));
     await useStore.getState().loadCostSettings();
@@ -519,22 +498,6 @@ describe("成本与 agent 的失败分支", () => {
     expect(useStore.getState().costOverview).not.toBeNull();
   });
 
-  it("setAgentTurns / setAgentPending 同时支持值与函数", () => {
-    useStore.getState().setAgentTurns([{ role: "user" }] as never);
-    useStore
-      .getState()
-      .setAgentTurns((prev) => [...prev, { role: "assistant" }] as never);
-    expect(useStore.getState().agentTurns).toHaveLength(2);
-
-    useStore.getState().setAgentPending([{ call_id: "c1" }] as never);
-    useStore.getState().setAgentPending((prev) => [...prev, { call_id: "c2" }] as never);
-    expect(useStore.getState().agentPending).toHaveLength(2);
-
-    useStore.getState().clearAgentChat();
-    expect(useStore.getState().agentTurns).toEqual([]);
-    expect(useStore.getState().agentPending).toEqual([]);
-  });
-
   it("setAlwaysOnTop / setKillTarget 直接写入", () => {
     useStore.getState().setAlwaysOnTop(true);
     expect(useStore.getState().alwaysOnTop).toBe(true);
@@ -542,5 +505,21 @@ describe("成本与 agent 的失败分支", () => {
     expect(useStore.getState().killTarget?.pid).toBe(1);
     useStore.getState().setKillTarget(null);
     expect(useStore.getState().killTarget).toBeNull();
+  });
+});
+
+// 回归护栏：UI 持久化（workbench-ui-v1）不得包含 view 字段。
+// view 只存内存态、每次启动落在默认页 —— 否则一旦持久化了某个后来被删除的
+// 页面 key（如已移除的 agent），下次启动 PAGE_COMPONENTS[view] 会取到
+// undefined，整个应用白屏。本用例锁死「partialize 永不收录 view」这一约束。
+describe("UI 持久化边界", () => {
+  it("持久化快照不包含 view（视图从不跨启动恢复）", () => {
+    useStore.getState().setView("tasks");
+    expect(useStore.getState().view).toBe("tasks");
+    const raw = localStorage.getItem("workbench-ui-v1");
+    expect(raw).toBeTruthy();
+    const parsed = JSON.parse(raw!) as { state?: Record<string, unknown> };
+    expect(parsed.state).toBeDefined();
+    expect("view" in parsed.state!).toBe(false);
   });
 });

@@ -6,11 +6,6 @@
 
 use std::path::Path;
 use ts_rs::{Config, TS};
-use workbench_lib::agent::llm::{
-    ChatMessage, ChatReply, FunctionCall, ProviderConfig, ToolCallWire,
-};
-use workbench_lib::agent::tools::{ToolResult, ToolRisk, ToolSpec};
-use workbench_lib::agent::{AgentRunResult, AgentStep, ProviderView};
 use workbench_lib::ai::{
     AiProcess, OpencodeSession, SessionDetail, SessionFile, SessionFilePreview,
 };
@@ -55,16 +50,4 @@ fn export_ts_bindings() {
     BackupResult::export_all(&cfg).unwrap();
     BackupPoint::export_all(&cfg).unwrap();
     RestoreResult::export_all(&cfg).unwrap();
-    // ── Agent 契约 ──
-    ToolSpec::export_all(&cfg).unwrap();
-    ToolRisk::export_all(&cfg).unwrap();
-    ToolResult::export_all(&cfg).unwrap();
-    ProviderConfig::export_all(&cfg).unwrap();
-    ProviderView::export_all(&cfg).unwrap();
-    ChatMessage::export_all(&cfg).unwrap();
-    ChatReply::export_all(&cfg).unwrap();
-    ToolCallWire::export_all(&cfg).unwrap();
-    FunctionCall::export_all(&cfg).unwrap();
-    AgentStep::export_all(&cfg).unwrap();
-    AgentRunResult::export_all(&cfg).unwrap();
 }

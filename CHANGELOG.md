@@ -3,9 +3,16 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-23
 
 ### Added
+
+- **UAC-elevated process termination.** When a normal kill fails, the kill
+  confirmation dialog offers an "End as administrator" retry that triggers the
+  OS UAC prompt (`terminate_process_elevated`, single `u32` PID argument).
+  The backend validates the target before spawning anything, so protected
+  process lists (PID 0/4, csrss/lsass/services, the app itself) are rejected
+  up front without ever flashing a UAC dialog.
 
 - **Theme share links.** The appearance panel gained a "Share link" button next to export: it packs the current theme into the URL fragment (`#theme=…`, base64url of the same JSON the export button writes). Opening such a link imports the theme once at boot through the same fail-closed validator as the JSON import (id collisions are renamed, never overwritten) and strips the fragment from the address bar, so reloading cannot import twice. A payload that fails to decode or validate is dropped and the fragment is still cleared.
 - **Two more overview layouts.** "Timeline" hangs every visible widget off one vertical rail as numbered stops, in the user's order. "Board" groups widgets into three fixed lanes (signals / resources / work) by purpose, keeps the user's order within each lane and drops empty lanes. Both ship with wireframe previews in Settings; the visual suite now covers seven layouts.
@@ -100,6 +107,13 @@ recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `buildTheme` 19, `Processes` 14, `Agent` 17). Extracted modules:
   `useAppRuntime`, `useShellLayout`, `pages/processFilter`, `pages/processes/
   ProcessTable`, `pages/servers/DevServerList`, `pages/ai/costCharts`.
+
+### Removed
+
+- **Agent conversation module** (AI chat + tool approval execution). Its 13
+  tools fully duplicated features the dedicated pages already cover, and it
+  required users to configure their own API key. AI session cost metering is
+  unaffected — it reads local session files and never depended on the agent.
 
 ### Fixed
 

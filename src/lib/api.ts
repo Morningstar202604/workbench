@@ -35,6 +35,11 @@ export async function terminateProcess(pid: number): Promise<void> {
   return invoke("terminate_process", { pid });
 }
 
+/** 以管理员结束进程：Windows 触发 UAC 授权，受保护进程由后端直接拒绝。 */
+export async function terminateProcessElevated(pid: number): Promise<void> {
+  return invoke("terminate_process_elevated", { pid });
+}
+
 export async function listPorts(): Promise<PortEntry[]> {
   return invoke<PortEntry[]>("list_ports");
 }

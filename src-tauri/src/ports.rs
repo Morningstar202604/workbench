@@ -69,7 +69,7 @@ pub fn parse_ss(output: &str) -> Vec<PortEntry> {
         };
         let (remote_addr, _) = split_host_port(tokens[5]).unwrap_or((tokens[5].to_string(), 0));
         // 状态词必须与 netstat 方言统一：netstat 给 "LISTENING"，ss 给 "LISTEN"。
-        // 消费方（Servers 页、list_dev_servers、agent 工具）只认一种，
+        // 消费方（Servers 页、list_dev_servers）只认一种，
         // 不统一就会在某个平台上整片丢掉监听端口。
         let state = if protocol == "UDP" {
             "UDP".to_string()
