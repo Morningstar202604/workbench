@@ -406,13 +406,17 @@ Done and planned. Vote or propose new ideas in the Issues.
 - [x] Three shells (rail / top dock / zen) and five overview layouts
 - [x] Draggable, hideable overview widgets
 - [x] Multilingual UI (English / 简体中文 / 日本語)
-- [ ] Cross-platform support (Linux done and verified; macOS not built)
-- [ ] Installer code signing
+- [x] Cross-platform (Windows and Linux built and verified; macOS built by the
+      `Backend (macOS)` CI job)
+- [ ] Installer code signing (needs a paid certificate)
 - [x] Model pricing editor (edit / add / reset overrides from the UI)
 - [x] Data backup and restore (timestamped snapshots, one-click rollback)
-- [ ] Sharded cost ledger (100k+ records)
-- [ ] Page-level end-to-end tests (visual + structural covered; agent and
-      import/export flows are not)
+- [x] SQLite cost ledger (100k records aggregate in 246 ms; sharding not needed)
+- [x] Page-level E2E (Playwright 10 pages × 8 themes plus three packaged-app
+      suites: data/backup, agent approval, import/export)
+- [x] Editable widget widths (4/6/8/12 columns)
+- [x] Theme editor: status colours, live contrast readout, UI scale
+- [ ] Auto-update (needs a signed release channel)
 
 ## Known limitations
 
