@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { Menu, Moon, Pin, PinOff, RefreshCw, Sun } from "lucide-react";
+import { Menu, Moon, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
 import { isTauri } from "../lib/api";
 import { localeFor, useLang, useT } from "../lib/i18n";
 import { useStore } from "../lib/store";
@@ -46,6 +46,23 @@ export function AppHeaderControls() {
 
   return (
     <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => {
+          window.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true })
+          );
+        }}
+        title={t("app.searchShortcut")}
+        aria-label={t("app.searchShortcut")}
+        className="hidden items-center gap-1.5 rounded-full border border-line/70 bg-panel2/60 px-2.5 py-1 text-[11px] text-dim transition-colors hover:text-text xl:flex"
+      >
+        <Search size={12} />
+        <span className="max-w-[130px] truncate">{t("app.searchShortcut")}</span>
+        <kbd className="rounded border border-line px-1 text-[9.5px] text-faint">
+          Ctrl K
+        </kbd>
+      </button>
       <span className="num hidden text-[11px] text-faint lg:inline">
         {lastRefreshAt
           ? t("app.updatedAt", {

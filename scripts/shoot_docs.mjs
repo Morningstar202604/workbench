@@ -41,6 +41,40 @@ const PAGES = [
   { key: "logs", file: "10-logs.png" },
 ];
 
+/** 额外镜头：截图脚本不只拍「每页一张」，还要拍这次交付的新交互。 */
+const SHOTS = [
+  {
+    file: "17-process-tree.png",
+    page: "processes",
+    prepare: async (cdp) => {
+      await cdp.send("Runtime.evaluate", {
+        expression: `document.querySelector('button[data-proc-view="tree"]')?.click()`,
+      });
+      await sleep(800);
+    },
+  },
+  {
+    file: "18-command-palette.png",
+    page: null,
+    prepare: async (cdp) => {
+      await cdp.send("Runtime.evaluate", {
+        expression: `window.dispatchEvent(new KeyboardEvent('keydown', {key:'k', ctrlKey:true}))`,
+      });
+      await sleep(400);
+      await cdp.send("Runtime.evaluate", {
+        expression: `(() => { const i = document.querySelector('[role=dialog] input'); if (i) { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; set.call(i,'node'); i.dispatchEvent(new Event('input',{bubbles:true})); } })()`,
+      });
+      await sleep(500);
+    },
+    close: async (cdp) => {
+      await cdp.send("Runtime.evaluate", {
+        expression: `window.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape'}))`,
+      });
+      await sleep(300);
+    },
+  },
+];
+
 function httpJson(pathname) {
   return new Promise((resolve, reject) => {
     http
@@ -141,8 +175,23 @@ async function main() {
     console.log(`  ${file}`);
   }
 
+  for (const shot of SHOTS) {
+    if (shot.page) {
+      const idx = keys.indexOf(shot.page);
+      await cdp.send("Runtime.evaluate", {
+        expression: `(() => { const b = [...document.querySelectorAll('nav button')][${idx}]; if (b) b.click(); })()`,
+      });
+      await sleep(900);
+    }
+    await shot.prepare(cdp);
+    const png = await cdp.send("Page.captureScreenshot", { format: "png" });
+    fs.writeFileSync(path.join(OUT_DIR, shot.file), Buffer.from(png.data, "base64"));
+    console.log(`  ${shot.file}`);
+    if (shot.close) await shot.close(cdp);
+  }
+
   ws.close();
-  console.log(`完成：${PAGES.length} 张 -> ${OUT_DIR}`);
+  console.log(`完成：${PAGES.length + SHOTS.length} 张 -> ${OUT_DIR}`);
 }
 
 main().catch((e) => {

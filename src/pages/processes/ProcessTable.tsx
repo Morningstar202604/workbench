@@ -5,34 +5,43 @@ import { Badge, Btn, Empty, Td, Tr } from "../../ui";
 import { formatBytes, fromNow, shortPath } from "../../lib/util";
 import { useStore } from "../../lib/store";
 import { localeFor, useLang, useT } from "../../lib/i18n";
+import { statusKeyOf } from "../../lib/processStatus";
 import type { ProcInfo } from "../../types";
+import type { TreeRow } from "./tree";
 
 /** 虚拟滚动估算尺寸：普通行固定，展开详情行内容高度不定，交由实测修正 */
 const ROW_H = 37;
-const DETAIL_H = 170;
+const DETAIL_H = 190;
 const OVERSCAN = 12;
 
-type Unit = { kind: "row" | "detail"; p: ProcInfo };
+type Unit = { kind: "row"; row: TreeRow } | { kind: "detail"; p: ProcInfo };
 
 /**
- * 进程表：虚拟滚动 + 行内展开。
+ * 进程表：虚拟滚动 + 行内展开 + 可选父子层级。
  *
- * 从页面里拆出来的原因：虚拟滚动的测量逻辑与行 JSX 一起占 200 行，
- * 页面本身的圈复杂度因此到 14（红线 10）。拆开后页面只负责「取数 +
- * 两三种状态」，表格可以独立测（render 20 行只挂载视口内的几行）。
+ * 层级由 `tree.ts` 预先摊平成行序列（带 depth），表格只负责缩进渲染。
+ * 扁平与树形共用同一套虚拟化与展开逻辑，避免「树形为缩进另写一份表格」
+ * 之后两边的键盘行为各自漂移。
  */
 export function ProcessTable({
-  procs,
+  rows,
   aiPids,
   devPids,
   onClearFilter,
   canClear,
+  focusPid,
+  expandedNodes,
+  onToggleNode,
 }: {
-  procs: ProcInfo[];
+  rows: TreeRow[];
   aiPids: Set<number>;
   devPids: Set<number>;
   onClearFilter: () => void;
   canClear: boolean;
+  focusPid?: number | null;
+  /** 树形视图里已展开的父节点 PID */
+  expandedNodes?: Set<number>;
+  onToggleNode?: (pid: number) => void;
 }) {
   const t = useT();
   const [expandedPid, setExpandedPid] = useState<number | null>(null);
@@ -41,12 +50,12 @@ export function ProcessTable({
   // 命令行长度变化，react-virtual 先按估算值排版，再对进入视口的单元实测修正。
   const units = useMemo(() => {
     const out: Unit[] = [];
-    for (const p of procs) {
-      out.push({ kind: "row", p });
-      if (expandedPid === p.pid) out.push({ kind: "detail", p });
+    for (const row of rows) {
+      out.push({ kind: "row", row });
+      if (expandedPid === row.p.pid) out.push({ kind: "detail", p: row.p });
     }
     return out;
-  }, [procs, expandedPid]);
+  }, [rows, expandedPid]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -64,9 +73,16 @@ export function ProcessTable({
   // 筛选条件变化后列表整体换血，回到顶部，避免停留在旧滚动位置看到空白区
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
-  }, [procs]);
+  }, [rows]);
 
-  if (procs.length === 0) {
+  // 从端口页 / 命令面板跳过来时滚到目标行：虚拟列表不滚过去就只是「数据变了」。
+  useEffect(() => {
+    if (!focusPid) return;
+    const index = rows.findIndex((r) => r.p.pid === focusPid);
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: "center" });
+  }, [focusPid, rows, virtualizer]);
+
+  if (rows.length === 0) {
     return (
       <Empty
         icon={SearchX}
@@ -83,10 +99,11 @@ export function ProcessTable({
     );
   }
 
-  const rows = virtualizer.getVirtualItems();
-  const padTop = rows.length ? rows[0].start : 0;
-  const padBottom = rows.length
-    ? virtualizer.getTotalSize() - rows[rows.length - 1].end
+  const toggle = (pid: number) => setExpandedPid((cur) => (cur === pid ? null : pid));
+  const virtualRows = virtualizer.getVirtualItems();
+  const padTop = virtualRows.length ? virtualRows[0].start : 0;
+  const padBottom = virtualRows.length
+    ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
     : 0;
 
   return (
@@ -103,21 +120,40 @@ export function ProcessTable({
         </thead>
         <tbody>
           {padTop > 0 && <Spacer height={padTop} />}
-          {rows.map((v) => {
+          {virtualRows.map((v) => {
             const unit = units[v.index];
             if (!unit) return null;
+            if (unit.kind === "detail") {
+              return (
+                <ProcessDetail
+                  key={`d-${unit.p.pid}`}
+                  p={unit.p}
+                  index={v.index}
+                  measure={virtualizer.measureElement}
+                />
+              );
+            }
             return (
-              <ProcessUnit
-                key={unit.kind === "detail" ? `d-${unit.p.pid}` : unit.p.pid}
-                unit={unit}
+              <ProcessRow
+                key={unit.row.p.pid}
+                row={unit.row}
                 index={v.index}
                 measure={virtualizer.measureElement}
-                expanded={expandedPid === unit.p.pid}
-                onToggle={() =>
-                  setExpandedPid(expandedPid === unit.p.pid ? null : unit.p.pid)
+                detailOpen={expandedPid === unit.row.p.pid}
+                nodeOpen={
+                  expandedNodes && unit.row.hasChildren
+                    ? expandedNodes.has(unit.row.p.pid)
+                    : undefined
+                }
+                onToggle={() => toggle(unit.row.p.pid)}
+                onToggleNode={
+                  unit.row.hasChildren && onToggleNode
+                    ? () => onToggleNode(unit.row.p.pid)
+                    : undefined
                 }
                 aiPids={aiPids}
                 devPids={devPids}
+                focused={focusPid === unit.row.p.pid}
               />
             );
           })}
@@ -152,23 +188,7 @@ function Spacer({ height }: { height: number }) {
   );
 }
 
-/** 一行进程，或它的展开详情。 */
-function ProcessUnit(props: {
-  unit: Unit;
-  index: number;
-  measure: (el: Element | null) => void;
-  expanded: boolean;
-  onToggle: () => void;
-  aiPids: Set<number>;
-  devPids: Set<number>;
-}) {
-  if (props.unit.kind === "detail") {
-    return <ProcessDetail p={props.unit.p} index={props.index} measure={props.measure} />;
-  }
-  return <ProcessRow {...props} />;
-}
-
-/** 展开的详情行：可执行路径、父 PID、启动时间、完整命令行。 */
+/** 展开的详情行：可执行路径、父 PID、启动时间、完整命令行、监听端口。 */
 function ProcessDetail({
   p,
   index,
@@ -208,45 +228,75 @@ function ProcessDetail({
               {p.cmd_line || "—"}
             </code>
           </div>
+          <div className="sm:col-span-3">
+            <span className="text-dim">{t("procs.detailPorts")}</span>
+            <PortsOfPid pid={p.pid} />
+          </div>
         </div>
       </Td>
     </Tr>
   );
 }
 
+/** 该进程正在监听的端口。端口页「看进程」的反向闭环就靠这块。 */
+function PortsOfPid({ pid }: { pid: number }) {
+  const t = useT();
+  const ports = useStore((s) => s.ports);
+  const mine = ports.filter((p) => p.pid === pid);
+  if (mine.length === 0) {
+    return <span className="ml-2 text-faint">{t("procs.noPorts")}</span>;
+  }
+  return (
+    <span className="ml-2 inline-flex flex-wrap gap-1">
+      {mine.map((p) => (
+        <Badge key={`${p.protocol}-${p.local_port}-${p.local_addr}`} tone="accent">
+          {p.protocol === "UDP" ? "udp" : "tcp"}:{p.local_port}
+        </Badge>
+      ))}
+    </span>
+  );
+}
+
 /** 普通进程行。整行可点击/可回车展开，右侧是终止按钮。 */
 function ProcessRow({
-  unit,
+  row,
   index,
   measure,
-  expanded,
+  detailOpen,
+  nodeOpen,
   onToggle,
+  onToggleNode,
   aiPids,
   devPids,
+  focused,
 }: {
-  unit: Unit;
+  row: TreeRow;
   index: number;
   measure: (el: Element | null) => void;
-  expanded: boolean;
+  detailOpen: boolean;
+  /** 树形视图下的节点展开态；undefined = 扁平视图，没有子节点概念 */
+  nodeOpen?: boolean;
   onToggle: () => void;
+  onToggleNode?: () => void;
   aiPids: Set<number>;
   devPids: Set<number>;
+  focused: boolean;
 }) {
   const t = useT();
-  const { p } = unit;
+  const { p, depth } = row;
   const risky = aiPids.has(p.pid) || devPids.has(p.pid) || p.cpu > 50;
 
   return (
     <Tr
       data-index={index}
       ref={measure}
-      className={expanded ? "bg-accentsoft/10" : ""}
+      className={focused ? "bg-accent/15" : detailOpen ? "bg-accentsoft/10" : ""}
       onClick={onToggle}
       // 表格行本身不可聚焦，键盘用户无法展开详情：补 role/tabIndex
       // 与 Enter/Space，和鼠标点击等价。
       role="button"
       tabIndex={0}
-      aria-expanded={expanded}
+      aria-expanded={nodeOpen ?? detailOpen}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -255,14 +305,37 @@ function ProcessRow({
       }}
     >
       <Td className="w-6">
-        <Chevron expanded={expanded} />
+        {onToggleNode ? (
+          <button
+            type="button"
+            aria-label={p.name}
+            aria-expanded={Boolean(nodeOpen)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleNode();
+            }}
+            className="flex h-4 w-4 items-center justify-center"
+          >
+            <Chevron expanded={Boolean(nodeOpen)} dim={false} />
+          </button>
+        ) : (
+          <Chevron expanded={detailOpen} dim={!row.hasChildren} />
+        )}
       </Td>
       <Td mono className="text-dim">
         {p.pid}
       </Td>
-      <Td className="font-medium max-w-[160px] truncate">
-        <span className="flex items-center gap-1.5">
-          {p.name}
+      <Td className="font-medium max-w-[180px] truncate">
+        <span
+          className="flex items-center gap-1.5"
+          style={depth > 0 ? { paddingLeft: Math.min(depth, 6) * 14 } : undefined}
+        >
+          {depth > 0 && (
+            <span className="text-faint" aria-hidden="true">
+              └
+            </span>
+          )}
+          <span className="truncate">{p.name}</span>
           {aiPids.has(p.pid) && <Badge tone="warn">AI</Badge>}
           {devPids.has(p.pid) && <Badge tone="ok">DEV</Badge>}
         </span>
@@ -271,7 +344,7 @@ function ProcessRow({
         <CpuCell cpu={p.cpu} />
       </Td>
       <Td>{formatBytes(p.memory)}</Td>
-      <Td className="text-dim">{p.status}</Td>
+      <Td className="text-dim">{t(`procs.status.${statusKeyOf(p.status)}`)}</Td>
       <Td className="text-xs text-dim">{fromNow(p.start_time)}</Td>
       <Td className="max-w-[240px]">
         <div
@@ -298,12 +371,9 @@ function ProcessRow({
 }
 
 /** 展开箭头。收起时右向、展开时下向且用强调色。 */
-function Chevron({ expanded }: { expanded: boolean }) {
-  return expanded ? (
-    <ChevronDown size={12} className="text-accent" />
-  ) : (
-    <ChevronRight size={12} className="text-dim" />
-  );
+function Chevron({ expanded, dim }: { expanded: boolean; dim?: boolean }) {
+  if (expanded) return <ChevronDown size={12} className="text-accent" />;
+  return <ChevronRight size={12} className={dim ? "text-line" : "text-dim"} />;
 }
 
 /** CPU 读数 + 迷你条。阈值色分三档：>50 危险、>10 警告、其余强调色。 */

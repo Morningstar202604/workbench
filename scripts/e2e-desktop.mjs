@@ -40,6 +40,13 @@ async function main() {
 
   await p.waitForTimeout(1500);
 
+  // ── 1b. 记录测试前的数据快照 ──
+  // 这套测试会写入标记项目来验证备份/恢复。跑完必须把原始数据放回去，
+  // 否则开发机上的真实项目列表会被测试数据顶掉（曾经就是这样丢过一次）。
+  const originalData = await p.evaluate(() =>
+    window.__TAURI_INTERNALS__.invoke("load_data")
+  );
+
   // ── 2. 直接调 IPC：定价表必须来自 Rust 内置表 ──
   const view = await p.evaluate(async () => {
     const { invoke } = window.__TAURI_INTERNALS__;
@@ -225,6 +232,21 @@ async function main() {
     fail(`自启开关状态不对（应为 false，实际 ${autostartUi.checked}）`);
   }
   ok("设置页渲染开机自启开关，状态与系统一致");
+
+  // ── 11. 还原测试前的数据（否则标记项目会顶掉开发机上的真实项目）──
+  await p.evaluate(
+    (data) => window.__TAURI_INTERNALS__.invoke("save_data", { data }),
+    originalData
+  );
+  const restoredData = await p.evaluate(() =>
+    window.__TAURI_INTERNALS__.invoke("load_data")
+  );
+  if (restoredData.projects.length !== originalData.projects.length) {
+    fail("测试结束后没能还原原始数据");
+  }
+  ok(
+    `已还原测试前数据（${originalData.projects.length} 个项目 / ${originalData.tasks.length} 个任务）`
+  );
 
   await browser.close();
   console.log("\n全部通过（真实桌面应用 + 真实 IPC）");

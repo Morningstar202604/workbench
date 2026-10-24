@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText, RefreshCw, Trash2 } from "lucide-react";
 import { useStore } from "../lib/store";
-import { readLogs, clearLogs } from "../lib/api";
+import { isTauri, readLogs, clearLogs } from "../lib/api";
+import { demoLogs } from "../lib/demo";
 import { Btn } from "../ui";
 import { t as translate, useT } from "../lib/i18n";
 
@@ -18,6 +19,12 @@ export default function Logs() {
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   const load = useCallback(async () => {
+    // 浏览器预览没有后端日志文件：给一段标注清楚的样例，
+    // 而不是把整页渲染成「不可用」——那看起来像功能坏了。
+    if (!isTauri()) {
+      setContent(demoLogs);
+      return;
+    }
     try {
       setContent(await readLogs(500));
     } catch {

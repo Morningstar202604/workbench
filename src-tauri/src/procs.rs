@@ -58,22 +58,26 @@ pub struct ProcInfo {
     pub start_time: u64,
 }
 
-/// 把 sysinfo 的 ProcessStatus 枚举映射成中文状态标签。
-fn status_label(status: &sysinfo::ProcessStatus) -> String {
+/// 把 sysinfo 的 ProcessStatus 枚举映射成**与语言无关**的稳定键。
+///
+/// 这里曾经直接发中文标签，于是英文/日文界面的进程状态列永远是中文——
+/// 状态是系统词汇，不能跟着后端源码的语言走。前端 `lib/processStatus.ts`
+/// 负责把键翻成当前语言。
+fn status_key(status: &sysinfo::ProcessStatus) -> &'static str {
     match status {
-        sysinfo::ProcessStatus::Run => "运行中".to_string(),
-        sysinfo::ProcessStatus::Sleep => "休眠".to_string(),
-        sysinfo::ProcessStatus::Idle => "空闲".to_string(),
-        sysinfo::ProcessStatus::Stop => "已停止".to_string(),
-        sysinfo::ProcessStatus::Zombie => "僵尸".to_string(),
-        sysinfo::ProcessStatus::Dead => "已终止".to_string(),
-        sysinfo::ProcessStatus::Tracing => "追踪中".to_string(),
-        sysinfo::ProcessStatus::Wakekill => "唤醒中".to_string(),
-        sysinfo::ProcessStatus::Waking => "正在唤醒".to_string(),
-        sysinfo::ProcessStatus::Parked => "已停放".to_string(),
-        sysinfo::ProcessStatus::LockBlocked => "锁阻塞".to_string(),
-        sysinfo::ProcessStatus::UninterruptibleDiskSleep => "磁盘休眠".to_string(),
-        _ => format!("{:?}", status),
+        sysinfo::ProcessStatus::Run => "Run",
+        sysinfo::ProcessStatus::Sleep => "Sleep",
+        sysinfo::ProcessStatus::Idle => "Idle",
+        sysinfo::ProcessStatus::Stop => "Stop",
+        sysinfo::ProcessStatus::Zombie => "Zombie",
+        sysinfo::ProcessStatus::Dead => "Dead",
+        sysinfo::ProcessStatus::Tracing => "Tracing",
+        sysinfo::ProcessStatus::Wakekill => "Wakekill",
+        sysinfo::ProcessStatus::Waking => "Waking",
+        sysinfo::ProcessStatus::Parked => "Parked",
+        sysinfo::ProcessStatus::LockBlocked => "LockBlocked",
+        sysinfo::ProcessStatus::UninterruptibleDiskSleep => "UninterruptibleDiskSleep",
+        _ => "Unknown",
     }
 }
 
@@ -143,7 +147,7 @@ fn collect_processes() -> Vec<ProcInfo> {
             cpu: p.cpu_usage(),
             memory: p.memory(),
             parent_pid: p.parent().map(|pid| pid.as_u32()),
-            status: status_label(&p.status()),
+            status: status_key(&p.status()).to_string(),
             start_time: p.start_time(),
         })
         .collect()

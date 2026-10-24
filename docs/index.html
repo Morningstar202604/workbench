@@ -190,6 +190,12 @@
       .shot img { width: 100%; display: block; }
       .shot figcaption { padding: 12px 16px; font-size: 13px; color: var(--dim); }
       figure { margin: 0; }
+      .video {
+        margin-top: 20px; border: 1px solid var(--line);
+        border-radius: var(--radius); overflow: hidden; background: var(--panel);
+      }
+      .video video { width: 100%; display: block; }
+      .video figcaption { padding: 12px 16px; font-size: 13px; color: var(--dim); }
 
       /* ── Table ──────────────────────────────── */
       table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -285,7 +291,7 @@
       <!-- ── Hero ─────────────────────────────── -->
       <div class="hero">
         <div class="wrap hero-inner">
-          <div class="pill"><span class="dot"></span> <span data-i18n="hero.pill">v0.1.1 · Windows x64 · MIT licensed</span></div>
+          <div class="pill"><span class="dot"></span> <span data-i18n="hero.pill">v0.3.0 · Windows x64 · MIT licensed</span></div>
           <h1>
             <span data-i18n="hero.h1a">Your machine, at a glance</span><br />
             <span class="grad" data-i18n="hero.h1b">with AI session cost metering</span>
@@ -298,14 +304,14 @@
             <a class="btn btn-primary" id="cta-setup" href="#download" data-i18n="hero.cta1">Download installer</a>
             <a class="btn" id="cta-portable" href="#download" data-i18n="hero.cta2">Portable exe</a>
           </div>
-          <p class="meta" data-i18n="hero.meta">Windows 10 / 11 · ~3 MB installer · runs without admin rights</p>
+          <p class="meta" data-i18n="hero.meta">Windows 10 / 11 (NSIS) · Linux (.deb) · macOS (.app, CI-built) · no admin rights required</p>
         </div>
       </div>
 
       <!-- ── Features ─────────────────────────── -->
       <section id="features" class="wrap">
         <h2 class="sec-title" data-i18n="feat.title">Features</h2>
-        <p class="sec-sub" data-i18n="feat.sub">Nine modules covering the "see it" and "count it" of your daily dev environment.</p>
+        <p class="sec-sub" data-i18n="feat.sub">Nine modules plus a keyboard-first command palette — see it, find it, count it.</p>
         <div class="grid g3">
           <div class="card">
             <div class="ico">🖥</div>
@@ -315,7 +321,7 @@
           <div class="card">
             <div class="ico">⚙</div>
             <h3 data-i18n="f2t">Processes</h3>
-            <p data-i18n="f2p">Full process snapshot, CPU / memory sorting and filtering, virtual scrolling for thousands of rows, kill confirmation.</p>
+            <p data-i18n="f2p">Flat table or parent/child tree, virtual scrolling for thousands of rows, CSV export, and a kill confirmation that re-verifies the target before acting.</p>
           </div>
           <div class="card">
             <div class="ico">🌐</div>
@@ -346,6 +352,11 @@
             <div class="ico">🎛</div>
             <h3 data-i18n="f8t">Settings</h3>
             <p data-i18n="f8p">Dark / light themes, refresh interval, budget and alert thresholds, JSON import &amp; export.</p>
+          </div>
+          <div class="card">
+            <div class="ico">⌘</div>
+            <h3 data-i18n="f10t">Command palette</h3>
+            <p data-i18n="f10p">Ctrl/Cmd+K searches every page, process, port, project and task; ports link straight to the process that owns them.</p>
           </div>
           <div class="card">
             <div class="ico">🔒</div>
@@ -379,22 +390,37 @@
             <figcaption data-i18n="s4">AI sessions — token cost trends and model breakdown</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/05-projects.png" alt="Projects: card and table views" loading="lazy" />
+            <img src="screenshots/07-projects.png" alt="Projects: card and table views" loading="lazy" />
             <figcaption data-i18n="s5">Projects — card / table views, Git branch detection</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/06-tasks.png" alt="Tasks: drag-and-drop kanban" loading="lazy" />
+            <img src="screenshots/08-tasks.png" alt="Tasks: drag-and-drop kanban" loading="lazy" />
             <figcaption data-i18n="s6">Tasks — drag-and-drop kanban (todo / in progress / done)</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/07-settings.png" alt="Settings: theme, refresh and budget" loading="lazy" />
+            <img src="screenshots/09-settings.png" alt="Settings: theme, refresh and budget" loading="lazy" />
             <figcaption data-i18n="s7">Settings — theme, refresh interval and budget</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/08-logs.png" alt="Logs" loading="lazy" />
+            <img src="screenshots/10-logs.png" alt="Logs" loading="lazy" />
             <figcaption data-i18n="s8">Logs — built-in viewer with auto refresh</figcaption>
           </figure>
+          <figure class="shot">
+            <img src="screenshots/17-process-tree.png" alt="Process tree grouped by parent PID" loading="lazy" />
+            <figcaption data-i18n="s9">Process tree — parent/child grouping with per-process listening ports</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/18-command-palette.png" alt="Command palette searching processes" loading="lazy" />
+            <figcaption data-i18n="s10">Command palette (Ctrl/Cmd+K) — pages, processes, ports, projects and tasks in one search</figcaption>
+          </figure>
         </div>
+
+        <figure class="video">
+          <video controls muted playsinline preload="metadata" poster="screenshots/01-overview.png">
+            <source src="screenshots/workbench-demo.mp4" type="video/mp4" />
+          </video>
+          <figcaption data-i18n="s11">30-second tour — recorded from the real UI in browser demo mode</figcaption>
+        </figure>
       </section>
 
       <!-- ── Download ─────────────────────────── -->
@@ -436,7 +462,7 @@
         <ol class="steps">
           <li>
             <strong data-i18n="dl.step1t">Download the installer</strong>
-            <span data-i18n-html="dl.step1d">Click "Download installer" above to get <code>Workbench_0.1.1_x64-setup.exe</code>.</span>
+            <span data-i18n-html="dl.step1d">Click "Download installer" above to get <code>Workbench_0.3.0_x64-setup.exe</code>.</span>
           </li>
           <li>
             <strong data-i18n="dl.step2t">Allow the Windows prompt</strong>
@@ -506,7 +532,7 @@
           </p>
         </details>
         <details>
-          <summary data-i18n="q6">Is macOS / Linux supported?</summary>
+          <summary data-i18n="q6">Which platforms are supported?</summary>
           <p data-i18n-html="a6">
             Not verified yet. Development, testing and packaging are Windows-only today: port
             collection shells out to <code>netstat -ano</code> and only the NSIS installer is
@@ -550,22 +576,25 @@
             title: "Workbench — Local system dashboard & AI session cost metering",
             "nav.features": "Features", "nav.screenshots": "Screenshots", "nav.download": "Download",
             "nav.faq": "FAQ", "nav.source": "Source",
-            "hero.pill": "v0.1.1 · Windows x64 · MIT licensed",
+            "hero.pill": "v0.3.0 · Windows x64 · MIT licensed",
             "hero.h1a": "Your machine, at a glance",
             "hero.h1b": "with AI session cost metering",
             "hero.sub": 'Live view of processes, ports and dev servers; token usage and spend for Claude Code / Codex / opencode. <strong>All data stays on your device</strong> — nothing is uploaded.',
             "hero.cta1": "Download installer", "hero.cta2": "Portable exe",
-            "hero.meta": "Windows 10 / 11 · ~4 MB installer · runs without admin rights",
+            "hero.meta": "Windows 10 / 11 (NSIS) · Linux (.deb) · macOS (.app, CI-built) · no admin rights required",
             "feat.title": "Features",
-            "feat.sub": 'Nine modules covering the "see it" and "count it" of your daily dev environment.',
+            "feat.sub": 'Nine modules plus a keyboard-first command palette — see it, find it, count it.',
             "f1t": "Overview", "f1p": "Live CPU / memory trends, disk usage donut, process group stats and system info in one screen.",
-            "f2t": "Processes", "f2p": "Full process snapshot, CPU / memory sorting and filtering, virtual scrolling for thousands of rows, kill confirmation.",
+            "f2t": "Processes", "f2p": "Flat table or parent/child tree, virtual scrolling for thousands of rows, CSV export, and a kill confirmation that re-verifies the target before acting.",
             "f3t": "Servers & ports", "f3p": "Parses netstat for listening ports and auto-tags 30+ dev frameworks such as Vite / Next / uvicorn.",
             "f4t": "AI sessions", "f4p": "opencode online sessions with details; local Claude Code / Codex session file preview and message stats.",
             "f5t": "Cost metering", "f5p": "Tokens and spend by day / by model, 40+ built-in model prices, Anthropic cache semantics and budget alerts.",
             "f6t": "Projects & tasks", "f6p": "Local project registry with automatic Git branch detection; kanban task board, drag to change status.",
             "f7t": "Logs", "f7p": "Built-in log viewer with per-launch rotation, tail reading and auto refresh.",
             "f8t": "Settings", "f8p": "Dark / light themes, refresh interval, budget and alert thresholds, JSON import & export.",
+            "f10t": "Command palette",
+            "f10p": "Ctrl/Cmd+K searches every page, process, port, project and task; a port links straight to the process that owns it.",
+            "f10t": "Command palette", "f10p": "Ctrl/Cmd+K searches every page, process, port, project and task; a port links straight to the process that owns it.",
             "f9t": "Privacy first", "f9p": "Everything lands in the local app data directory; CSP locked to self; opened paths go through a backend whitelist.",
             "shots.title": "Screenshots",
             "shots.sub": 'Captured in browser demo mode (<code>npm run preview</code>) — paths and host names are placeholders.',
@@ -577,6 +606,9 @@
             s6: "Tasks — drag-and-drop kanban (todo / in progress / done)",
             s7: "Settings — theme, refresh interval and budget",
             s8: "Logs — built-in viewer with auto refresh",
+            s9: "Process tree — parent/child grouping with per-process listening ports",
+            s10: "Command palette (Ctrl/Cmd+K) — pages, processes, ports, projects and tasks in one search",
+            s11: "30-second tour — recorded from the real UI in browser demo mode",
             "dl.title": "Download",
             "dl.sub": 'Windows x64. The installer is not code-signed; Windows may warn "Unknown publisher" on first run.',
             "dl.tag1": "Recommended", "dl.t1": "NSIS installer",
@@ -591,7 +623,7 @@
             "dl.uionly": "UI only", "dl.uionlyv": "browser demo mode, no Rust needed",
             "dl.steps": "Fresh install",
             "dl.step1t": "Download the installer",
-            "dl.step1d": 'Click "Download installer" above to get <code>Workbench_0.1.1_x64-setup.exe</code>.',
+            "dl.step1d": 'Click "Download installer" above to get <code>Workbench_0.3.0_x64-setup.exe</code>.',
             "dl.step2t": "Allow the Windows prompt",
             "dl.step2d": 'The installer is unsigned, so SmartScreen may step in: choose "More info" → "Run anyway".',
             "dl.step3t": "Install and launch",
@@ -610,8 +642,8 @@
             a4: "No. PID 0/4 and critical system processes (csrss, lsass, services…) are rejected by the backend, and the frontend asks for confirmation. The target identity is also re-verified after refresh, so PID reuse cannot cause a mistaken kill.",
             q5: "Where did the window go after closing? How do I really quit?",
             a5: 'Closing hides to the system tray (intentional — the app keeps monitoring). To truly exit, right-click the tray icon and choose "Quit". The hotkey <code>Ctrl+Shift+W</code> shows / hides the window anytime.',
-            q6: "Is macOS / Linux supported?",
-            a6: "Not verified yet. Development, testing and packaging are Windows-only today: port collection shells out to <code>netstat -ano</code> and only the NSIS installer is produced. The code contains a POSIX branch, but it has never been exercised — so the README does not claim support.",
+            q6: "Which platforms are supported?",
+            a6: "Windows is the primary target (NSIS installer). Linux is built and tested in CI, which produces a <code>.deb</code>; macOS is compiled, unit-tested and packaged as an unsigned <code>.app</code> in CI on every commit. Port collection uses <code>netstat -ano</code> on Windows and <code>ss -tulpn</code> (with a netstat fallback) on Linux. macOS builds are not signed or notarized, so Gatekeeper requires right-click → Open.",
             "src.title": "Source code",
             "src.sub": "The same code is mirrored across five platforms — pick whichever you like.",
             current: "(current)",
@@ -621,22 +653,23 @@
             title: "工作台 Workbench — 本机运维仪表盘与 AI 会话成本计量",
             "nav.features": "功能", "nav.screenshots": "截图", "nav.download": "下载",
             "nav.faq": "常见问题", "nav.source": "源码",
-            "hero.pill": "v0.1.1 · Windows x64 · MIT 开源",
+            "hero.pill": "v0.3.0 · Windows x64 · MIT 开源",
             "hero.h1a": "本机运维仪表盘",
             "hero.h1b": "与 AI 会话成本计量",
             "hero.sub": '进程、端口、开发服务器实时可视；统计 Claude Code / Codex / opencode 的 token 消耗与花费。<strong>数据仅存本机</strong>，不上传任何信息。',
             "hero.cta1": "下载安装包", "hero.cta2": "免安装版 exe",
-            "hero.meta": "Windows 10 / 11 · 约 4 MB 安装包 · 无需管理员权限即可运行",
+            "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb）· macOS（.app，CI 构建）· 无需管理员权限",
             "feat.title": "功能",
-            "feat.sub": "九个模块，覆盖日常开发环境的「看得见」与「算得清」。",
+            "feat.sub": "九个模块 + 键盘优先的命令面板：看得见、找得到、算得清。",
             "f1t": "概览", "f1p": "CPU / 内存实时趋势曲线、磁盘占用环形图、进程分类统计与系统信息一屏总览。",
-            "f2t": "进程监控", "f2p": "全进程快照，CPU / 内存排序与筛选，虚拟滚动支撑上千行，杀进程二次确认。",
+            "f2t": "进程监控", "f2p": "列表与父子树双视图，虚拟滚动支撑上千行，一键导出 CSV；结束进程前重新校验目标身份。",
             "f3t": "服务与端口", "f3p": "解析 netstat 找出监听端口，自动标注 Vite / Next / uvicorn 等 30+ 开发框架。",
             "f4t": "AI 会话", "f4p": "opencode 在线会话与详情；本地 Claude Code / Codex 会话文件预览与消息统计。",
             "f5t": "成本计量", "f5p": "token 与花费按日 / 按模型统计，内置 40+ 模型价格，支持 Anthropic 缓存折扣语义与预算告警。",
             "f6t": "项目与任务", "f6p": "本地项目登记与 Git 分支自动检测；看板式任务板，拖拽即改状态。",
             "f7t": "运行日志", "f7p": "内置日志查看器，按启动滚动归档，支持尾部读取与自动刷新。",
             "f8t": "设置", "f8p": "深浅双主题、刷新间隔调节、预算与告警阈值、数据 JSON 导入导出。",
+            "f10t": "命令面板", "f10p": "Ctrl/Cmd+K 一次搜索全部页面、进程、端口、项目与任务；端口可直接跳到占用它的进程。",
             "f9t": "隐私优先", "f9p": "全部数据落本机 app data 目录；CSP 收紧到 self，打开路径走后端白名单校验。",
             "shots.title": "界面",
             "shots.sub": "截自浏览器演示模式（<code>npm run preview</code>），路径与主机名均为占位数据。",
@@ -648,6 +681,9 @@
             s6: "任务 — 拖拽看板（待办 / 进行中 / 已完成）",
             s7: "设置 — 主题、刷新间隔与预算",
             s8: "运行日志 — 内置查看器，自动刷新",
+            s9: "进程树 — 按父 PID 归组，展开可见子进程与各自的监听端口",
+            s10: "命令面板（Ctrl/Cmd+K）— 页面、进程、端口、项目、任务一次搜完",
+            s11: "30 秒演示 — 浏览器演示模式的真实界面录制",
             "dl.title": "下载",
             "dl.sub": "Windows x64。安装包未做代码签名，首次运行 Windows 可能提示「未知发布者」。",
             "dl.tag1": "推荐", "dl.t1": "NSIS 安装包",
@@ -662,7 +698,7 @@
             "dl.uionly": "仅看界面", "dl.uionlyv": "浏览器演示模式，无需 Rust",
             "dl.steps": "全新安装",
             "dl.step1t": "下载安装包",
-            "dl.step1d": "点上方「下载安装包」，得到 <code>Workbench_0.1.1_x64-setup.exe</code>。",
+            "dl.step1d": "点上方「下载安装包」，得到 <code>Workbench_0.3.0_x64-setup.exe</code>。",
             "dl.step2t": "放行 Windows 提示",
             "dl.step2d": "因未做代码签名，SmartScreen 可能拦截：点「更多信息」→「仍要运行」。",
             "dl.step3t": "完成安装并启动",
@@ -681,8 +717,8 @@
             a4: "不会。PID 0/4 与 csrss、lsass、services 等关键系统进程被后端直接拒绝，前端也有二次确认。此外终止前会刷新并校验进程身份，避免 PID 复用导致误杀。",
             q5: "关闭窗口后程序去哪了？怎么真正退出？",
             a5: "点关闭是隐藏到系统托盘（这是有意设计，便于常驻监控）。要真正结束进程，右键托盘图标选「退出工作台」。快捷键 <code>Ctrl+Shift+W</code> 可随时显示 / 隐藏窗口。",
-            q6: "支持 macOS / Linux 吗？",
-            a6: "尚未验证。当前只在 Windows 上开发、测试与打包：端口采集写死 <code>netstat -ano</code>，安装包只产出 NSIS。代码里有 POSIX 分支但没有实际跑过，因此不在 README 里声称支持。",
+            q6: "支持哪些平台？",
+            a6: "Windows 是主要目标（NSIS 安装包）。Linux 在 CI 中真实构建并测试，产出 <code>.deb</code>；macOS 每次提交都会在 CI 里编译、跑单元测试并打出未签名的 <code>.app</code>。端口采集在 Windows 用 <code>netstat -ano</code>，Linux 用 <code>ss -tulpn</code>（失败回退 netstat）。macOS 产物未签名/未公证，首次打开需右键 → 打开。",
             "src.title": "源码",
             "src.sub": "同一份代码镜像在五个平台，任选其一。",
             current: "（当前）",
@@ -692,22 +728,23 @@
             title: "Workbench — ローカル運用ダッシュボード & AI セッションコスト計測",
             "nav.features": "機能", "nav.screenshots": "スクリーンショット", "nav.download": "ダウンロード",
             "nav.faq": "FAQ", "nav.source": "ソース",
-            "hero.pill": "v0.1.1 · Windows x64 · MIT ライセンス",
+            "hero.pill": "v0.3.0 · Windows x64 · MIT ライセンス",
             "hero.h1a": "ローカル運用ダッシュボード",
             "hero.h1b": "AI セッションコスト計測と一体に",
             "hero.sub": "プロセス・ポート・開発サーバーをリアルタイム可視化。Claude Code / Codex / opencode のトークン消費と費用を集計。<strong>データは端末内にのみ保存</strong>され、一切アップロードされません。",
             "hero.cta1": "インストーラーを入手", "hero.cta2": "ポータブル exe",
-            "hero.meta": "Windows 10 / 11 · 約 4 MB のインストーラー · 管理者権限不要で実行可能",
+            "hero.meta": "Windows 10 / 11（NSIS）· Linux（.deb）· macOS（.app、CI ビルド）· 管理者権限不要",
             "feat.title": "機能",
-            "feat.sub": "9 つのモジュールで、日々の開発環境を「見える化」し「正確に数える」。",
+            "feat.sub": "9 つのモジュールとキーボード優先のコマンドパレット。見つけて、数える。",
             "f1t": "概要", "f1p": "CPU / メモリのリアルタイム推移、ディスク使用率ドーナツ、プロセス分類とシステム情報を 1 画面で。",
-            "f2t": "プロセス", "f2p": "全プロセス snapshot、CPU / メモリのソートとフィルタ、数千行に耐える仮想スクロール、強制終了の二重確認。",
+            "f2t": "プロセス", "f2p": "リストと親子ツリーの 2 表示、数千行に耐える仮想スクロール、CSV 書き出し、終了前の再検証。",
             "f3t": "サーバー & ポート", "f3p": "netstat を解析してリッスンポートを検出し、Vite / Next / uvicorn など 30+ の開発フレームワークを自動判定。",
             "f4t": "AI セッション", "f4p": "opencode のオンラインセッションと詳細。ローカルの Claude Code / Codex セッションファイルのプレビューとメッセージ統計。",
             "f5t": "コスト計測", "f5p": "トークンと費用を日別 / モデル別に集計。40+ モデル価格を内蔵し、Anthropic キャッシュの課金と予算アラートに対応。",
             "f6t": "プロジェクト & タスク", "f6p": "ローカルプロジェクト登録と Git ブランチ自動検出。カンバンタスクボードはドラッグで状態変更。",
             "f7t": "ログ", "f7p": "内蔵ログビューア。起動単位でローテーションし、末尾読み取りと自動更新に対応。",
             "f8t": "設定", "f8p": "ダーク / ライトテーマ、更新間隔、予算とアラートしきい値、JSON インポート & エクスポート。",
+            "f10t": "コマンドパレット", "f10p": "Ctrl/Cmd+K でページ・プロセス・ポート・プロジェクト・タスクを横断検索。ポートから所有プロセスへ直接移動できます。",
             "f9t": "プライバシー第一", "f9p": "データはすべてローカルの app data ディレクトリへ。CSP は self に固定、パスを開く際はバックエンドのホワイトリストで検証。",
             "shots.title": "スクリーンショット",
             "shots.sub": "ブラウザデモモード（<code>npm run preview</code>）で撮影。パスとホスト名はすべてプレースホルダーです。",
@@ -719,6 +756,9 @@
             s6: "タスク — ドラッグ＆ドロップのカンバン（todo / 進行中 / 完了）",
             s7: "設定 — テーマ、更新間隔、予算",
             s8: "ログ — 内蔵ビューア、自動更新",
+            s9: "プロセスツリー — 親 PID でグループ化、子プロセスと待受ポートを表示",
+            s10: "コマンドパレット（Ctrl/Cmd+K）— ページ・プロセス・ポート・プロジェクト・タスクを一括検索",
+            s11: "30 秒ツアー — ブラウザのデモモードで実際の UI を録画",
             "dl.title": "ダウンロード",
             "dl.sub": "Windows x64。インストーラーはコード署名されていないため、初回実行時に「不明な発行元」と表示されることがあります。",
             "dl.tag1": "推奨", "dl.t1": "NSIS インストーラー",
@@ -733,7 +773,7 @@
             "dl.uionly": "UI のみ", "dl.uionlyv": "ブラウザデモモード。Rust 不要",
             "dl.steps": "新規インストール",
             "dl.step1t": "インストーラーをダウンロード",
-            "dl.step1d": "上の「インストーラーを入手」から <code>Workbench_0.1.1_x64-setup.exe</code> を入手します。",
+            "dl.step1d": "上の「インストーラーを入手」から <code>Workbench_0.3.0_x64-setup.exe</code> を入手します。",
             "dl.step2t": "Windows の警告を許可",
             "dl.step2d": "未署名のため SmartScreen が出ることがあります:「詳細情報」→「実行」を選択してください。",
             "dl.step3t": "インストールして起動",
@@ -752,8 +792,8 @@
             a4: "いいえ。PID 0/4 と重要システムプロセス（csrss、lsass、services 等）はバックエンドが拒否し、フロントエンドも確認を求めます。終了前に対象の同一性を再検証するため、PID 再利用による誤爆は起きません。",
             q5: "閉じたウィンドウはどこへ？本当に終了するには？",
             a5: "閉じるとシステムトレイに格納されます（常駐監視のための意図的な設計）。完全に終了するにはトレイアイコンを右クリックして「終了」を選択。<code>Ctrl+Shift+W</code> でいつでも表示 / 非表示を切り替えられます。",
-            q6: "macOS / Linux には対応していますか？",
-            a6: "未検証です。開発・テスト・パッケージングは Windows のみ: ポート取得は <code>netstat -ano</code> 固定で、インストーラーは NSIS のみ。コードには POSIX 分岐がありますが実行されたことがないため、README では対応を謳っていません。",
+            q6: "対応プラットフォームは？",
+            a6: "Windows が主対象（NSIS インストーラー）。Linux は CI で実際にビルド・テストされ <code>.deb</code> を生成します。macOS はコミットごとに CI でコンパイル・単体テスト・未署名の <code>.app</code> 生成まで実行します。ポート取得は Windows が <code>netstat -ano</code>、Linux が <code>ss -tulpn</code>（失敗時 netstat にフォールバック）。macOS は署名・公証なしのため、初回は右クリック→開くが必要です。",
             "src.title": "ソースコード",
             "src.sub": "同じコードが 5 プラットフォームにミラーされています。お好きなものをどうぞ。",
             current: "（現在）",

@@ -17,6 +17,7 @@
 | ✅ **Tasks** | Kanban board (drag to change status) |
 | ⚙ **Settings** | Theme editor, shell / layout / widget arrangement, refresh interval, budget thresholds, JSON import & export, backup & restore, start at login |
 | 📋 **Logs** | Built-in viewer, auto refresh, tail reading |
+| ⌨ **CLI** | `workbench ps` / `ports` / `diag`, `--json`, read-only, no window |
 
 ## Cost metering
 
@@ -109,6 +110,19 @@ cargo test --test export_bindings   # regenerates src/generated/*.ts
 snapshot. After changing a Rust struct you must re-run the command above,
 otherwise the CI drift gate will reject the PR.
 
+### Command line
+
+The desktop binary doubles as a read-only CLI — useful in scripts, CI and SSH
+sessions where opening a 1440×900 window is absurd:
+
+```bash
+workbench ps --json      # [{pid, name, cpu, memory, parent_pid, status, cmd_line, …}]
+workbench ports          # PROTO PORT ADDRESS STATE PID
+workbench diag --json    # the same report the Settings panel renders
+```
+
+Exit codes: `0` success, `2` unknown command. It never mutates state.
+
 ### Development
 
 ```bash
@@ -179,7 +193,7 @@ workbench/
 ```bash
 npm run format:check       # Prettier
 npm run lint               # ESLint (zero warnings)
-npm run test               # frontend unit tests (vitest, 48 cases)
+npm run test               # frontend unit tests (vitest, 370 cases)
 npm run coverage           # coverage
 npm run dup                # duplication (jscpd, 3% threshold)
 npm run build              # tsc + vite build
@@ -272,6 +286,11 @@ Done and planned. Vote or propose new ideas in the Issues.
       the importer, no backend needed)
 - [x] Elevated process termination (UAC prompt after a normal kill fails;
       protected processes are rejected by the backend up front)
+- [x] Process tree view (parent/child from `parent_pid`, cycle-safe, virtualised)
+- [x] Command palette (Ctrl/Cmd+K over pages, processes, ports, projects, tasks)
+- [x] Port → process jump and reverse port lookup in the process detail
+- [x] CSV export for processes and listening ports
+- [x] Environment self-check with per-item ok / warn / fail and a copyable report
 - [ ] Auto-update (needs a signed release channel)
 
 ## Known limitations
@@ -282,15 +301,17 @@ Done and planned. Vote or propose new ideas in the Issues.
   container + Xvfb); it has not been tried on a physical desktop yet.
   AppImage is not produced because the bundler fetches `linuxdeploy` from
   GitHub at build time
-- Interaction paths are covered by Playwright (structure and WCAG AA across 10 pages × 8 themes) plus a packaged-exe desktop E2E over real IPC; the import/export flow is not scripted yet
+- Interaction paths are covered by Playwright (structure and WCAG AA across 10 pages × 8 themes), a structural feature suite for the command palette / process tree / port jump / CSV export, plus a packaged-exe desktop E2E over real IPC
 - The cost ledger is a SQLite database (`cost.db`, `rusqlite` bundled) with
   indexes on day / model / file. Aggregation runs inside SQL, so 100k records
   aggregate in ~250 ms instead of re-parsing a whole JSON file per query.
   The old `cost_data.json` is imported once and renamed `.migrated` (never deleted)
-- The cost ledger has no sharded storage yet; very large histories make full read/write sluggish
 - The installer is unsigned; first launch may trigger a SmartScreen prompt
-- The tray menu text is currently Chinese only (frontend UI is fully
-  trilingual)
+- The tray menu text is bilingual Chinese/English and does not follow the UI
+  language switch (it is built once at startup)
+- No plugin API, no HTTP API and no remote monitoring — by design, see
+  [COMPARISON.md](COMPARISON.md) for what that costs us against Glances and
+  System Informer
 
 ## Data storage
 

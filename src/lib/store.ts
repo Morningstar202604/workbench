@@ -81,6 +81,8 @@ import type {
   WorkbenchData,
 } from "../types";
 
+export type ProcView = "flat" | "tree";
+
 const HISTORY_LEN = 60;
 const TOAST_TTL_MS = 2600;
 const SAVE_DEBOUNCE_MS = 300;
@@ -100,6 +102,12 @@ interface UiState {
   widgetHidden: WidgetId[];
   /** 用户覆盖的组件宽度（缺省 = 组件自带 span） */
   widgetSpans: Partial<Record<WidgetId, number>>;
+  /** 进程页视图：扁平列表 / 父子树 */
+  procView: ProcView;
+  /** 进程页搜索词。放在 store 里是因为端口页/命令面板要能带着 PID 跳过来。 */
+  procQuery: string;
+  /** 跳转后要高亮的进程 PID（一次性） */
+  focusPid: number | null;
   refreshMs: number;
   view: ViewKey;
   alwaysOnTop: boolean;
@@ -151,6 +159,9 @@ interface Store extends UiState, RuntimeState {
   setWidgetHidden: (h: WidgetId[]) => void;
   setWidgetSpan: (id: WidgetId, span: number) => void;
   resetWidgets: () => void;
+  setProcView: (v: ProcView) => void;
+  setProcQuery: (q: string) => void;
+  setFocusPid: (pid: number | null) => void;
   setRefreshMs: (ms: number) => void;
   setToast: (t: string) => void;
   clearToast: () => void;
@@ -202,6 +213,9 @@ export const useStore = create<Store>()(
       widgetOrder: DEFAULT_ORDER,
       widgetHidden: [],
       widgetSpans: {},
+      procView: "flat",
+      procQuery: "",
+      focusPid: null,
       refreshMs: 3000,
       view: "overview",
       alwaysOnTop: false,
@@ -307,6 +321,9 @@ export const useStore = create<Store>()(
         set((s) => ({ widgetSpans: normalizeSpans({ ...s.widgetSpans, [id]: span }) })),
       resetWidgets: () =>
         set({ widgetOrder: DEFAULT_ORDER, widgetHidden: [], widgetSpans: {} }),
+      setProcView: (procView) => set({ procView }),
+      setProcQuery: (procQuery) => set({ procQuery }),
+      setFocusPid: (focusPid) => set({ focusPid }),
       setRefreshMs: (ms) => set({ refreshMs: ms }),
       setToast: (t) => {
         set({ toast: t });
@@ -735,6 +752,7 @@ export const useStore = create<Store>()(
           widgetOrder: normalizeOrder(state.widgetOrder),
           widgetHidden: normalizeHidden(state.widgetHidden),
           widgetSpans: normalizeSpans(state.widgetSpans),
+          procView: state.procView === "tree" ? "tree" : "flat",
         } as never;
       },
       partialize: (s) => ({
@@ -745,6 +763,7 @@ export const useStore = create<Store>()(
         widgetOrder: s.widgetOrder,
         widgetHidden: s.widgetHidden,
         widgetSpans: s.widgetSpans,
+        procView: s.procView,
         refreshMs: s.refreshMs,
         alwaysOnTop: s.alwaysOnTop,
       }),

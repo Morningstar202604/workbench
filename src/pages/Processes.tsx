@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Cpu, MemoryStick, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Cpu, Download, ListTree, MemoryStick, Rows3, Search } from "lucide-react";
 import { EChart } from "../lib/echarts";
 import { seriesColors } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
@@ -9,7 +9,9 @@ import { formatBytes } from "../lib/util";
 import { cpuHistogram, memoryHistogram } from "../lib/aggregate";
 import { filterProcs, type ProcSortKey } from "./processFilter";
 import { ProcessTable } from "./processes/ProcessTable";
+import { buildForest, flattenTree, type TreeNode } from "./processes/tree";
 import { useT } from "../lib/i18n";
+import { downloadText, toCsv } from "../lib/export";
 import type { Bucket } from "../lib/aggregate";
 import type { ProcInfo } from "../types";
 import type { EChartsCoreOption } from "echarts/core";
@@ -31,7 +33,22 @@ type Chip = "all" | "ai" | "dev";
 
 export default function Processes() {
   const t = useT();
-  const { procs, devs, ais, loading, runtimeError, refreshRuntime, theme } = useStore(
+  const {
+    procs,
+    devs,
+    ais,
+    loading,
+    runtimeError,
+    refreshRuntime,
+    theme,
+    procView,
+    setProcView,
+    procQuery,
+    setProcQuery,
+    focusPid,
+    setFocusPid,
+    setToast,
+  } = useStore(
     useShallow((s) => ({
       procs: s.procs,
       devs: s.devs,
@@ -40,18 +57,52 @@ export default function Processes() {
       runtimeError: s.runtimeError,
       refreshRuntime: s.refreshRuntime,
       theme: s.theme,
+      procView: s.procView,
+      setProcView: s.setProcView,
+      procQuery: s.procQuery,
+      setProcQuery: s.setProcQuery,
+      focusPid: s.focusPid,
+      setFocusPid: s.setFocusPid,
+      setToast: s.setToast,
     }))
   );
-  const [q, setQ] = useState("");
   const [sort, setSort] = useState<ProcSortKey>("cpu");
   const [chip, setChip] = useState<Chip>("all");
+  // null = 用户还没动过：树形默认展开根节点这一层（全收起像「进程只剩几个」，
+  // 全展开又会让上千行一次铺满）。用户点过一次之后就用他自己的集合。
+  const [expanded, setExpanded] = useState<Set<number> | null>(null);
+
+  // 跳转高亮只亮一次：用户开始操作后清掉，否则那一行会一直像被选中。
+  useEffect(() => {
+    if (focusPid === null) return;
+    const id = setTimeout(() => setFocusPid(null), 4000);
+    return () => clearTimeout(id);
+  }, [focusPid, setFocusPid]);
 
   const aiPids = useMemo(() => new Set(ais.map((a) => a.pid)), [ais]);
   const devPids = useMemo(() => new Set(devs.map((d) => d.pid)), [devs]);
   const filteredProcs = useMemo(
-    () => filterProcs(procs, { query: q, chip, sort, aiPids, devPids }),
-    [procs, q, chip, sort, aiPids, devPids]
+    () => filterProcs(procs, { query: procQuery, chip, sort, aiPids, devPids }),
+    [procs, procQuery, chip, sort, aiPids, devPids]
   );
+
+  // 树形视图要展示完整父子关系：筛掉父节点会让子节点全变成孤儿，
+  // 所以层级始终基于全量快照构建，只对渲染行做筛选后的可达集合裁剪。
+  const forest = useMemo(
+    () => (procView === "tree" ? buildForest(procs, sort) : []),
+    [procView, procs, sort]
+  );
+  const rows = useMemo(() => {
+    if (procView === "flat") {
+      return filteredProcs.map((p) => ({ p, depth: 0, hasChildren: false }));
+    }
+    const effectiveExpanded = expanded ?? new Set(forest.map((n) => n.p.pid));
+    return treeRowsFor(
+      forest,
+      effectiveExpanded,
+      new Set(filteredProcs.map((p) => p.pid))
+    );
+  }, [procView, filteredProcs, forest, expanded]);
 
   const colors = useMemo(() => seriesColors(theme), [theme]);
   const cpuChart = useMemo(() => histogram(cpuHistogram(procs), colors), [procs, colors]);
@@ -59,6 +110,34 @@ export default function Processes() {
     () => histogram(memoryHistogram(procs), colors),
     [procs, colors]
   );
+
+  const exportRows = () => {
+    const header = [
+      "pid",
+      "name",
+      "cpu_pct",
+      "memory_bytes",
+      "status",
+      "parent_pid",
+      "start_time",
+      "exe_path",
+      "cmd_line",
+    ];
+    const body = filteredProcs.map((p) => [
+      p.pid,
+      p.name,
+      p.cpu.toFixed(1),
+      p.memory,
+      p.status,
+      p.parent_pid ?? "",
+      new Date(p.start_time * 1000).toISOString(),
+      p.exe_path,
+      p.cmd_line,
+    ]);
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    downloadText(`workbench-processes-${stamp}.csv`, toCsv([header, ...body]));
+    setToast(t("procs.exported", { count: body.length }));
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -95,12 +174,13 @@ export default function Processes() {
             className={`${inputCls} pl-8`}
             aria-label={t("procs.searchPlaceholder")}
             placeholder={t("procs.searchPlaceholder")}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
+            value={procQuery}
+            onChange={(e) => setProcQuery(e.target.value)}
           />
         </div>
         <ChipFilter chip={chip} onPick={setChip} />
         <SortSelect sort={sort} onPick={setSort} />
+        <ViewToggle view={procView} onPick={setProcView} />
         <span className="text-xs text-dim">
           {loading ? (
             <Spinner />
@@ -108,26 +188,90 @@ export default function Processes() {
             t("procs.procCount", { shown: filteredProcs.length, total: procs.length })
           )}
         </span>
-        <Btn onClick={refreshRuntime} className="ml-auto">
-          {t("procs.refresh")}
-        </Btn>
+        <div className="ml-auto flex items-center gap-2">
+          <Btn
+            onClick={exportRows}
+            className="!py-1 !text-xs"
+            title={t("procs.exportCsv")}
+          >
+            <Download size={12} /> {t("procs.exportCsv")}
+          </Btn>
+          <Btn onClick={refreshRuntime} className="!py-1 !text-xs">
+            {t("procs.refresh")}
+          </Btn>
+        </div>
       </Card>
 
       <Card>
         <ProcessTable
-          procs={filteredProcs}
+          rows={rows}
           aiPids={aiPids}
           devPids={devPids}
-          canClear={Boolean(q) || chip !== "all"}
+          canClear={Boolean(procQuery) || chip !== "all"}
           onClearFilter={() => {
-            setQ("");
+            setProcQuery("");
             setChip("all");
           }}
+          focusPid={focusPid}
+          expandedNodes={
+            procView === "tree"
+              ? (expanded ?? new Set(forest.map((n) => n.p.pid)))
+              : undefined
+          }
+          onToggleNode={(pid) =>
+            setExpanded((cur) => {
+              const base = cur ?? new Set(forest.map((n) => n.p.pid));
+              const next = new Set(base);
+              if (next.has(pid)) next.delete(pid);
+              else next.add(pid);
+              return next;
+            })
+          }
         />
       </Card>
-      <p className="px-1 text-[11px] text-dim">{t("procs.tableHint")}</p>
+      <p className="px-1 text-[11px] text-dim">
+        {procView === "tree" ? t("procs.treeHint") : t("procs.tableHint")}
+      </p>
+      {procView === "tree" && (
+        <span className="sr-only" aria-live="polite">
+          {t("procs.procCount", { shown: rows.length, total: procs.length })}
+        </span>
+      )}
     </div>
   );
+}
+
+/**
+ * 树形行 + 筛选裁剪。
+ *
+ * 有筛选词时保留三类节点：命中节点、它的祖先（否则子进程失去缩进语境）、
+ * 它的整棵子树（搜 `node` 时用户想看到它拉起的子进程）。筛选期间强制展开，
+ * 否则命中的节点可能藏在折叠的父节点里，看起来像「搜不到」。
+ */
+function treeRowsFor(forest: TreeNode[], expanded: Set<number>, hits: Set<number>) {
+  if (hits.size === 0) return flattenTree(forest, expanded);
+  const keep = new Set<number>();
+  const path: TreeNode[] = [];
+
+  const markSubtree = (node: TreeNode) => {
+    keep.add(node.p.pid);
+    for (const child of node.children) markSubtree(child);
+  };
+
+  const walk = (node: TreeNode) => {
+    path.push(node);
+    if (hits.has(node.p.pid)) {
+      for (const ancestor of path) keep.add(ancestor.p.pid);
+      markSubtree(node);
+    }
+    for (const child of node.children) walk(child);
+    path.pop();
+  };
+
+  for (const root of forest) walk(root);
+
+  const allExpanded = new Set<number>(keep);
+  return flattenTree(forest, allExpanded).filter((r) => keep.has(r.p.pid));
 }
 
 /** 四张统计卡：总数、CPU 合计、内存合计、高 CPU 进程数。 */
@@ -233,6 +377,43 @@ function SortSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+/** 扁平 / 树形切换。 */
+function ViewToggle({
+  view,
+  onPick,
+}: {
+  view: "flat" | "tree";
+  onPick: (v: "flat" | "tree") => void;
+}) {
+  const t = useT();
+  const items = [
+    { id: "flat" as const, icon: Rows3, label: t("procs.viewFlat") },
+    { id: "tree" as const, icon: ListTree, label: t("procs.viewTree") },
+  ];
+  return (
+    <div
+      className="flex items-center gap-0.5 rounded-[var(--radius-btn)] border border-line bg-panel2 p-0.5"
+      role="group"
+      aria-label={t("procs.viewLabel")}
+    >
+      {items.map((it) => (
+        <button
+          key={it.id}
+          type="button"
+          data-proc-view={it.id}
+          aria-pressed={view === it.id}
+          onClick={() => onPick(it.id)}
+          className={`flex items-center gap-1 rounded-[calc(var(--radius-btn)-2px)] px-2 py-1 text-xs transition-colors ${
+            view === it.id ? "bg-accentsoft text-accent" : "text-dim hover:text-text"
+          }`}
+        >
+          <it.icon size={12} /> {it.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

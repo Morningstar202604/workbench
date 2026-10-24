@@ -6,6 +6,7 @@ use crate::ai::{self, AiProcess, OpencodeSession, SessionDetail, SessionFilePrev
 use crate::cost_store::{self, CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow};
 use crate::data::{self, WorkbenchData};
 use crate::devserver::{self, DevServer};
+use crate::diagnostics::{self, DiagnosticsReport};
 use crate::ipc_guard::{AllowedPorts, KnownDirs};
 use crate::ports::{self, PortEntry};
 use crate::pricing::PricingTable;
@@ -1138,7 +1139,9 @@ mod tests {
         assert!(
             verify_elevated_target_unchanged(Some("explorer.exe".into()), "notepad.exe").is_err()
         );
-        assert!(verify_elevated_target_unchanged(Some("notepad.exe".into()), "notepad.exe").is_ok());
+        assert!(
+            verify_elevated_target_unchanged(Some("notepad.exe".into()), "notepad.exe").is_ok()
+        );
     }
 
     /// 非 Windows 平台没有 UAC，必须显式报错而不是静默降级。
@@ -1148,4 +1151,18 @@ mod tests {
         let err = run_elevated_taskkill(1).unwrap_err();
         assert!(err.contains("仅 Windows"), "实际错误: {err}");
     }
+}
+
+/// 环境自检。返回每一项的 ok/warn/fail，任何一项失败都不会中断整份报告。
+/// `Path::is_dir()` 可能触碰断开的网络盘，因此放到阻塞线程里执行。
+#[tauri::command(async)]
+pub async fn diagnostics(app: AppHandle) -> Result<DiagnosticsReport, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法定位数据目录: {e}"))?;
+    let version = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || diagnostics::collect(&version, &data_dir))
+        .await
+        .map_err(|e| format!("任务执行失败: {e}"))
 }

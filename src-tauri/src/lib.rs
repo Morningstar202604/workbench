@@ -1,8 +1,10 @@
 pub mod ai;
+pub mod cli;
 pub mod commands;
 pub mod cost_store;
 pub mod data;
 pub mod devserver;
+pub mod diagnostics;
 pub mod ipc_guard;
 pub mod json_store;
 pub mod logging_setup;
@@ -223,6 +225,7 @@ pub fn run() {
             commands::restore_backup,
             commands::get_pricing,
             commands::save_pricing,
+            commands::diagnostics,
         ])
         .run(tauri::generate_context!())
         .expect("运行工作台应用失败");

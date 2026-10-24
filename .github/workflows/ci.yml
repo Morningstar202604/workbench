@@ -115,6 +115,16 @@ jobs:
           dpkg-deb -c "$deb" | grep -q "usr/bin/workbench" || { echo "binary missing"; exit 1; }
           dpkg-deb -f "$deb" Package | grep -Eq '^[a-z0-9][a-z0-9.+-]*$' || { echo "invalid package name"; exit 1; }
 
+      # 产物上传：README 里「取 CI 的 linux-deb artifact」必须是真的可下载，
+      # 否则又是一句没有兑现的声明。
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
   # macOS：代码里所有平台差异都走 `cfg`，但从未真正编译过。
   # 公开仓库的 macOS runner 免费；跑一次就能把「未验证」变成「每 commit 验证」。
   # 产物不签名（需要付费证书），所以只验证能编译、能跑测试、能打出 .app。
@@ -160,6 +170,14 @@ jobs:
           echo "built: $app"
           test -x "$app/Contents/MacOS/workbench" || { echo "binary missing"; exit 1; }
           test -f "$app/Contents/Info.plist" || { echo "Info.plist missing"; exit 1; }
+
+      - name: Upload app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: src-tauri/target/release/bundle/macos/*.app
+          if-no-files-found: error
+          retention-days: 14
 
   backend:
     name: Backend (Windows)

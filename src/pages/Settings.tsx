@@ -8,6 +8,7 @@ import { Badge, Btn, Card, Field, SectionTitle, inputCls } from "../ui";
 import { AppearancePanel } from "../components/AppearancePanel";
 import { AutostartCard } from "../components/AutostartCard";
 import { BackupPanel } from "../components/BackupPanel";
+import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { formatUsd } from "../lib/util";
 import type { CostSettings, WorkbenchData } from "../types";
 
@@ -381,6 +382,7 @@ export default function Settings() {
               </p>
             </Card>
             <BackupPanel />
+            {isTauri() && <DiagnosticsPanel />}
           </div>{" "}
         </div>
       </div>

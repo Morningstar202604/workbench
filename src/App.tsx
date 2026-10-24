@@ -4,6 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useT } from "./lib/i18n";
 import { AppHeader, DockHeader } from "./components/AppHeader";
 import { KillDialog, Toast } from "./components/KillDialog";
+import { CommandPalette } from "./components/CommandPalette";
 import { Sidebar } from "./components/Nav";
 import { Spinner } from "./ui";
 import { PAGE_COMPONENTS } from "./pages/registry";
@@ -111,6 +112,7 @@ export default function App() {
       </div>
 
       <KillDialog />
+      <CommandPalette />
       <Toast />
     </div>
   );

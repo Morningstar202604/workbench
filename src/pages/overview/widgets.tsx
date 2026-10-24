@@ -14,6 +14,7 @@ import { EChart } from "../../lib/echarts";
 import {
   chartGapColor,
   chartLineColor,
+  chartTheme,
   horizontalBarOption,
   seriesColors,
 } from "../../lib/chartTheme";
@@ -53,8 +54,8 @@ import type {
  * 唯一的例外是「当前主题 id」——图表要按主题取色，而 ECharts 不读 CSS 变量。
  */
 
-const ACCENT = "#22d3ee";
-const WARN = "#f5b544";
+// 资源曲线的两条系列颜色来自当前主题，不能写死：Paper 主题下的青色曲线
+// 与米色底冲突，而自定义主题永远拿不到自己的一套。
 
 /** 组件外壳：统一的标题栏 + 拖拽把手。 */
 export function WidgetFrame({
@@ -164,9 +165,18 @@ export function ResourceWidget() {
   const t = useT();
   const lang = useLang();
   const bp = useBreakpoint();
-  const { history, procs, sysinfo } = useStore(
-    useShallow((s) => ({ history: s.history, procs: s.procs, sysinfo: s.sysinfo }))
+  const { history, procs, sysinfo, theme } = useStore(
+    useShallow((s) => ({
+      history: s.history,
+      procs: s.procs,
+      sysinfo: s.sysinfo,
+      theme: s.theme,
+    }))
   );
+  // CPU 用强调色、内存用主题的 warn 色：两者在色相上足够远（青 vs 琥珀），
+  // 又都来自主题自身，切到 Paper / Jade 时不会突然出现一抹陌生的紫。
+  const cpuColor = useMemo(() => chartTheme(theme).accent, [theme]);
+  const memColor = useMemo(() => chartTheme(theme).warn, [theme]);
 
   const memTotal = procs.reduce((a, p) => a + (p.memory ?? 0), 0);
   const memTotalGb = sysinfo ? sysinfo.total_memory / 1024 ** 3 : 0;
@@ -225,9 +235,9 @@ export function ResourceWidget() {
           smooth: true,
           showSymbol: false,
           data: history.map((h) => h.cpu),
-          lineStyle: { color: ACCENT, width: 2 },
-          itemStyle: { color: ACCENT },
-          areaStyle: area(ACCENT),
+          lineStyle: { color: cpuColor, width: 2 },
+          itemStyle: { color: cpuColor },
+          areaStyle: area(cpuColor),
         },
         {
           id: "memory",
@@ -237,13 +247,13 @@ export function ResourceWidget() {
           smooth: true,
           showSymbol: false,
           data: history.map((h) => h.memGb),
-          lineStyle: { color: WARN, width: 2 },
-          itemStyle: { color: WARN },
-          areaStyle: area(WARN),
+          lineStyle: { color: memColor, width: 2 },
+          itemStyle: { color: memColor },
+          areaStyle: area(memColor),
         },
       ],
     };
-  }, [history, t, lang, bp]);
+  }, [history, t, lang, bp, cpuColor, memColor]);
 
   return (
     <WidgetFrame title={t("overview.chartResourceTitle", { count: history.length })}>

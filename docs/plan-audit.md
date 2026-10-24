@@ -89,10 +89,29 @@
 
 布局引擎只认组件 id，不认实现：新增布局不需要改任何组件，新增组件也不需要改布局。
 
+## 三点五、2026-10-24 收尾轮（v0.3.0）
+
+本轮把「对外展示型开源项目」缺的东西一次补齐，全部有可复现证据：
+
+| 项目 | 状态 | 证据 |
+|---|---|---|
+| 进程树视图 | 完成 | `src/pages/processes/tree.ts`（孤儿/自环/双节点环/排序/折叠 9 条单测）；UI `ProcessTable.tsx` + `Processes.tsx` |
+| 命令面板 Ctrl/Cmd+K | 完成 | `src/lib/commandSearch.ts`（7 条单测）+ `components/CommandPalette.tsx`；`e2e/features.spec.ts` 3 条 |
+| 端口 → 进程跳转 | 完成 | `Servers.tsx` 端口行按钮；进程详情反向端口列表；E2E 1 条 |
+| CSV 导出（进程 / 端口） | 完成 | `src/lib/export.ts`（公式注入防护，4 条单测）；E2E 校验下载内容 |
+| 环境自检 | 完成 | `src-tauri/src/diagnostics.rs`（3 条 Rust 单测）+ 设置页面板 |
+| 进程状态国际化 | 完成 | 后端改发 ASCII 键（`procs.rs:66`），前端 `processStatus.ts` 兼容旧中文值 |
+| 资源曲线跟随主题 | 完成 | `widgets.tsx` 改用 `chartTheme(theme).accent/warn` |
+| 置顶状态重启后生效 | 完成 | `useAppRuntime.ts` 启动时重新下发 `set_always_on_top` |
+| 落地页破图 / 版本陈旧 | 完成 | 4 张图路径修正；版本 0.1.1 → 0.3.0；新增进程树 / 命令面板截图与 30 秒演示视频；Pages workflow 增加资源存在性门禁 |
+| Release / Pages workflow | 恢复 | 三平台矩阵 + SHA256SUMS；此前被镜像清理提交删除 |
+| 竞品对标文档 | 完成 | `docs/COMPARISON{,.zh-CN,.ja}.md`：8 个真实工具的功能矩阵与「对方更强在哪」 |
+
 ## 四、仍未做（按性价比排序）
 
 1. **代码签名**：需要付费证书（OV 约 $200–400/年），未签名不影响功能。
 2. **自动更新**：需要 `tauri-plugin-updater` + minisign 发布签名，属安装完整性改动，需单独一轮 deep 审计。
+3. **插件 API / HTTP API / 远程监控**：明确不做——见 `docs/COMPARISON.md` 的取舍说明。
 3. ~~**主题分享链接**~~ **已完成（2026-10-23）**：外观面板新增「分享链接」，
    主题压进 `#theme=` URL hash（base64url），打开即经 `importTheme` 一键导入
    （与 JSON 导入同一套 parseTheme fail-closed 校验，id 冲突改名不覆盖），

@@ -81,6 +81,32 @@ export const demoData: WorkbenchData = {
 
 export const demoProcs: ProcInfo[] = [
   {
+    pid: 900,
+    name: "explorer.exe",
+    exe_path: "C:\\Windows\\explorer.exe",
+    cmd_line: "C:\\Windows\\explorer.exe",
+    argv: ["C:\\Windows\\explorer.exe"],
+    cwd: "C:\\Windows",
+    cpu: 0.6,
+    memory: 112 * 1024 * 1024,
+    parent_pid: null,
+    status: "Run",
+    start_time: nowSec() - 86400 * 2,
+  },
+  {
+    pid: 3000,
+    name: "chrome.exe",
+    exe_path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    cmd_line: "chrome",
+    argv: ["chrome"],
+    cwd: "C:\\",
+    cpu: 3.1,
+    memory: 260 * 1024 * 1024,
+    parent_pid: null,
+    status: "Run",
+    start_time: nowSec() - 86400,
+  },
+  {
     pid: 1234,
     name: "node.exe",
     exe_path: "C:\\nodejs\\node.exe",
@@ -95,7 +121,7 @@ export const demoProcs: ProcInfo[] = [
     cpu: 8.4,
     memory: 420 * 1024 * 1024,
     parent_pid: 900,
-    status: "运行中",
+    status: "Run",
     start_time: nowSec() - 3600,
   },
   {
@@ -108,7 +134,7 @@ export const demoProcs: ProcInfo[] = [
     cpu: 2.1,
     memory: 180 * 1024 * 1024,
     parent_pid: null,
-    status: "运行中",
+    status: "Run",
     start_time: nowSec() - 7200,
   },
   {
@@ -121,7 +147,7 @@ export const demoProcs: ProcInfo[] = [
     cpu: 12.6,
     memory: 980 * 1024 * 1024,
     parent_pid: 3000,
-    status: "运行中",
+    status: "Run",
     start_time: nowSec() - 86400,
   },
   {
@@ -133,8 +159,8 @@ export const demoProcs: ProcInfo[] = [
     cwd: "C:\\proj\\data-api",
     cpu: 1.2,
     memory: 96 * 1024 * 1024,
-    parent_pid: 4000,
-    status: "运行中",
+    parent_pid: 900,
+    status: "Run",
     start_time: nowSec() - 1800,
   },
 ];
@@ -322,6 +348,30 @@ export const demoCostTrend: CostTrendRow[] = demoTrendCosts.map((cost, i) => {
     record_count: demoTrendCounts[i],
   };
 });
+
+/**
+ * 浏览器演示模式下的日志样例。
+ *
+ * 真实日志由 Rust 侧写入 app data 目录，浏览器里没有后端可读；
+ * 输出一句「不可用」会让日志页在演示/截图里变成一整块空白，
+ * 也让人误以为功能坏了。这里给一段形状真实的样例并明确标注是演示数据。
+ */
+export const demoLogs = [
+  "2026-10-24T10:12:01.442Z  INFO  workbench_lib: 工作台 v0.3.0 启动",
+  "2026-10-24T10:12:01.451Z  INFO  workbench_lib: 托盘创建成功 (Windows)",
+  "2026-10-24T10:12:01.470Z  INFO  workbench_lib: 全局快捷键 CmdOrCtrl+Shift+W 已注册",
+  "2026-10-24T10:12:02.118Z  INFO  workbench::commands: 从 data.json 登记 2 个有效项目目录（共 2 个）",
+  "2026-10-24T10:12:02.240Z  INFO  workbench::cost_store: 成本库已就绪 cost.db（386 条记录）",
+  "2026-10-24T10:12:02.905Z  WARN  workbench::ai: opencode 服务未监听 127.0.0.1:4096，跳过在线会话",
+  "2026-10-24T10:12:03.331Z  INFO  workbench::ports: 采集监听端口 3 条（netstat -ano）",
+  "2026-10-24T10:12:03.336Z  INFO  workbench::devserver: 识别开发服务器 2 个（vite:5173, uvicorn:8000）",
+  "2026-10-24T10:12:06.412Z  INFO  workbench::commands: 请求终止进程 PID=9876",
+  "2026-10-24T10:12:06.510Z  WARN  workbench::procs: 进程拒绝终止或已退出 PID=9876",
+  "2026-10-24T10:12:09.002Z  INFO  workbench::session_meter: 扫描会话文件 12 个，新增 3 条用量记录",
+  "2026-10-24T10:12:12.771Z  DEBUG workbench::ipc_guard: 拒绝打开未登记的路径: C:\\Users\\me\\secrets",
+  "2026-10-24T10:12:15.203Z  INFO  workbench::commands: 环境自检完成 9 ok / 3 warn / 0 fail",
+  "（以上为浏览器演示数据，真实日志仅在桌面端写入）",
+].join("\n");
 
 /** 按模型分解（构造值）。 */
 export const demoCostModelBreakdown: ModelBreakdownRow[] = [

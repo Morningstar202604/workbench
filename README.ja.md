@@ -4,69 +4,100 @@
 
 [![Release](https://img.shields.io/github/v/release/X33834/workbench?color=22d3ee&label=release)](https://github.com/X33834/workbench/releases/latest)
 [![License](https://img.shields.io/github/license/X33834/workbench?color=34d399)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078d4)](docs/ARCHITECTURE.ja.md#システム要件)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.ja.md#システム要件)
+[![CI](https://github.com/X33834/workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/X33834/workbench/actions/workflows/ci.yml)
 
 ![Workbench](docs/screenshots/12-brand-hero.png)
 
-ローカルファーストのデスクトップ運用ワークベンチ。プロセス・ポート・開発サーバー・
-プロジェクト・タスク・AI セッションコストを 1 画面で把握し、必要なときは高権限
-操作（終了できないプロセスを管理者として終了）も行えます。データは端末内にのみ保存。
+**ポートを見て、プロセスを見つけ、コストを把握する。**
+
+自分のマシンでサービスや AI コーディングエージェントを動かす開発者のための、
+ローカルファーストなデスクトップワークベンチ。プロセス・待受ポート・開発サーバー・
+プロジェクト・タスク、そして Claude Code / Codex セッションが実際にいくら使ったかを
+1 画面で把握できます。データは端末外に出ず、アカウントもクラウドもモデル設定も不要です。
+
+## 他のツールとの違い
+
+| | |
+|---|---|
+| **ポート → プロセス → コスト** | 待受ポートから所有プロセスへ直接移動でき、プロセスの詳細は保持している全ポートを逆引き表示。セッションファイルが同じマシンの作業と実コストを結びます。 |
+| **開発サーバーを理解する** | 「ポートが開いている」だけでなく、コマンドラインから Vite / Next / Nuxt / Django / uvicorn / Rails など 30+ のフレームワークを信頼度付きで判定。 |
+| **キーボード優先** | Ctrl/Cmd+K でページ・プロセス・ポート・プロジェクト・タスクを横断検索。フラット表と親子ツリーの 2 表示。 |
+| **実装で担保する信頼性** | 保護対象プロセスは Rust 層で拒否、終了直前に同一性を再検証、昇格は都度承認。レポートには検証内容を明記。 |
+| **誠実なローカルファースト** | 台帳はローカル SQLite、CSP は self 固定、テレメトリなし。外部通信は任意のローカル opencode 探索のみ。 |
 
 ## スクリーンショット
 
 | 概要 | プロセス |
 |------|----------|
 | ![概要](docs/screenshots/01-overview.png) | ![プロセス](docs/screenshots/02-processes.png) |
-| CPU / メモリ傾向、ディスク、プロセス分類 | 全プロセス snapshot、仮想スクロール、強制終了の確認 |
+| CPU / メモリ推移、ディスク、プロセス分類 | 全プロセス snapshot、仮想スクロール、CSV 書き出し |
+
+| プロセスツリー | コマンドパレット |
+|----------------|------------------|
+| ![プロセスツリー](docs/screenshots/17-process-tree.png) | ![コマンドパレット](docs/screenshots/18-command-palette.png) |
+| 親 PID でグループ化、子プロセスと待受ポート | Ctrl/Cmd+K でページ / プロセス / ポート / プロジェクト / タスクを検索 |
 
 | サーバー & ポート | AI セッション |
 |-------------------|----------------|
 | ![サーバー](docs/screenshots/03-servers.png) | ![AI セッション](docs/screenshots/04-ai-sessions.png) |
-| netstat 解析、開発フレームワーク判定 | セッションファイル、オンラインセッション、ツール分布 |
+| netstat / ss 解析、開発フレームワーク判定 | セッションファイル、オンラインセッション、ツール分布 |
 
 | コスト台帳 | タスク |
 |------------|--------|
 | ![コスト](docs/screenshots/05-costs.png) | ![タスク](docs/screenshots/08-tasks.png) |
 | 予算進捗、推移、モデル内訳 | ドラッグ＆ドロップのカンバン |
 
+### 30 秒ツアー
+
+[![デモ](docs/screenshots/01-overview.png)](docs/screenshots/workbench-demo.mp4)
+
+ブラウザのデモモードで録画した実際の UI（実在のホスト名・パス・アカウント情報は含みません）。
+[MP4 を直接ダウンロード](docs/screenshots/workbench-demo.mp4)。
+
 ## 機能
 
 | 機能 | 説明 |
 |------|------|
-| **リアルタイム監視** | プロセス・ポート（netstat）・開発サーバー検出、フレームワーク判定付き |
+| **リアルタイム監視** | プロセス、待受ポート（Windows は `netstat`、Linux は `ss -tulpn` で netstat にフォールバック）、開発サーバー検出（フレームワーク + 信頼度） |
+| **プロセスツリー** | リスト / 親子ツリーの 2 表示。`parent_pid` から構築し孤児・循環に安全。仮想スクロール、行内詳細（そのプロセスの待受ポート）、CSV 書き出し |
+| **コマンドパレット** | Ctrl/Cmd+K でページ・プロセス・ポート・プロジェクト・タスクを曖昧検索。↑ ↓ ↵ Esc の完全キーボード操作 |
 | **管理者として終了** | 通常終了が失敗したあとワンクリックで管理者終了——OS の UAC を提示。保護対象システムプロセスはバックエンドが事前拒否 |
 | **AI セッションコスト計測** | ローカル Claude / Codex セッションのトークンコストを SQLite 台帳に記録——モデル不要・API キー不要・データは端末外に出ません |
 | **価格エディタ** | 40+ モデルの価格を内蔵。UI から変更 / 追加 / 内蔵価格へ復元 |
-| **バックアップ & 復元** | タイムスタンプ付きスナップショット、ワンクリック復元、整合性チェック |
+| **バックアップ & 復元** | タイムスタンプ付きスナップショット、ワンクリック復元、整合性チェック（`VACUUM INTO` + `PRAGMA integrity_check`） |
 | **ログイン時に起動** | 実際の OS 登録（レジストリ / autostart）。トグルは OS から状態を再読込 |
-| **ビジュアルシステム** | 7 レイアウト × 8 テーマ × 3 シェル、ドラッグ / 非表示ウィジェット、テーマエディタと共有リンク |
+| **環境チェック** | プラットフォーム、データフォルダー、コスト DB、セッションフォルダー、ポートツールを ok / warn / fail で個別表示。レポートはコピー可能 |
+| **CLI モード** | 同じ実行ファイルで `workbench ps` / `ports` / `diag`（`--json` 対応）。読み取り専用でスクリプト化可能、ウィンドウなし |
+| **ビジュアルシステム** | 7 レイアウト × 8 テーマ × 3 シェル、ドラッグ / 非表示 + 個別幅設定、テーマエディタと共有リンク |
 | **三言語 UI** | 简体中文（既定）/ English / 日本語 |
-| **クロスプラットフォーム** | Windows（NSIS インストーラー + ポータブル exe）と Linux（deb） |
+| **クロスプラットフォーム** | Windows（NSIS + ポータブル exe）、Linux（`.deb`）、macOS（`.app`、CI ビルド・未署名） |
 
 ## ダウンロード
 
-**v0.2.0** —— プラットフォームに合わせて入手:
+**v0.3.0** —— プラットフォームに合わせて入手:
 
 | プラットフォーム | ファイル |
 |------------------|----------|
-| Windows 10/11 x64 | `Workbench_0.2.0_x64-setup.exe`（NSIS、約 4 MB） |
-| Linux | v0.2.0 は未提供 —— ソースからビルド、または 0.1.1 の deb を利用 |
+| Windows 10/11 x64 | `Workbench_0.3.0_x64-setup.exe`（NSIS、約 5 MB） |
+| Linux x64 | 公開アセットは未提供 —— `npm run tauri build -- --bundles deb`、または CI の `linux-deb` artifact |
+| macOS | 公開アセットは未提供 —— `npm run tauri build -- --bundles app`、または CI の `macos-app` artifact（未署名、初回は右クリック→開く） |
 
 > コード署名されていないため、Windows SmartScreen が「不明な発行元」を表示する
 > ことがあります。**詳細情報 → 実行** で問題ありません（証明書に費用がかかるためで、
-> ファイルが危険なわけではありません）。
+> ファイルが危険なわけではありません）。macOS も同様に未署名で、初回は右クリック→開くが必要です。
 
 ミラーはいずれも同一コードで、それぞれ Release を公開しています:
 
 | ミラー | Release ページ |
 |--------|----------------|
-| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) —— **v0.1.1** のまま（push 認証は未解決） |
-| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) —— v0.2.0 公開済み、インストーラー添付は Release ページから対応予定 |
-| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) —— v0.2.0 公開済み、インストーラー添付は Release ページから対応予定 |
+| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) |
+| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) |
+| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) |
 
 ## ビルド
 
-Node.js ≥ 20 と Rust ≥ 1.77 が必要です:
+Node.js ≥ 20 と Rust ≥ 1.90 が必要です:
 
 ```bash
 npm install
@@ -74,9 +105,27 @@ npm run tauri dev      # デスクトップ開発モード（ホットリロー�
 npm run tauri build    # インストーラー → src-tauri/target/release/bundle/
 ```
 
+ローカル CI ミラー（`.github/workflows/ci.yml` と同じ手順）:
+
+```bash
+node scripts/ci-local.mjs          # 型 → lint → 整形 → 単体テスト → ビルド → Playwright → cargo
+node scripts/ci-local.mjs --fast   # 視覚回帰をスキップ
+```
+
+コマンドライン（同じ実行ファイル、ウィンドウなし）:
+
+```bash
+workbench ps            # 全プロセス: PID、名前、CPU%、メモリ、親、状態
+workbench ports         # 待受ポートと所有 PID
+workbench diag          # 環境チェック
+workbench ports --json  # スクリプト向け JSON
+```
+
 技術スタック・プロジェクト構成・FAQ・ロードマップ・スクリーンショット一覧などは
 [アーキテクチャ & リファレンス](docs/ARCHITECTURE.ja.md)
 （[English](docs/ARCHITECTURE.md) / [简体中文](docs/ARCHITECTURE.zh-CN.md)）へ。
+Mission Center、System Informer、btop++、Glances、ccusage などとの比較は
+[docs/COMPARISON.ja.md](docs/COMPARISON.ja.md)。
 
 ## コントリビュート & ライセンス
 

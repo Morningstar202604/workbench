@@ -16,6 +16,7 @@ use workbench_lib::commands::{
 use workbench_lib::cost_store::{CostOverview, CostSettings, CostTrendRow, ModelBreakdownRow};
 use workbench_lib::data::{Project, Task, WorkbenchData};
 use workbench_lib::devserver::DevServer;
+use workbench_lib::diagnostics::{DiagnosticCheck, DiagnosticsReport};
 use workbench_lib::ports::PortEntry;
 use workbench_lib::pricing::PricingRow;
 use workbench_lib::procs::ProcInfo;
@@ -50,4 +51,6 @@ fn export_ts_bindings() {
     BackupResult::export_all(&cfg).unwrap();
     BackupPoint::export_all(&cfg).unwrap();
     RestoreResult::export_all(&cfg).unwrap();
+    DiagnosticCheck::export_all(&cfg).unwrap();
+    DiagnosticsReport::export_all(&cfg).unwrap();
 }

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { classifyOpenTarget } from "./openTarget";
 import type {
   AiProcess,
+  DiagnosticsReport,
   CostOverview,
   CostSettings,
   CostTrendRow,
@@ -228,4 +229,11 @@ export async function savePricing(
 
 export async function clearCostRecords(): Promise<void> {
   return invoke("clear_cost_records");
+}
+
+// ── 环境自检 ──────────────────────────────────────────────
+
+/** 运行环境逐项检查（平台、数据目录、会话目录、端口工具…）。 */
+export async function runDiagnostics(): Promise<DiagnosticsReport> {
+  return invoke<DiagnosticsReport>("diagnostics");
 }

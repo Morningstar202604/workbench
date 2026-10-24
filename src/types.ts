@@ -31,6 +31,8 @@ export type { PricingView } from "./generated/PricingView";
 export type { BackupResult } from "./generated/BackupResult";
 export type { BackupPoint } from "./generated/BackupPoint";
 export type { RestoreResult } from "./generated/RestoreResult";
+export type { DiagnosticCheck } from "./generated/DiagnosticCheck";
+export type { DiagnosticsReport } from "./generated/DiagnosticsReport";
 
 export type { CostSettings } from "./generated/CostSettings";
 export type { CostOverview } from "./generated/CostOverview";

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { isTauri } from "./api";
 import { useStore } from "./store";
 
@@ -19,6 +20,14 @@ export function useAppRuntime() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  // 置顶是持久化偏好，但窗口属性只活在当前进程里：重启后必须重新下发，
+  // 否则图标显示「已置顶」而窗口其实没有——一个典型的假状态。
+  useEffect(() => {
+    if (!isTauri()) return;
+    const on = useStore.getState().alwaysOnTop;
+    if (on) void invoke("set_always_on_top", { on: true }).catch(() => {});
+  }, []);
 
   // 轮询：窗口隐藏时暂停（看不见界面时继续采样纯属浪费电）
   useEffect(() => {

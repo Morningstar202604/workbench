@@ -4,68 +4,99 @@
 
 [![Release](https://img.shields.io/github/v/release/X33834/workbench?color=22d3ee&label=release)](https://github.com/X33834/workbench/releases/latest)
 [![License](https://img.shields.io/github/license/X33834/workbench?color=34d399)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078d4)](docs/ARCHITECTURE.zh-CN.md#系统要求)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4)](docs/ARCHITECTURE.zh-CN.md#系统要求)
+[![CI](https://github.com/X33834/workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/X33834/workbench/actions/workflows/ci.yml)
 
 ![工作台](docs/screenshots/12-brand-hero.png)
 
-本地优先的桌面运维工作台：进程、端口、开发服务器、项目、任务与 AI 会话成本，
-一屏看清；需要时也能做高权限操作（比如以管理员结束一个杀不掉的进程）。
-数据仅存本机。
+**看见端口，找到进程，算清成本。**
+
+面向在本机跑服务、跑 AI 编码代理的开发者：一屏看清所有进程、监听端口、开发服务器、
+项目与任务，以及 Claude Code / Codex 会话到底花了多少钱。数据不出本机，没有账号、
+没有云端、不需要配置模型。
+
+## 与同类工具的不同
+
+| | |
+|---|---|
+| **端口 → 进程 → 成本** | 从监听端口一键跳到占用它的进程，进程详情反过来列出它持有的全部端口；会话文件把同一台机器上的工作和真实花费连起来。同类本地工具没有把这三层接在一起。 |
+| **懂开发服务器** | 不止「端口开着」：从命令行识别 Vite / Next / Nuxt / Django / uvicorn / Rails 等 30+ 框架，并标注置信度。 |
+| **键盘优先** | Ctrl/Cmd+K 一次搜索页面、进程、端口、项目、任务；进程支持列表与父子树双视图，全流程不用鼠标。 |
+| **可靠性写进实现** | 受保护系统进程在 Rust 层直接拒绝；结束前重新校验目标身份；提权按次授权；每份报告都写清它验证了什么。 |
+| **诚实的本地优先** | 账本是本机 SQLite，CSP 收紧到 self，无遥测。唯一的外部请求是可选地探测本机 opencode 服务。 |
 
 ## 界面预览
 
 | 概览 | 进程监控 |
 |------|----------|
 | ![概览](docs/screenshots/01-overview.png) | ![进程监控](docs/screenshots/02-processes.png) |
-| CPU / 内存趋势、磁盘与进程分类 | 全进程快照、虚拟滚动、杀进程二次确认 |
+| CPU / 内存趋势、磁盘与进程分类 | 全进程快照、虚拟滚动、CSV 导出 |
+
+| 进程树 | 命令面板 |
+|--------|----------|
+| ![进程树](docs/screenshots/17-process-tree.png) | ![命令面板](docs/screenshots/18-command-palette.png) |
+| 按父 PID 归组，展开看子进程与端口 | Ctrl/Cmd+K 横跨页面 / 进程 / 端口 / 项目 / 任务 |
 
 | 服务与端口 | AI 会话 |
 |------------|----------|
 | ![服务与端口](docs/screenshots/03-servers.png) | ![AI 会话](docs/screenshots/04-ai-sessions.png) |
-| netstat 端口识别与开发框架标注 | 会话文件、在线会话、工具分布 |
+| netstat / ss 解析与开发框架标注 | 会话文件、在线会话、工具分布 |
 
 | 成本账本 | 任务看板 |
 |----------|----------|
 | ![成本账本](docs/screenshots/05-costs.png) | ![任务看板](docs/screenshots/08-tasks.png) |
 | 预算进度、趋势、模型分解 | 拖拽看板，待办 / 进行中 / 已完成 |
 
+### 30 秒演示
+
+[![演示](docs/screenshots/01-overview.png)](docs/screenshots/workbench-demo.mp4)
+
+浏览器演示模式下录制的真实界面（不含任何真实主机名、路径或账户数据）。
+[直接下载 MP4](docs/screenshots/workbench-demo.mp4)。
+
 ## 功能
 
 | 功能 | 说明 |
 |------|------|
-| **实时监控** | 进程、端口（netstat）、开发服务器识别，带开发框架标注 |
+| **实时监控** | 进程、监听端口（Windows 用 `netstat`，Linux 用 `ss -tulpn` 并回退 netstat）、开发服务器识别（框架 + 置信度） |
+| **进程树** | 列表 / 父子树双视图，基于 `parent_pid` 构建且对孤儿与环安全；虚拟滚动、行内详情（含该进程自己的监听端口）、CSV 导出 |
+| **命令面板** | Ctrl/Cmd+K 模糊搜索页面、进程、端口、项目、任务；↑ ↓ ↵ Esc 全键盘操作 |
 | **管理员结束进程** | 普通结束失败后一键「以管理员结束」，触发系统 UAC 授权弹窗；受保护系统进程由后端先行拦截 |
 | **AI 会话成本计量** | 本机 Claude / Codex 会话 token 成本，SQLite 本地账本——不依赖任何模型、不要 API key、数据不出本机 |
 | **价格编辑器** | 40+ 模型价格内置，界面内改价 / 新增 / 恢复内置价 |
-| **备份恢复** | 带时间戳快照，一键回滚，恢复前完整性校验 |
+| **备份恢复** | 带时间戳快照，一键回滚，恢复前完整性校验（`VACUUM INTO` + `PRAGMA integrity_check`） |
 | **开机自启** | 真实系统级注册（注册表 / autostart），开关状态回读操作系统 |
-| **视觉系统** | 7 种概览版面 × 8 套主题 × 3 种外壳，组件可拖拽 / 隐藏，主题编辑器与分享链接 |
+| **环境自检** | 平台、数据目录、成本库、会话目录、端口工具逐项 ok / warn / fail，报告可一键复制 |
+| **命令行模式** | 同一个可执行文件支持 `workbench ps` / `ports` / `diag`（加 `--json`），只读、可进脚本、不弹窗口 |
+| **视觉系统** | 7 种概览版面 × 8 套主题 × 3 种外壳，组件可拖拽 / 隐藏并单独设宽度，主题编辑器与分享链接 |
 | **三语界面** | 简体中文（默认）/ English / 日本語 |
-| **跨平台** | Windows（NSIS 安装包 + 免安装 exe）与 Linux（deb） |
+| **跨平台** | Windows（NSIS + 免安装 exe）、Linux（`.deb`）、macOS（`.app`，CI 构建未签名） |
 
 ## 下载
 
-**v0.2.0** —— 按平台取安装包：
+**v0.3.0** —— 按平台取安装包：
 
 | 平台 | 文件 |
 |------|------|
-| Windows 10/11 x64 | `Workbench_0.2.0_x64-setup.exe`（NSIS，约 4 MB） |
-| Linux | v0.2.0 暂无安装包 —— 可源码构建，或沿用 0.1.1 的 deb |
+| Windows 10/11 x64 | `Workbench_0.3.0_x64-setup.exe`（NSIS，约 5 MB） |
+| Linux x64 | 暂未发布附件 —— 可 `npm run tauri build -- --bundles deb`，或取 CI 的 `linux-deb` artifact |
+| macOS | 暂未发布附件 —— 可 `npm run tauri build -- --bundles app`，或取 CI 的 `macos-app` artifact（未签名，首次右键打开） |
 
 > 安装包未做代码签名，Windows SmartScreen 可能提示「未知发布者」——
-> 点「更多信息 → 仍要运行」即可（证书需付费，文件没有风险）。
+> 点「更多信息 → 仍要运行」即可（证书需付费，文件没有风险）。macOS 同理，
+> 首次打开需右键 → 打开。
 
 任选镜像下载——代码完全一致，各自发布 Release：
 
 | 镜像 | Release 页 |
 |------|------------|
-| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) —— 停留在 **v0.1.1**（推送凭据待解决） |
-| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) —— 已发 v0.2.0，安装包附件待从 Release 页上传 |
-| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) —— 已发 v0.2.0，安装包附件待从 Release 页上传 |
+| GitHub | [github.com/X33834/workbench/releases](https://github.com/X33834/workbench/releases) |
+| Gitee | [gitee.com/badhope/workbench/releases](https://gitee.com/badhope/workbench/releases) |
+| GitCode | [gitcode.com/badhope/workbench/releases](https://gitcode.com/badhope/workbench/releases) |
 
 ## 构建
 
-需要 Node.js ≥ 20 与 Rust ≥ 1.77：
+需要 Node.js ≥ 20 与 Rust ≥ 1.90：
 
 ```bash
 npm install
@@ -73,9 +104,27 @@ npm run tauri dev      # 桌面开发模式（含热更新）
 npm run tauri build    # 安装包 → src-tauri/target/release/bundle/
 ```
 
+本地 CI 镜像（与 `.github/workflows/ci.yml` 同一套步骤）：
+
+```bash
+node scripts/ci-local.mjs          # 类型 → lint → 格式 → 单测 → 构建 → Playwright → cargo
+node scripts/ci-local.mjs --fast   # 跳过视觉回归
+```
+
+命令行（同一个可执行文件，不弹窗口）：
+
+```bash
+workbench ps            # 全部进程：pid、名称、CPU%、内存、父进程、状态
+workbench ports         # 监听端口及所属 PID
+workbench diag          # 环境自检
+workbench ports --json  # 供脚本消费的 JSON
+```
+
 技术栈、项目结构、常见问题、Roadmap、截图全览等内容都在
 [架构与参考文档](docs/ARCHITECTURE.zh-CN.md)
 （[English](docs/ARCHITECTURE.md) / [日本語](docs/ARCHITECTURE.ja.md)）。
+与 Mission Center、System Informer、btop++、Glances、ccusage 等工具的对比见
+[docs/COMPARISON.zh-CN.md](docs/COMPARISON.zh-CN.md)。
 
 ## 参与贡献 & 许可
 

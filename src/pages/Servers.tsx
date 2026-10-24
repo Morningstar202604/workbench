@@ -1,11 +1,12 @@
 import { useMemo } from "react";
-import { BarChart3, ExternalLink, Network, Server } from "lucide-react";
+import { BarChart3, ExternalLink, ListTree, Network, Server } from "lucide-react";
 import { EChart } from "../lib/echarts";
 import { chartGapColor, horizontalBarOption, seriesColors } from "../lib/chartTheme";
 import { useStore } from "../lib/store";
 import { useShallow } from "zustand/react/shallow";
 import { useT } from "../lib/i18n";
 import { Btn, Card, Empty, ErrorState, SectionTitle, Skeleton, StatCard } from "../ui";
+import { downloadText, toCsv } from "../lib/export";
 import {
   frameworkDistribution,
   isPieWorthRendering,
@@ -17,19 +18,40 @@ import type { EChartsCoreOption } from "echarts/core";
 
 export default function Servers() {
   const t = useT();
-  const { devs, ports, procs, refreshRuntime, loading, runtimeError, theme, openTarget } =
-    useStore(
-      useShallow((s) => ({
-        devs: s.devs,
-        ports: s.ports,
-        procs: s.procs,
-        refreshRuntime: s.refreshRuntime,
-        loading: s.loading,
-        runtimeError: s.runtimeError,
-        theme: s.theme,
-        openTarget: s.openTarget,
-      }))
-    );
+  const {
+    devs,
+    ports,
+    procs,
+    refreshRuntime,
+    loading,
+    runtimeError,
+    theme,
+    openTarget,
+    setProcQuery,
+    setFocusPid,
+    setView,
+  } = useStore(
+    useShallow((s) => ({
+      devs: s.devs,
+      ports: s.ports,
+      procs: s.procs,
+      refreshRuntime: s.refreshRuntime,
+      loading: s.loading,
+      runtimeError: s.runtimeError,
+      theme: s.theme,
+      openTarget: s.openTarget,
+      setProcQuery: s.setProcQuery,
+      setFocusPid: s.setFocusPid,
+      setView: s.setView,
+    }))
+  );
+
+  /** 端口 → 进程的闭环：带着 PID 跳到进程页并高亮。 */
+  const showProcess = (pid: number) => {
+    setProcQuery(String(pid));
+    setFocusPid(pid);
+    setView("processes");
+  };
 
   const listening = useMemo<PortEntry[]>(
     () =>
@@ -144,7 +166,35 @@ export default function Servers() {
 
       {/* ── 全部监听端口 ── */}
       <Card className="">
-        <SectionTitle>
+        <SectionTitle
+          extra={
+            listening.length > 0 ? (
+              <Btn
+                className="!py-1 !text-xs"
+                onClick={() => {
+                  const rows: (string | number)[][] = [
+                    ["protocol", "local_address", "port", "pid", "process", "state"],
+                    ...listening.map((p) => [
+                      p.protocol,
+                      p.local_addr,
+                      p.local_port,
+                      p.pid,
+                      procByPid.get(p.pid) ?? "",
+                      p.state,
+                    ]),
+                  ];
+                  const stamp = new Date()
+                    .toISOString()
+                    .slice(0, 19)
+                    .replace(/[:T]/g, "-");
+                  downloadText(`workbench-ports-${stamp}.csv`, toCsv(rows));
+                }}
+              >
+                {t("servers.exportCsv")}
+              </Btn>
+            ) : undefined
+          }
+        >
           {t("servers.allTcpPorts", { count: listening.length })}
         </SectionTitle>
         {listening.length === 0 ? (
@@ -160,16 +210,34 @@ export default function Servers() {
                 <span className="font-mono font-semibold text-accent">
                   :{p.local_port}
                 </span>
-                <span className="text-dim truncate">
-                  {procByPid.get(p.pid) ?? `PID ${p.pid}`}
-                </span>
                 <button
-                  className="ml-auto text-dim hover:text-accent"
-                  onClick={() => openTarget(`http://localhost:${p.local_port}`)}
-                  title={t("servers.open")}
+                  type="button"
+                  className="min-w-0 flex-1 truncate text-left text-dim hover:text-accent"
+                  onClick={() => showProcess(p.pid)}
+                  title={t("servers.showProcess")}
                 >
-                  <ExternalLink size={11} />
+                  {procByPid.get(p.pid) ?? `PID ${p.pid}`}
                 </button>
+                <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    className="text-dim hover:text-accent"
+                    onClick={() => showProcess(p.pid)}
+                    title={t("servers.showProcess")}
+                    aria-label={t("servers.showProcess")}
+                  >
+                    <ListTree size={11} />
+                  </button>
+                  <button
+                    type="button"
+                    className="text-dim hover:text-accent"
+                    onClick={() => openTarget(`http://localhost:${p.local_port}`)}
+                    title={t("servers.open")}
+                    aria-label={t("servers.open")}
+                  >
+                    <ExternalLink size={11} />
+                  </button>
+                </span>
               </div>
             ))}
           </div>

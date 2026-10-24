@@ -3,6 +3,84 @@
 This project follows [Semantic Versioning](https://semver.org/) and the format
 recommended by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-10-24
+
+### Added
+
+- **Process tree view.** `parent_pid` now drives a real hierarchy: flat table or
+  parent/child tree, cycle-safe and orphan-safe (`buildForest` promotes nodes
+  that no natural root can reach instead of dropping or duplicating them),
+  virtualised, and with a per-row detail panel that lists the ports *that*
+  process is listening on. Sibling order follows the active sort key. Recorded
+  in `src/pages/processes/tree.ts` with 9 unit tests.
+- **Command palette (Ctrl/Cmd+K).** One fuzzy search over pages, processes,
+  ports, projects and tasks; ↑ ↓ to move, ↵ to run, Esc to close. Selecting a
+  process or port jumps to the process page, sets the query to that PID and
+  highlights the row for a few seconds. Pure matching logic in
+  `src/lib/commandSearch.ts` (7 tests), UI in `components/CommandPalette.tsx`.
+- **Port → process jump, both directions.** Every listening port now has a
+  "show owning process" action; the process detail lists the reverse mapping.
+- **CSV export** for the process table and the listening-port list. Escaping is
+  RFC 4180 plus formula-injection neutralisation (`= + - @` prefixed with an
+  apostrophe), covered by `src/lib/export.test.ts`.
+- **CLI mode.** The same executable now also works as a small read-only CLI:
+  `workbench ps`, `workbench ports`, `workbench diag`, each accepting `--json`.
+  No window opens and no state is written; killing processes deliberately stays
+  in the GUI confirmation flow. Windows builds attach to the parent console or
+  write the redirected handle, so `workbench ports --json > ports.json` works
+  from cmd, PowerShell and Git Bash alike (verified on the packaged exe).
+- **Environment self-check** in Settings (`diagnostics` command): platform, data
+  directory writability, cost database, Claude / Codex / opencode session
+  folders, and the port tooling actually used on this OS — each reported
+  independently as ok / warn / fail with a hint and a copyable summary. One
+  failing check never aborts the report.
+- **Feature E2E suite** (`e2e/features.spec.ts`, 7 cases): command palette
+  open/search/execute, process tree expand/collapse, port jump, CSV download
+  contents.
+
+### Changed
+
+- **Process status is language-independent.** The Rust backend used to emit
+  localized Chinese labels (`运行中`), so English and Japanese users saw Chinese
+  in the status column. It now emits stable ASCII keys (`Run`, `Sleep`, …) and
+  the UI translates them via `src/lib/processStatus.ts`, which also maps the
+  legacy labels so old snapshots still render.
+- **The resource chart follows the theme.** CPU/memory series were hard-coded
+  cyan/amber; they now take the active theme's accent and warn colours, so Paper,
+  Ink and custom themes stop growing foreign colours.
+- **Pinned window state survives a restart.** `alwaysOnTop` was persisted but
+  never re-applied to the window, so the pin icon lied after a relaunch.
+- **Tree view defaults to one expanded level.** A fully collapsed tree looks
+  like "only a handful of processes"; a fully expanded one floods a thousand
+  rows. The first switch expands the roots and remembers the user's own set
+  afterwards.
+- **README ×3 rewritten** around positioning, the new capabilities and a real
+  demo video; the landing page was brought in line (version, screenshot paths,
+  new shots, video, platform FAQ).
+- **New `docs/COMPARISON{,.zh-CN,.ja}.md`**: an honest feature matrix and
+  "where the others are better" section against Mission Center, System
+  Informer, btop++, Glances, Stats, ccusage and Claude Code Usage Monitor.
+
+### Fixed
+
+- **Landing page referenced four screenshots that never existed**
+  (`05-projects.png`, `06-tasks.png`, `07-settings.png`, `08-logs.png`); the
+  real files are `07-`, `08-`, `09-`, `10-`. The Pages workflow now fails when
+  any `src`/`href` asset is missing, so this cannot silently rot again.
+- **Landing page still advertised v0.1.1** and a filename that no longer exists.
+- **Demo mode had no process hierarchy**, so the new tree view looked empty on
+  first acquaintance; demo data now includes two root processes with children.
+- **`README` listed Linux as "not packaged" for the current release** while CI
+  builds a `.deb` on every push; CI now uploads `linux-deb` and `macos-app`
+  artifacts and the README links to them instead of claiming they do not exist.
+
+### Infrastructure
+
+- `pages.yml` and `release.yml` restored (they had been deleted from the
+  default branch by the mirror clean-up commits). Pages now validates every
+  referenced asset; Release builds Windows NSIS, Linux deb and macOS app,
+  publishes SHA-256 checksums and states plainly that the builds are unsigned.
+
 ## [0.2.0] - 2026-10-23
 
 ### Added
