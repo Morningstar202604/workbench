@@ -28,7 +28,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # 落地页引用的每一张图、每一段视频都必须真实存在。
       # 上一版曾引用 screenshots/05-projects.png 这类从未生成的文件，
